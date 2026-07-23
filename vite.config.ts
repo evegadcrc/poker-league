@@ -24,6 +24,9 @@ export default defineConfig(({ mode }) => {
       css: true,
       env: {
         SUPABASE_SERVICE_ROLE_KEY: env.SUPABASE_SERVICE_ROLE_KEY ?? '',
+        // Opt-in flag for the realtime WS integration test (slice 11), which is
+        // flaky under parallel Kong load so it stays out of the default gate.
+        RUN_REALTIME_IT: env.RUN_REALTIME_IT ?? '',
       },
     },
   }

@@ -1005,3 +1005,208 @@
   font: 600 13px/1.5 'Archivo';
   color: var(--ink-2);
 }
+
+/* ---- En Vivo (slice 11): scoreboard / blinds / stats / premios / standings ---- */
+.live-reconnect {
+  margin: 8px 18px 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--paper-3);
+  color: var(--ink-2);
+  font: 700 11px 'Archivo';
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+
+.live-wrap {
+  background: var(--ink);
+  color: var(--paper);
+  margin: 14px 18px;
+  border-radius: 20px;
+  padding: 22px 18px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+[data-theme='neon'] .live-wrap {
+  background: linear-gradient(145deg, rgba(255, 46, 136, 0.18), rgba(34, 211, 238, 0.13));
+  border: 1px solid rgba(255, 46, 136, 0.4);
+  box-shadow: 0 0 44px -12px rgba(255, 46, 136, 0.55);
+  color: var(--ink);
+}
+.live-wrap.paused {
+  opacity: 0.92;
+}
+.live-wrap .lvl {
+  font: 700 11px 'Archivo';
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--paper) 65%, transparent);
+}
+[data-theme='neon'] .live-wrap .lvl {
+  color: var(--ink-2);
+}
+.timer {
+  font-family: 'Archivo';
+  font-weight: 800;
+  font-feature-settings: 'tnum' 1;
+  font-size: 78px;
+  line-height: 0.9;
+  letter-spacing: -0.03em;
+  margin: 10px 0 6px;
+}
+[data-theme='neon'] .timer {
+  text-shadow: 0 0 26px rgba(34, 211, 238, 0.7);
+}
+.blinds {
+  display: flex;
+  justify-content: center;
+  gap: 22px;
+  margin-top: 6px;
+}
+.blinds .b .v {
+  font: 800 22px 'Archivo';
+  font-feature-settings: 'tnum' 1;
+}
+.blinds .b .k {
+  font: 700 9px 'Archivo';
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--paper) 60%, transparent);
+  margin-top: 3px;
+}
+[data-theme='neon'] .blinds .b .k {
+  color: var(--ink-2);
+}
+.next-lvl {
+  margin-top: 14px;
+  font: 600 12px 'Archivo';
+  color: color-mix(in srgb, var(--paper) 70%, transparent);
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+  padding-top: 12px;
+}
+[data-theme='neon'] .next-lvl {
+  color: var(--ink-2);
+  border-top-color: var(--rule);
+}
+
+.live-stats {
+  display: flex;
+  margin: 0 18px;
+  border: 1.5px solid var(--ink);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.live-stats .c {
+  flex: 1;
+  padding: 13px 8px;
+  text-align: center;
+  border-right: 1px solid var(--rule);
+}
+.live-stats .c:last-child {
+  border-right: 0;
+}
+.live-stats .c .v {
+  font: 800 20px 'Archivo';
+  font-feature-settings: 'tnum' 1;
+  color: var(--oxblood);
+}
+.live-stats .c .k {
+  font: 700 8.5px 'Archivo';
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-top: 3px;
+}
+
+.premios {
+  margin: 12px 18px;
+  border: 1.5px solid var(--ink);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.premios .ph {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 14px;
+  border-bottom: 1.5px solid var(--ink);
+  background: var(--paper-2);
+}
+.premios .ph .t {
+  font: 800 12px 'Archivo';
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.premios .ph .s {
+  font: 600 11px 'Archivo';
+  color: var(--ink-2);
+}
+.prow-prize {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--rule);
+}
+.prow-prize:last-child {
+  border-bottom: 0;
+}
+.prow-prize .pl {
+  font-family: 'Bricolage Grotesque';
+  font-weight: 800;
+  font-size: 16px;
+  width: 28px;
+  color: var(--oxblood);
+}
+.prow-prize .nm {
+  flex: 1;
+  font: 700 13px 'Archivo';
+  color: var(--ink-2);
+}
+.prow-prize .amt {
+  font: 800 17px 'Archivo';
+  font-feature-settings: 'tnum' 1;
+}
+.prow-prize .pct {
+  font: 600 11px 'Archivo';
+  color: var(--ink-3);
+  width: 42px;
+  text-align: right;
+}
+
+.standing {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 18px;
+  border-bottom: 1px solid var(--rule);
+}
+.standing .pos {
+  font-family: 'Bricolage Grotesque';
+  font-weight: 800;
+  font-size: 18px;
+  width: 26px;
+  text-align: center;
+  font-feature-settings: 'tnum' 1;
+  color: var(--ink-2);
+}
+.standing.alive .pos {
+  color: var(--oxblood);
+}
+.standing .nm {
+  flex: 1;
+  font: 700 14.5px 'Archivo';
+}
+.standing.out {
+  opacity: 0.55;
+}
+
+.mini-badge {
+  font: 800 10px 'Archivo';
+  font-feature-settings: 'tnum' 1;
+  color: var(--oxblood);
+  background: color-mix(in srgb, var(--oxblood) 12%, transparent);
+  padding: 2px 6px;
+  border-radius: 5px;
+}
