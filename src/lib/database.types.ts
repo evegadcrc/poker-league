@@ -398,10 +398,7 @@ export type Database = {
         Args: { p_checked_in: number; p_season_id: string }
         Returns: number
       }
-      fn_pot: {
-        Args: { p_tournament_id: string }
-        Returns: number
-      }
+      fn_pot: { Args: { p_tournament_id: string }; Returns: number }
       fn_tournament_points: {
         Args: { p_tournament_id: string }
         Returns: undefined
@@ -419,10 +416,46 @@ export type Database = {
           wins: number
         }[]
       }
-      set_prizes: {
+      open_tournament: {
         Args: { p_tournament_id: string }
-        Returns: Json
+        Returns: {
+          ante_enabled: boolean
+          blind_structure_id: string | null
+          buy_in: number
+          created_at: string
+          created_by: string | null
+          current_level: number
+          final_table_size: number | null
+          geofence_radius_m: number
+          id: string
+          is_paused: boolean
+          level_started_at: string | null
+          name: string
+          paused_remaining_seconds: number | null
+          prize_pool_override: number | null
+          prizes: Json | null
+          rebuy_amount: number | null
+          rebuy_until_level: number | null
+          scheduled_at: string
+          season_id: string
+          starting_stack: number | null
+          status: Database["public"]["Enums"]["tournament_status"]
+          timer_mode: Database["public"]["Enums"]["timer_mode"]
+          venue_lat: number | null
+          venue_lng: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "tournament"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
+      recompute_final_table_size: {
+        Args: { p_tournament_id: string }
+        Returns: number
+      }
+      set_prizes: { Args: { p_tournament_id: string }; Returns: Json }
       set_prizes_manual: {
         Args: { p_amounts: Json; p_tournament_id: string }
         Returns: Json
