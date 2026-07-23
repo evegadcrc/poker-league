@@ -7,6 +7,31 @@ export type Json =
   | Json[]
 
 export type Database = {
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       blind_level: {
@@ -369,6 +394,27 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      fn_final_table_size: {
+        Args: { p_checked_in: number; p_season_id: string }
+        Returns: number
+      }
+      fn_tournament_points: {
+        Args: { p_tournament_id: string }
+        Returns: undefined
+      }
+      leaderboard: {
+        Args: { p_season_id: string }
+        Returns: {
+          avatar_url: string
+          form: string[]
+          games_played: number
+          player_id: string
+          player_name: string
+          podiums: number
+          total_points: number
+          wins: number
+        }[]
+      }
     }
     Enums: {
       entry_status:
@@ -508,6 +554,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       entry_status: [
