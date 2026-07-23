@@ -7,31 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       blind_level: {
@@ -376,6 +351,24 @@ export type Database = {
     Functions: {
       auth_is_admin: { Args: never; Returns: boolean }
       auth_player_id: { Args: never; Returns: string }
+      claim_player: {
+        Args: never
+        Returns: {
+          auth_user_id: string | null
+          avatar_url: string | null
+          created_at: string
+          email: string
+          id: string
+          is_admin: boolean
+          name: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "player"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
     }
     Enums: {
       entry_status:
@@ -515,9 +508,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       entry_status: [

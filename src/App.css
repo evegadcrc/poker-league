@@ -25,6 +25,11 @@
   align-items: center;
   gap: 10px;
 }
+.tb-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 .brandtext {
   display: flex;
   flex-direction: column;
@@ -178,4 +183,141 @@
 }
 [data-theme='neon'] .pill.podio {
   box-shadow: 0 0 12px -2px #22d3ee;
+}
+
+/* ---- buttons (ported from the prototype's .btn primitives) ---- */
+.btn {
+  font: 800 13px 'Archivo';
+  letter-spacing: 0.03em;
+  padding: 0 16px;
+  height: 44px;
+  border-radius: 12px;
+  cursor: pointer;
+  border: 1.5px solid var(--ink);
+  background: var(--paper-2);
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-decoration: none;
+  transition: transform 0.14s ease, background 0.2s ease;
+}
+.btn:active {
+  transform: scale(0.97);
+}
+.btn.primary {
+  background: var(--ink);
+  color: var(--paper);
+}
+.btn.blood {
+  background: var(--oxblood);
+  color: var(--on-oxblood);
+  border-color: var(--oxblood);
+}
+[data-theme='neon'] .btn.blood {
+  box-shadow: 0 0 22px -6px #ff2e88;
+}
+.btn.ghost {
+  background: transparent;
+}
+.btn.sm {
+  height: 36px;
+  padding: 0 12px;
+  font-size: 12px;
+  border-radius: 10px;
+}
+.btn.full {
+  width: 100%;
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.link-btn {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--oxblood);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* ---- login (ported from prototype #screen-login) ---- */
+.login-screen {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 34px 26px;
+  text-align: center;
+  position: relative;
+}
+.login-theme {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+}
+.login-logo {
+  align-self: center;
+  margin-bottom: 22px;
+}
+.login-mark {
+  font-family: 'Bricolage Grotesque';
+  font-weight: 800;
+  font-size: 44px;
+  letter-spacing: -0.03em;
+  line-height: 0.95;
+  text-transform: var(--disp-transform);
+}
+.login-sub {
+  font: 600 12px 'Archivo';
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin-top: 10px;
+}
+.login-form {
+  width: 100%;
+  max-width: 340px;
+  margin-top: 24px;
+}
+.login-in {
+  border: 1.5px solid var(--ink);
+  border-radius: 12px;
+  height: 50px;
+  padding: 0 15px;
+  background: var(--paper-2);
+  color: var(--ink);
+  font: 600 15px 'Archivo';
+  width: 100%;
+}
+.login-in::placeholder {
+  color: var(--ink-3);
+}
+.login-note {
+  font: 600 13px/1.4 'Archivo';
+  margin-top: 16px;
+}
+.login-note.ok {
+  color: var(--ink-2);
+}
+.login-note.err {
+  color: var(--oxblood);
+}
+
+/* ---- shared full-screen loading (route guards) ---- */
+.fullscreen-center {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+}
+.loading-text {
+  font: 700 12px 'Archivo';
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
 }
