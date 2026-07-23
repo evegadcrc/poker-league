@@ -2,9 +2,9 @@
 goal: Build "Poker League" PWA (React+Vite+TS+Tailwind+shadcn / Supabase) per poker-league-app-plan.md — Phase 1 first
 task: poker-league-prototype
 step: build
-progress: 72%
+progress: 76%
 blockers: none
-updated: 2026-07-24T00:40:00Z
+updated: 2026-07-24T01:20:00Z
 ---
 
 ## What we're doing
@@ -13,12 +13,11 @@ UI-first design for the Poker League Phase 1 prototype. Grilling complete; spec 
 oxblood, big grotesk, tabular figures), light + dark first-class, identity from scratch.
 
 ## Last action
-/dh:run autopilot. Slices 1-9 DONE + verified (…, 6e1c26e). Slice 9: mig 0006 rsvp/cancel_rsvp
-(status-locked, graduated penalty 0/−5/−10/−15, idempotent) + Fechas cards + FechaDetail
-(/fechas/:id) attendance/pills/CancelSheet. 66 tests green.
+/dh:run autopilot. Slices 1-10 DONE + verified (…, 0139ee0). Slice 10: mig 0007 check_in (live-gate,
+haversine, early_bird+chips, recompute) + admin_check_in + FE geolocation/states/"+2.000 fichas".
+82 tests green. Note: pre-existing lint warnings on test-mock `then` pattern → simplify pass.
 
 ## Next step
-/dh:run continues — slice 10/16: geofenced check-in. Mig 0007 check_in(id,lat,lng) — require
-status=live, haversine vs venue±radius, early_bird+bonus chips, admin_check_in override, and MUST
-call recompute_final_table_size after each check-in (slice-7 dependency). FE: geolocation +
-states + "+2.000 fichas" moment.
+/dh:run continues — slice 11/16: Live view (En Vivo) + realtime. src/routes/Live.tsx state-based
+timer (client computes remaining), blinds (hide ante when ante_enabled=false), fn_pot, Premios
+(tournament.prizes), standings; subscribe tournament:{id}+entries:{id}. Ground Realtime v2 in docs.
