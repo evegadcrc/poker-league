@@ -56,7 +56,14 @@ const NINE_HOURS = new Date(Date.now() + 9 * 3_600_000).toISOString()
 
 function setTournament(status = 'scheduled', scheduledAt = NINE_HOURS) {
   h.single.tournament = {
-    data: { id: 't-1', season_id: 's1', name: 'Fecha 9', scheduled_at: scheduledAt, status },
+    data: {
+      id: 't-1',
+      season_id: 's1',
+      name: 'Fecha 9',
+      scheduled_at: scheduledAt,
+      status,
+      geofence_radius_m: 100,
+    },
     error: null,
   }
 }

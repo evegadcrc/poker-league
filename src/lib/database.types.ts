@@ -374,10 +374,70 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_check_in: {
+        Args: { p_entry_id: string }
+        Returns: {
+          cancelled_at: string | null
+          check_in_geo_ok: boolean | null
+          checked_in_at: string | null
+          chips: number | null
+          chop_group: number | null
+          chopped: boolean
+          created_at: string
+          early_bird: boolean
+          eliminated_at: string | null
+          final_position: number | null
+          id: string
+          made_final_table: boolean
+          paid: boolean
+          player_id: string
+          points_earned: number | null
+          rebuys_count: number
+          rsvp_at: string | null
+          status: Database["public"]["Enums"]["entry_status"]
+          tournament_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "entry"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       auth_is_admin: { Args: never; Returns: boolean }
       auth_player_id: { Args: never; Returns: string }
       cancel_rsvp: {
         Args: { p_tournament_id: string }
+        Returns: {
+          cancelled_at: string | null
+          check_in_geo_ok: boolean | null
+          checked_in_at: string | null
+          chips: number | null
+          chop_group: number | null
+          chopped: boolean
+          created_at: string
+          early_bird: boolean
+          eliminated_at: string | null
+          final_position: number | null
+          id: string
+          made_final_table: boolean
+          paid: boolean
+          player_id: string
+          points_earned: number | null
+          rebuys_count: number
+          rsvp_at: string | null
+          status: Database["public"]["Enums"]["entry_status"]
+          tournament_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "entry"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      check_in: {
+        Args: { p_lat: number; p_lng: number; p_tournament_id: string }
         Returns: {
           cancelled_at: string | null
           check_in_geo_ok: boolean | null

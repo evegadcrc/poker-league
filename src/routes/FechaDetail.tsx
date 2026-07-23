@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { useAuth } from '@/lib/auth'
+import { useAuth, useRole } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import Avatar from '@/components/Avatar'
 import Sheet from '@/components/Sheet'
+import { classifyCheckInError, requestPosition, type Coords } from '@/lib/checkin'
 import {
   attendanceCounts,
   bandLabel,
@@ -24,6 +25,7 @@ type TournamentRow = {
   name: string
   scheduled_at: string
   status: TournamentStatus
+  geofence_radius_m: number
 }
 
 type EntryRow = {
@@ -34,11 +36,29 @@ type EntryRow = {
   cancelled_at: string | null
   checked_in_at: string | null
   early_bird: boolean
+  chips: number | null
   points_earned: number | null
   final_position: number | null
   rebuys_count: number
   player: { name: string; avatar_url: string | null } | null
 }
+
+/** Where the caller's own check-in attempt currently sits (drives banner + button). */
+type CheckIn =
+  | { kind: 'idle' }
+  | { kind: 'locating' }
+  | { kind: 'submitting' }
+  | { kind: 'out-of-range' }
+  | { kind: 'denied' }
+  | { kind: 'error'; message: string }
+
+/** Statuses that mean the player has already taken their seat. */
+const CHECKED_IN_STATUSES: ReadonlySet<EntryStatus> = new Set<EntryStatus>([
+  'checked_in',
+  'playing',
+  'eliminated',
+  'winner',
+])
 
 type Ready = {
   phase: 'ready'
@@ -61,7 +81,7 @@ const OVERLINE: Record<TournamentStatus, string> = {
 async function fetchDetail(id: string): Promise<State> {
   const { data: t, error: tErr } = await supabase
     .from('tournament')
-    .select('id, season_id, name, scheduled_at, status')
+    .select('id, season_id, name, scheduled_at, status, geofence_radius_m')
     .eq('id', id)
     .maybeSingle()
 
@@ -73,7 +93,7 @@ async function fetchDetail(id: string): Promise<State> {
     supabase
       .from('entry')
       .select(
-        'id, player_id, status, rsvp_at, cancelled_at, checked_in_at, early_bird, points_earned, final_position, rebuys_count, player:player_id(name, avatar_url)',
+        'id, player_id, status, rsvp_at, cancelled_at, checked_in_at, early_bird, chips, points_earned, final_position, rebuys_count, player:player_id(name, avatar_url)',
       )
       .eq('tournament_id', id),
     supabase.from('season').select('cancel_bands').eq('id', tournament.season_id).maybeSingle(),
@@ -96,11 +116,17 @@ async function fetchDetail(id: string): Promise<State> {
 export default function FechaDetail() {
   const { id = '' } = useParams()
   const { player } = useAuth()
+  const { isAdmin } = useRole()
   const navigate = useNavigate()
   const [state, setState] = useState<State>({ phase: 'loading' })
   const [attempt, setAttempt] = useState(0)
   const [busy, setBusy] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
+  const [checkIn, setCheckIn] = useState<CheckIn>({ kind: 'idle' })
+  // Non-null → show the celebratory "+2.000 fichas" sheet after a check-in.
+  const [celebrate, setCelebrate] = useState<{ earlyBird: boolean; chips: number | null } | null>(
+    null,
+  )
 
   const reload = useCallback(() => setAttempt((n) => n + 1), [])
 
@@ -136,6 +162,7 @@ export default function FechaDetail() {
             cancelled_at: null,
             checked_in_at: null,
             early_bird: false,
+            chips: null,
             points_earned: null,
             final_position: null,
             rebuys_count: 0,
@@ -171,6 +198,48 @@ export default function FechaDetail() {
     if (error) console.error('cancel_rsvp failed', error.message)
   }, [id, patchMine, reload])
 
+  // Geolocate → check_in RPC. Every failure resolves to a friendly state:
+  // no GPS / denied → "pedile al admin"; outside geofence → "estás fuera".
+  const doCheckIn = useCallback(async () => {
+    setCheckIn({ kind: 'locating' })
+    let coords: Coords
+    try {
+      coords = await requestPosition()
+    } catch {
+      setCheckIn({ kind: 'denied' })
+      return
+    }
+    setCheckIn({ kind: 'submitting' })
+    const { data, error } = await supabase.rpc('check_in', {
+      p_tournament_id: id,
+      p_lat: coords.lat,
+      p_lng: coords.lng,
+    })
+    if (error) {
+      const kind = classifyCheckInError(error.message)
+      if (kind === 'out-of-range') setCheckIn({ kind: 'out-of-range' })
+      else if (kind === 'not-live')
+        setCheckIn({ kind: 'error', message: 'El torneo aún no está abierto.' })
+      else setCheckIn({ kind: 'error', message: 'No se pudo hacer el check-in.' })
+      return
+    }
+    const row = Array.isArray(data) ? data[0] : undefined
+    setCheckIn({ kind: 'idle' })
+    patchMine('checked_in')
+    setCelebrate({ earlyBird: row?.early_bird ?? false, chips: row?.chips ?? null })
+    reload()
+  }, [id, patchMine, reload])
+
+  // Admin override for a player whose GPS failed (check_in_geo_ok=false in DB).
+  const doAdminCheckIn = useCallback(
+    async (entryId: string) => {
+      const { error } = await supabase.rpc('admin_check_in', { p_entry_id: entryId })
+      if (error) console.error('admin_check_in failed', error.message)
+      else reload()
+    },
+    [reload],
+  )
+
   if (state.phase === 'loading') {
     return (
       <>
@@ -205,6 +274,10 @@ export default function FechaDetail() {
   const counts = attendanceCounts(entries)
   const myEntry = player ? entries.find((e) => e.player_id === player.id) ?? null : null
   const scheduled = tournament.status === 'scheduled'
+  const live = tournament.status === 'live'
+  const canCheckIn = live && myEntry?.status === 'confirmed'
+  const alreadyCheckedIn = live && myEntry != null && CHECKED_IN_STATUSES.has(myEntry.status)
+  const locating = checkIn.kind === 'locating' || checkIn.kind === 'submitting'
 
   return (
     <>
@@ -231,8 +304,32 @@ export default function FechaDetail() {
           <RsvpActions status={myEntry?.status} busy={busy} onRsvp={doRsvp} onCancel={() => setCancelOpen(true)} />
         </div>
       )}
-      {tournament.status === 'live' && (
+      {canCheckIn && (
+        <>
+          <GeoBanner state={checkIn} radius={tournament.geofence_radius_m} />
+          <div className="btn-row">
+            <button
+              type="button"
+              className="btn blood full"
+              disabled={locating}
+              onClick={doCheckIn}
+            >
+              {checkIn.kind === 'locating'
+                ? 'Ubicando…'
+                : checkIn.kind === 'submitting'
+                  ? 'Confirmando…'
+                  : '📍 Hacer check-in'}
+            </button>
+          </div>
+        </>
+      )}
+      {live && (
         <div className="btn-row">
+          {alreadyCheckedIn && (
+            <button type="button" className="btn full" disabled>
+              ✓ Ya hiciste check-in
+            </button>
+          )}
           <Link className="btn blood full" to="/vivo">
             Ir a En Vivo
           </Link>
@@ -241,7 +338,13 @@ export default function FechaDetail() {
 
       <div className="plist">
         {entries.map((e) => (
-          <PlayerAttendanceRow key={e.id} entry={e} isMe={player?.id === e.player_id} />
+          <PlayerAttendanceRow
+            key={e.id}
+            entry={e}
+            isMe={player?.id === e.player_id}
+            canAdminCheckIn={isAdmin && live && e.status === 'confirmed'}
+            onAdminCheckIn={doAdminCheckIn}
+          />
         ))}
       </div>
 
@@ -252,6 +355,8 @@ export default function FechaDetail() {
         bands={bands}
         scheduledAt={tournament.scheduled_at}
       />
+
+      <CheckInCelebration celebrate={celebrate} onClose={() => setCelebrate(null)} />
     </>
   )
 
@@ -317,7 +422,17 @@ function ChipCount({ tone, n, label }: { tone: string; n: number; label: string 
   )
 }
 
-function PlayerAttendanceRow({ entry, isMe }: { entry: EntryRow; isMe: boolean }) {
+function PlayerAttendanceRow({
+  entry,
+  isMe,
+  canAdminCheckIn,
+  onAdminCheckIn,
+}: {
+  entry: EntryRow
+  isMe: boolean
+  canAdminCheckIn: boolean
+  onAdminCheckIn: (entryId: string) => void
+}) {
   const pill = statusPill(entry.status)
   const name = entry.player?.name ?? 'Jugador'
   return (
@@ -330,8 +445,107 @@ function PlayerAttendanceRow({ entry, isMe }: { entry: EntryRow; isMe: boolean }
         </b>
         <div className="sub">{noteFor(entry)}</div>
       </div>
-      <span className={`status ${pill.cls}`}>{pill.label}</span>
+      {canAdminCheckIn ? (
+        <button
+          type="button"
+          className="btn sm blood admin-checkin"
+          onClick={() => onAdminCheckIn(entry.id)}
+        >
+          Registrar
+        </button>
+      ) : (
+        <span className={`status ${pill.cls}`}>{pill.label}</span>
+      )}
     </div>
+  )
+}
+
+// Geofence banner (ported from the prototype `.geo`): neutral while idle,
+// oxblood "warn" variant when the caller is out of range or GPS failed.
+function GeoBanner({ state, radius }: { state: CheckIn; radius: number }) {
+  if (state.kind === 'out-of-range') {
+    return (
+      <div className="geo warn" role="alert">
+        <span className="ring">✕</span>
+        <div>
+          Estás <b className="ok">fuera de la sede</b>. Acercate al lugar (radio {radius} m) e
+          intentá de nuevo.
+        </div>
+      </div>
+    )
+  }
+  if (state.kind === 'denied') {
+    return (
+      <div className="geo warn" role="alert">
+        <span className="ring">!</span>
+        <div>
+          No pudimos leer tu ubicación.
+          <br />
+          <span style={{ color: 'var(--ink-3)' }}>Pedile al admin que te registre.</span>
+        </div>
+      </div>
+    )
+  }
+  if (state.kind === 'error') {
+    return (
+      <div className="geo warn" role="alert">
+        <span className="ring">!</span>
+        <div>{state.message}</div>
+      </div>
+    )
+  }
+  return (
+    <div className="geo">
+      <span className="ring">📍</span>
+      <div>
+        Hacé <b className="ok">check-in</b> cuando estés en la sede.
+        <br />
+        <span style={{ color: 'var(--ink-3)' }}>
+          Radio {radius} m · sin GPS, el admin te registra.
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// Celebratory sheet after a successful check-in — the "+2.000 fichas" moment
+// when the player arrived early (early_bird), a plain confirmation otherwise.
+function CheckInCelebration({
+  celebrate,
+  onClose,
+}: {
+  celebrate: { earlyBird: boolean; chips: number | null } | null
+  onClose: () => void
+}) {
+  const chipsLabel =
+    celebrate?.chips != null ? `${celebrate.chips.toLocaleString('es-CR')} fichas` : null
+  return (
+    <Sheet
+      open={celebrate != null}
+      onClose={onClose}
+      title={celebrate?.earlyBird ? '¡Llegaste temprano!' : '¡Check-in listo!'}
+    >
+      <div className="celebrate">
+        {celebrate?.earlyBird ? (
+          <>
+            <div className="big">+2.000 fichas</div>
+            <div className="sub">
+              Bonus por llegar antes del arranque.
+              {chipsLabel ? ` Arrancás con ${chipsLabel}.` : ''}
+            </div>
+          </>
+        ) : (
+          <div className="sub">
+            Check-in confirmado.{chipsLabel ? ` Arrancás con ${chipsLabel}.` : ''}
+          </div>
+        )}
+      </div>
+      <div className="btn-row">
+        <button type="button" className="btn blood full" onClick={onClose}>
+          Listo
+        </button>
+      </div>
+    </Sheet>
   )
 }
 

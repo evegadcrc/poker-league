@@ -968,3 +968,40 @@
   color: var(--ink-2);
   font: 600 13px/1.5 'Archivo';
 }
+
+/* ---- geofence banner state variants (check-in, slice 10) ---- */
+.geo.warn {
+  border-color: var(--oxblood);
+  color: var(--ink);
+}
+.geo.warn .ring {
+  border-color: var(--oxblood);
+  color: var(--oxblood);
+}
+.geo b.ok {
+  color: var(--ink);
+}
+
+/* the per-player admin "Registrar" affordance sits inline in the row */
+.prow .admin-checkin {
+  flex: none;
+  margin-left: 8px;
+}
+
+/* ---- check-in success celebration (early-bird "+2.000 fichas" moment) ---- */
+.celebrate {
+  text-align: center;
+  padding: 4px 18px 6px;
+}
+.celebrate .big {
+  font-family: 'Bricolage Grotesque';
+  font-weight: 800;
+  font-size: 30px;
+  line-height: 1.1;
+  color: #d9ae52;
+  margin: 6px 0;
+}
+.celebrate .sub {
+  font: 600 13px/1.5 'Archivo';
+  color: var(--ink-2);
+}
