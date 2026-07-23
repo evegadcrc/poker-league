@@ -1,0 +1,733 @@
+<!doctype html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Poker Friends · Póker — Prototipo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Archivo:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   POKER FRIENDS · Póker — prototype
+   Theme 1: "Sports Almanac" (paper/ink + oxblood) — light & dark
+   Theme 2: "Neón" (Vegas nightlife) — magenta/cyan glass+glow
+   ============================================================ */
+:root{
+  --paper:#F5F1E6; --paper-2:#FBF8F1; --paper-3:#EEE8D8;
+  --ink:#17130D; --ink-2:#57503F; --ink-3:#8C8472;
+  --rule:rgba(23,19,13,.14); --rule-strong:rgba(23,19,13,.30);
+  --oxblood:#7B1E22; --oxblood-2:#9A2A2E; --on-oxblood:#FBF3E4;
+  /* form-guide tiers (monochrome + oxblood) */
+  --champ-bg:#7B1E22; --champ-fg:#FBF3E4;
+  --podio-bg:#2B2620; --podio-fg:#F3ECD9;
+  --final-bg:#C4BCA8; --final-fg:#2B2620;
+  --out-bg:#E6E0D0;   --out-fg:#8A8272;
+  --shadow:0 1px 0 var(--rule), 0 18px 40px -28px rgba(23,19,13,.5);
+  --grain:.05; --tab-h:66px; --disp-transform:none; --disp-ls:-.02em;
+}
+[data-theme="dark"]{
+  --paper:#12100A; --paper-2:#1A160F; --paper-3:#221D14;
+  --ink:#F0EADB; --ink-2:#BBB2A0; --ink-3:#837B6B;
+  --rule:rgba(240,234,219,.15); --rule-strong:rgba(240,234,219,.32);
+  --oxblood:#DA5E58; --oxblood-2:#E7726B; --on-oxblood:#17130D;
+  --champ-bg:#DA5E58; --champ-fg:#17130D;
+  --podio-bg:#EDE7D7; --podio-fg:#17130D;
+  --final-bg:#4A4636; --final-fg:#EFE9DA;
+  --out-bg:#2A251A;   --out-fg:#9A927E;
+  --shadow:0 1px 0 var(--rule), 0 22px 46px -26px rgba(0,0,0,.8);
+  --grain:.07;
+}
+[data-theme="neon"]{
+  --paper:#14101F; --paper-2:rgba(150,120,220,.10); --paper-3:rgba(150,120,220,.18);
+  --ink:#F4ECFF; --ink-2:#C3B2E6; --ink-3:#8877B0;
+  --rule:rgba(180,150,255,.22); --rule-strong:rgba(180,150,255,.42);
+  --oxblood:#FF2E88; --oxblood-2:#22D3EE; --on-oxblood:#14101F;
+  --champ-bg:#FF2E88; --champ-fg:#14101F;
+  --podio-bg:#22D3EE; --podio-fg:#14101F;
+  --final-bg:rgba(180,150,255,.30); --final-fg:#F4ECFF;
+  --out-bg:rgba(255,255,255,.08);   --out-fg:#9A8BC0;
+  --shadow:0 0 0 1px rgba(255,46,136,.16), 0 20px 50px -24px rgba(255,46,136,.55);
+  --grain:0; --disp-transform:uppercase; --disp-ls:.01em;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:"Archivo",system-ui,sans-serif; background:var(--paper); color:var(--ink);
+  font-feature-settings:"tnum" 1,"ss01" 1; -webkit-font-smoothing:antialiased;
+  display:flex; align-items:center; justify-content:center; min-height:100dvh; padding:22px 14px;
+  transition:background .45s ease,color .45s ease;
+}
+[data-theme="neon"] body{
+  background:
+    radial-gradient(120% 80% at 8% -12%, rgba(255,46,136,.24), transparent 55%),
+    radial-gradient(110% 70% at 100% 0%, rgba(34,211,238,.20), transparent 55%), #14101F;
+}
+body::before{
+  content:""; position:fixed; inset:0; pointer-events:none; z-index:9999; opacity:var(--grain); mix-blend-mode:multiply;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+[data-theme="dark"] body::before{mix-blend-mode:screen}
+
+.phone{width:100%; max-width:412px; height:min(880px,94dvh); background:var(--paper); border:1.5px solid var(--ink);
+  border-radius:38px; overflow:hidden; position:relative; box-shadow:var(--shadow); display:flex; flex-direction:column}
+[data-theme="neon"] .phone{border-color:rgba(255,46,136,.5); box-shadow:0 0 70px -20px rgba(255,46,136,.55)}
+.scroll{flex:1; overflow-y:auto; overflow-x:hidden; -webkit-overflow-scrolling:touch; scrollbar-width:none}
+.scroll::-webkit-scrollbar{display:none}
+.screen{display:none; animation:fade .45s ease both; padding-bottom:calc(var(--tab-h) + 20px)}
+.screen.active{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.stagger>*{animation:rise .5s cubic-bezier(.2,.7,.2,1) both}
+.stagger>*:nth-child(1){animation-delay:.02s}.stagger>*:nth-child(2){animation-delay:.06s}
+.stagger>*:nth-child(3){animation-delay:.10s}.stagger>*:nth-child(4){animation-delay:.14s}
+.stagger>*:nth-child(5){animation-delay:.18s}.stagger>*:nth-child(6){animation-delay:.22s}
+.stagger>*:nth-child(7){animation-delay:.26s}.stagger>*:nth-child(8){animation-delay:.30s}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+/* top bar */
+.topbar{display:flex; align-items:center; justify-content:space-between; padding:16px 18px 12px;
+  border-bottom:1.5px solid var(--ink); background:var(--paper); position:sticky; top:0; z-index:20}
+.brand{display:flex; align-items:center; gap:10px}
+.brandtext{display:flex; flex-direction:column; line-height:1}
+.brand .kick{font:600 9px/1 "Archivo"; letter-spacing:.22em; text-transform:uppercase; color:var(--ink-2)}
+.brand .word{font-family:"Bricolage Grotesque"; font-weight:800; font-size:16px; letter-spacing:var(--disp-ls);
+  text-transform:var(--disp-transform); margin-top:3px; white-space:nowrap}
+.logo-emblem{border-radius:50%; background:#000 center/cover no-repeat; background-image:url("poker-friends.jpg"); flex:none; border:1.5px solid var(--rule-strong)}
+[data-theme="dark"] .logo-emblem{border-color:var(--oxblood)}
+[data-theme="neon"] .logo-emblem{border-color:#FF2E88; box-shadow:0 0 22px -4px #FF2E88, 0 0 34px -8px #22D3EE}
+.login-logo{align-self:center; margin-bottom:22px}
+.tb-actions{display:flex; gap:8px; align-items:center}
+.icon-btn{width:38px; height:38px; border:1.5px solid var(--ink); background:transparent; color:var(--ink);
+  border-radius:11px; display:grid; place-items:center; cursor:pointer; font-size:16px; transition:transform .15s ease, background .2s ease}
+.icon-btn:active{transform:scale(.92)} .icon-btn:hover{background:var(--paper-3)}
+.role-switch{display:flex; border:1.5px solid var(--ink); border-radius:11px; overflow:hidden; height:38px}
+.role-switch button{border:0; background:transparent; color:var(--ink-2); font:700 11px "Archivo";
+  letter-spacing:.04em; text-transform:uppercase; padding:0 11px; cursor:pointer}
+.role-switch button.on{background:var(--ink); color:var(--paper)}
+[data-theme="neon"] .icon-btn,[data-theme="neon"] .role-switch{border-color:rgba(255,46,136,.55)}
+
+.section-head{display:flex; align-items:baseline; justify-content:space-between; padding:20px 18px 8px}
+.section-head h1{font-family:"Bricolage Grotesque"; font-weight:800; font-size:30px; letter-spacing:var(--disp-ls);
+  text-transform:var(--disp-transform); line-height:.98}
+.section-head .meta{font:600 11px "Archivo"; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-2)}
+.overline{font:700 10px "Archivo"; letter-spacing:.22em; text-transform:uppercase; color:var(--oxblood); display:block; margin-bottom:6px}
+.rule{height:1.5px; background:var(--ink); margin:0 18px}
+.rule.faint{background:var(--rule)}
+
+/* leaderboard */
+.lb-legend{display:grid; grid-template-columns:34px 1fr auto; gap:10px; align-items:center; padding:10px 18px 8px;
+  color:var(--ink-3); font:700 10px "Archivo"; letter-spacing:.14em; text-transform:uppercase}
+.lb-row{display:grid; grid-template-columns:34px 1fr auto; gap:10px; align-items:center; padding:13px 18px;
+  border-bottom:1px solid var(--rule); cursor:pointer; transition:background .18s ease; position:relative}
+.lb-row:hover{background:var(--paper-2)}
+.lb-row.you{background:linear-gradient(90deg,color-mix(in srgb,var(--oxblood) 12%,transparent),transparent)}
+.lb-row.you::before{content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--oxblood)}
+.rank{font-family:"Bricolage Grotesque"; font-weight:800; font-size:26px; line-height:1; text-align:center; color:var(--ink); font-feature-settings:"tnum" 1}
+.rank.top1{color:var(--oxblood)}
+.who{display:flex; align-items:center; gap:11px; min-width:0}
+.avatar{width:40px; height:40px; border-radius:50%; border:1.5px solid var(--ink); flex:none; display:grid; place-items:center;
+  font-family:"Bricolage Grotesque"; font-weight:700; font-size:15px; background:var(--paper-3); color:var(--ink); overflow:hidden;
+  background-size:cover; background-position:center; position:relative}
+.who .name{display:flex; flex-direction:column; min-width:0}
+.who .name b{font:700 15.5px "Archivo"; letter-spacing:-.01em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.who .name .form{display:flex; gap:3px; margin-top:5px}
+.pill{width:19px; height:19px; border-radius:5px; display:grid; place-items:center; font:800 10px "Archivo"; font-feature-settings:"tnum" 1}
+.pill.champ{background:var(--champ-bg); color:var(--champ-fg)}
+.pill.podio{background:var(--podio-bg); color:var(--podio-fg)}
+.pill.final{background:var(--final-bg); color:var(--final-fg)}
+.pill.out{background:var(--out-bg); color:var(--out-fg)}
+[data-theme="neon"] .pill.champ{box-shadow:0 0 12px -2px #FF2E88}
+[data-theme="neon"] .pill.podio{box-shadow:0 0 12px -2px #22D3EE}
+.lb-stats{display:flex; align-items:baseline; gap:14px}
+.stat{display:flex; flex-direction:column; align-items:flex-end}
+.stat .v{font:800 16px "Archivo"; font-feature-settings:"tnum" 1; line-height:1}
+.stat .k{font:700 9px "Archivo"; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-3); margin-top:3px}
+.stat.pts .v{font-size:20px; color:var(--oxblood)}
+
+/* legend */
+.legend{display:flex; flex-wrap:wrap; gap:14px 18px; padding:16px 18px; margin:6px 0; border-top:1px solid var(--rule); border-bottom:1px solid var(--rule)}
+.legend span{display:inline-flex; align-items:center; gap:7px; font:700 11px "Archivo"; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-2)}
+.ld{display:inline-block; width:12px; height:12px; border-radius:50%}
+.ld.champ{background:var(--champ-bg)} .ld.podio{background:var(--podio-bg)}
+.ld.final{background:var(--final-bg); width:10px; height:10px; border-radius:2px; transform:rotate(45deg)}
+.ld.out{background:var(--out-bg); width:15px; height:4px; border-radius:2px}
+
+.pad{padding:0 18px}
+.card{border:1.5px solid var(--ink); border-radius:16px; background:var(--paper-2); padding:15px; margin:12px 0; box-shadow:var(--shadow)}
+[data-theme="neon"] .card{backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); border-color:rgba(255,46,136,.35)}
+.tourn-card{display:block; cursor:pointer; text-align:left; width:100%; color:inherit; font:inherit; border:1.5px solid var(--ink);
+  border-radius:16px; background:var(--paper-2); padding:0; margin:12px 0; overflow:hidden; box-shadow:var(--shadow); transition:transform .15s ease}
+[data-theme="neon"] .tourn-card{backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); border-color:rgba(255,46,136,.35)}
+.tourn-card:active{transform:scale(.99)}
+.tc-top{padding:15px 15px 12px; display:flex; justify-content:space-between; align-items:flex-start; gap:10px}
+.tc-title{font-family:"Bricolage Grotesque"; font-weight:800; font-size:19px; letter-spacing:-.02em; text-transform:var(--disp-transform); line-height:1.02}
+.tc-sub{font:600 12px "Archivo"; color:var(--ink-2); margin-top:5px}
+.badge{font:800 10px "Archivo"; letter-spacing:.1em; text-transform:uppercase; padding:5px 9px; border-radius:999px; white-space:nowrap; border:1.5px solid}
+.badge.live{background:var(--oxblood); color:var(--on-oxblood); border-color:var(--oxblood); animation:pulse 1.8s infinite}
+[data-theme="neon"] .badge.live{box-shadow:0 0 16px -2px #FF2E88}
+.badge.up{background:transparent; color:var(--ink); border-color:var(--ink)}
+.badge.done{background:var(--paper-3); color:var(--ink-2); border-color:var(--rule-strong)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.55}}
+.tc-foot{display:flex; border-top:1.5px solid var(--ink)}
+.tc-foot .cell{flex:1; padding:10px 12px; border-right:1px solid var(--rule)} .tc-foot .cell:last-child{border-right:0}
+.tc-foot .cell .v{font:800 16px "Archivo"; font-feature-settings:"tnum" 1}
+.tc-foot .cell .k{font:700 9px "Archivo"; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-3); margin-top:2px}
+
+/* attendance */
+.att-head{display:flex; gap:8px; padding:14px 18px 6px; flex-wrap:wrap}
+.chip-count{display:flex; align-items:center; gap:7px; border:1.5px solid var(--ink); border-radius:999px; padding:6px 12px 6px 8px}
+.chip-count .dot{width:9px; height:9px; border-radius:50%}
+.chip-count .n{font:800 14px "Archivo"; font-feature-settings:"tnum" 1}
+.chip-count .l{font:700 10px "Archivo"; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-2)}
+.dot.confirmed{background:var(--podio-bg)} .dot.declined{background:var(--oxblood)} .dot.none{background:var(--out-bg)}
+
+.plist{border-top:1.5px solid var(--ink)}
+.prow{display:flex; align-items:center; gap:11px; padding:12px 18px; border-bottom:1px solid var(--rule)}
+.prow .pinfo{flex:1; min-width:0}
+.prow .pinfo b{font:700 15px "Archivo"; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.prow .pinfo .sub{font:600 11.5px "Archivo"; color:var(--ink-2); margin-top:2px; display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+.status{font:800 9.5px "Archivo"; letter-spacing:.09em; text-transform:uppercase; padding:4px 8px; border-radius:6px; white-space:nowrap; border:1.5px solid transparent}
+.s-confirmed{background:color-mix(in srgb,var(--podio-bg) 16%,transparent); color:var(--ink)}
+.s-declined{background:var(--out-bg); color:var(--ink-2)}
+.s-none{background:transparent; color:var(--ink-3); border-color:var(--rule-strong)}
+.s-checked{background:color-mix(in srgb,var(--final-bg) 40%,transparent); color:var(--ink)}
+.s-playing{background:color-mix(in srgb,var(--oxblood) 14%,transparent); color:var(--oxblood)}
+.s-noshow{background:color-mix(in srgb,var(--oxblood) 20%,transparent); color:var(--oxblood)}
+.s-out{background:var(--out-bg); color:var(--ink-2)}
+.s-win{background:var(--oxblood); color:var(--on-oxblood)}
+.mini-badge{font:800 10px "Archivo"; font-feature-settings:"tnum" 1; color:var(--oxblood); background:color-mix(in srgb,var(--oxblood) 12%,transparent); padding:2px 6px; border-radius:5px}
+.chips-badge{font:800 10px "Archivo"; font-feature-settings:"tnum" 1; color:var(--ink-2); background:var(--paper-3); padding:2px 6px; border-radius:5px}
+.paid-check{color:var(--podio-bg); font-weight:800} [data-theme="dark"] .paid-check{color:#63B587} [data-theme="neon"] .paid-check{color:#22D3EE}
+.unpaid{color:var(--oxblood); font-weight:800}
+
+.btn{font:800 13px "Archivo"; letter-spacing:.03em; padding:0 16px; height:44px; border-radius:12px; cursor:pointer;
+  border:1.5px solid var(--ink); background:var(--paper-2); color:var(--ink); display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  transition:transform .14s ease, background .2s ease}
+.btn:active{transform:scale(.97)}
+.btn.primary{background:var(--ink); color:var(--paper)}
+.btn.blood{background:var(--oxblood); color:var(--on-oxblood); border-color:var(--oxblood)}
+[data-theme="neon"] .btn.blood{box-shadow:0 0 22px -6px #FF2E88}
+.btn.ghost{background:transparent}
+.btn.sm{height:36px; padding:0 12px; font-size:12px; border-radius:10px}
+.btn.full{width:100%} .btn:disabled{opacity:.4; cursor:not-allowed}
+.btn-row{display:flex; gap:10px; padding:14px 18px}
+
+/* live */
+.live-wrap{background:var(--ink); color:var(--paper); margin:14px 18px; border-radius:20px; padding:22px 18px; text-align:center; position:relative; overflow:hidden}
+[data-theme="neon"] .live-wrap{background:linear-gradient(145deg,rgba(255,46,136,.18),rgba(34,211,238,.13)); border:1px solid rgba(255,46,136,.4); box-shadow:0 0 44px -12px rgba(255,46,136,.55); color:var(--ink)}
+.live-wrap .lvl{font:700 11px "Archivo"; letter-spacing:.24em; text-transform:uppercase; color:color-mix(in srgb,var(--paper) 65%,transparent)}
+[data-theme="neon"] .live-wrap .lvl{color:var(--ink-2)}
+.timer{font-family:"Archivo"; font-weight:800; font-feature-settings:"tnum" 1; font-size:78px; line-height:.9; letter-spacing:-.03em; margin:10px 0 6px}
+[data-theme="neon"] .timer{text-shadow:0 0 26px rgba(34,211,238,.7)}
+.blinds{display:flex; justify-content:center; gap:22px; margin-top:6px}
+.blinds .b .v{font:800 22px "Archivo"; font-feature-settings:"tnum" 1}
+.blinds .b .k{font:700 9px "Archivo"; letter-spacing:.14em; text-transform:uppercase; color:color-mix(in srgb,var(--paper) 60%,transparent); margin-top:3px}
+[data-theme="neon"] .blinds .b .k{color:var(--ink-2)}
+.next-lvl{margin-top:14px; font:600 12px "Archivo"; color:color-mix(in srgb,var(--paper) 70%,transparent); border-top:1px solid rgba(255,255,255,.16); padding-top:12px}
+[data-theme="neon"] .next-lvl{color:var(--ink-2); border-top-color:var(--rule)}
+.live-stats{display:flex; margin:0 18px; border:1.5px solid var(--ink); border-radius:14px; overflow:hidden}
+.live-stats .c{flex:1; padding:13px 8px; text-align:center; border-right:1px solid var(--rule)} .live-stats .c:last-child{border-right:0}
+.live-stats .c .v{font:800 20px "Archivo"; font-feature-settings:"tnum" 1; color:var(--oxblood)}
+.live-stats .c .k{font:700 8.5px "Archivo"; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-3); margin-top:3px}
+
+/* premios */
+.premios{margin:12px 18px; border:1.5px solid var(--ink); border-radius:16px; overflow:hidden}
+.premios .ph{display:flex; justify-content:space-between; align-items:center; padding:12px 14px; border-bottom:1.5px solid var(--ink); background:var(--paper-2)}
+.premios .ph .t{font:800 12px "Archivo"; letter-spacing:.1em; text-transform:uppercase}
+.premios .ph .s{font:600 11px "Archivo"; color:var(--ink-2)}
+.prow-prize{display:flex; align-items:center; gap:12px; padding:11px 14px; border-bottom:1px solid var(--rule)} .prow-prize:last-child{border-bottom:0}
+.prow-prize .pl{font-family:"Bricolage Grotesque"; font-weight:800; font-size:16px; width:28px; color:var(--oxblood)}
+.prow-prize .nm{flex:1; font:700 13px "Archivo"; color:var(--ink-2)}
+.prow-prize .amt{font:800 17px "Archivo"; font-feature-settings:"tnum" 1}
+.prow-prize .pct{font:600 11px "Archivo"; color:var(--ink-3); width:42px; text-align:right}
+
+.standing{display:flex; align-items:center; gap:12px; padding:11px 18px; border-bottom:1px solid var(--rule)}
+.standing .pos{font-family:"Bricolage Grotesque"; font-weight:800; font-size:18px; width:26px; text-align:center; font-feature-settings:"tnum" 1; color:var(--ink-2)}
+.standing.alive .pos{color:var(--oxblood)} .standing .nm{flex:1; font:700 14.5px "Archivo"} .standing.out{opacity:.55}
+
+.clock-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:0 18px 6px}
+.clock-grid .btn{height:52px} .clock-grid .btn.wide{grid-column:span 2}
+
+/* admin sub-nav */
+.subnav{display:flex; gap:8px; padding:14px 18px 4px}
+.subnav button{flex:1; border:1.5px solid var(--ink); background:transparent; color:var(--ink-2); font:800 11px "Archivo";
+  letter-spacing:.02em; text-transform:uppercase; padding:9px 6px; border-radius:999px; cursor:pointer; white-space:nowrap; text-align:center}
+.subnav button.on{background:var(--ink); color:var(--paper)}
+.apanel{display:none} .apanel.on{display:block; animation:fade .35s ease both}
+
+/* forms */
+.field{padding:10px 18px}
+.field label{font:700 10px "Archivo"; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-2); display:block; margin-bottom:6px}
+.field input,.field select,.field textarea{width:100%; border:1.5px solid var(--ink); border-radius:11px; height:46px; padding:0 13px;
+  background:var(--paper-2); color:var(--ink); font:600 14px "Archivo"}
+.field textarea{height:auto; padding:12px 13px; line-height:1.5; resize:vertical}
+.field .two{display:flex; gap:10px} .field .two>*{flex:1}
+.field .hintline{font:600 11px "Archivo"; color:var(--ink-3); margin-top:5px}
+.toggle-row{display:flex; align-items:center; justify-content:space-between; padding:12px 18px; border-top:1px solid var(--rule); border-bottom:1px solid var(--rule); margin-top:6px}
+.toggle-row .tl{font:700 13px "Archivo"} .toggle-row .ts{font:600 11px "Archivo"; color:var(--ink-2); margin-top:2px}
+.switch{width:48px; height:28px; border-radius:999px; border:1.5px solid var(--ink); background:var(--paper-3); position:relative; cursor:pointer; flex:none}
+.switch::after{content:""; position:absolute; top:2px; left:2px; width:20px; height:20px; border-radius:50%; background:var(--ink); transition:transform .2s ease}
+.switch.on{background:var(--oxblood); border-color:var(--oxblood)} .switch.on::after{transform:translateX(20px); background:var(--on-oxblood)}
+.bands{display:flex; flex-direction:column; gap:0; margin:8px 18px 4px; border:1.5px solid var(--ink); border-radius:12px; overflow:hidden}
+.bands .br{display:flex; justify-content:space-between; padding:10px 13px; border-bottom:1px solid var(--rule); font:600 12.5px "Archivo"} .bands .br:last-child{border-bottom:0}
+.bands .br b{font-weight:800; color:var(--oxblood)}
+
+/* profile */
+.prof-hero{display:flex; align-items:center; gap:14px; padding:18px}
+.prof-hero .avatar{width:54px; height:54px; font-size:20px}
+.avatar .cam{position:absolute; right:-2px; bottom:-2px; width:22px; height:22px; border-radius:50%; background:var(--oxblood); color:var(--on-oxblood);
+  display:grid; place-items:center; font-size:11px; border:2px solid var(--paper)}
+.prof-hero h2{font-family:"Bricolage Grotesque"; font-weight:800; font-size:24px; letter-spacing:-.02em; text-transform:var(--disp-transform)}
+.prof-hero .sub{font:600 12px "Archivo"; color:var(--ink-2); margin-top:3px}
+.prof-stats{display:grid; grid-template-columns:repeat(4,1fr); border-top:1.5px solid var(--ink); border-bottom:1.5px solid var(--ink)}
+.prof-stats .c{padding:14px 8px; text-align:center; border-right:1px solid var(--rule)} .prof-stats .c:last-child{border-right:0}
+.prof-stats .c .v{font-family:"Bricolage Grotesque"; font-weight:800; font-size:24px; font-feature-settings:"tnum" 1}
+.prof-stats .c .v.blood{color:var(--oxblood)}
+.prof-stats .c .k{font:700 8.5px "Archivo"; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-3); margin-top:4px}
+.spark{padding:16px 18px} .spark svg{width:100%; height:88px; display:block}
+.big-form{display:flex; gap:6px; flex-wrap:wrap; padding:4px 18px 18px}
+.big-form .pill{width:30px; height:30px; border-radius:7px; font-size:13px}
+
+#screen-login{display:none; height:100%; flex-direction:column; justify-content:center; padding:34px 26px calc(var(--tab-h) + 34px)}
+#screen-login.active{display:flex}
+.login-mark{font-family:"Bricolage Grotesque"; font-weight:800; font-size:44px; letter-spacing:-.03em; line-height:.95; text-transform:var(--disp-transform)}
+.login-mark .suit{color:var(--oxblood)}
+.login-in{border:1.5px solid var(--ink); border-radius:12px; height:50px; padding:0 15px; background:var(--paper-2); color:var(--ink); font:600 15px "Archivo"; width:100%; margin-top:14px}
+.login-in::placeholder{color:var(--ink-3)}
+
+.tabs{position:absolute; left:0; right:0; bottom:0; height:var(--tab-h); background:var(--paper); border-top:1.5px solid var(--ink); display:flex; z-index:30; padding-bottom:env(safe-area-inset-bottom)}
+.tab{flex:1; border:0; background:transparent; cursor:pointer; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; color:var(--ink-3)}
+.tab .ic{font-size:19px; line-height:1} .tab .lb{font:700 9.5px "Archivo"; letter-spacing:.06em; text-transform:uppercase}
+.tab.on{color:var(--ink)} .tab.admin-only{display:none}
+body[data-role="admin"] .tab.admin-only{display:flex}
+
+.toast{position:absolute; left:16px; right:16px; bottom:calc(var(--tab-h) + 14px); z-index:60; background:var(--ink); color:var(--paper);
+  border-radius:13px; padding:13px 16px; display:flex; align-items:center; gap:11px; font:700 13px "Archivo";
+  transform:translateY(180%); opacity:0; visibility:hidden; transition:transform .4s cubic-bezier(.2,.8,.2,1), opacity .3s, visibility .3s; box-shadow:0 12px 30px -12px rgba(0,0,0,.5)}
+.toast.show{transform:none; opacity:1; visibility:visible}
+.toast .big{font-family:"Bricolage Grotesque"; font-weight:800; font-size:16px; color:#D9AE52}
+
+/* modal / sheet */
+.scrim{position:absolute; inset:0; background:rgba(10,8,4,.55); z-index:70; opacity:0; visibility:hidden; transition:opacity .3s, visibility .3s; display:flex; align-items:flex-end}
+.scrim.show{opacity:1; visibility:visible}
+.sheet{width:100%; background:var(--paper); border-top-left-radius:22px; border-top-right-radius:22px; border-top:1.5px solid var(--ink);
+  padding:8px 0 20px; transform:translateY(100%); transition:transform .35s cubic-bezier(.2,.8,.2,1); max-height:82%; overflow-y:auto}
+.scrim.show .sheet{transform:none}
+.sheet .grip{width:40px; height:4px; border-radius:2px; background:var(--rule-strong); margin:8px auto 4px}
+.sheet h3{font-family:"Bricolage Grotesque"; font-weight:800; font-size:22px; padding:10px 18px 4px; text-transform:var(--disp-transform)}
+.sheet p{font:600 13px "Archivo"; color:var(--ink-2); padding:2px 18px 8px; line-height:1.5}
+
+.back{display:flex; align-items:center; gap:7px; padding:14px 18px 0; cursor:pointer; font:700 12px "Archivo"; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-2); background:none; border:0}
+.hint{font:600 12px "Archivo"; color:var(--ink-2); padding:10px 18px; line-height:1.5} .hint b{color:var(--ink)}
+.geo{display:flex; align-items:center; gap:10px; margin:10px 18px; padding:12px 14px; border:1.5px dashed var(--rule-strong); border-radius:13px; font:600 12.5px "Archivo"; color:var(--ink-2)}
+.geo .ring{width:26px;height:26px;border-radius:50%;border:2px solid var(--podio-bg);display:grid;place-items:center;color:var(--ink);font-weight:800}
+</style>
+</head>
+<body data-role="player">
+<div class="phone">
+  <div class="topbar">
+    <div class="brand"><div class="logo-emblem" style="width:36px;height:36px"></div><div class="brandtext"><span class="kick">Temporada 2026</span><span class="word">POKER&nbsp;FRIENDS</span></div></div>
+    <div class="tb-actions">
+      <div class="role-switch" title="Cambiar rol (demo)">
+        <button id="r-player" class="on" onclick="setRole('player')">Jugador</button>
+        <button id="r-admin" onclick="setRole('admin')">Admin</button>
+      </div>
+      <button class="icon-btn" id="theme-btn" onclick="cycleTheme()" title="Tema" aria-label="Cambiar tema">☀</button>
+    </div>
+  </div>
+
+  <div class="scroll" id="scroll">
+
+    <!-- LIGA -->
+    <section class="screen active" id="screen-liga">
+      <div class="section-head"><div><span class="overline">Clasificación general</span><h1>Tabla</h1></div><span class="meta">8 fechas</span></div>
+      <div class="rule"></div>
+      <div class="lb-legend"><span>#</span><span>Jugador</span><span>Pts</span></div>
+      <div id="lb-rows" class="stagger"></div>
+      <div class="legend">
+        <span><i class="ld champ"></i>Campeón</span><span><i class="ld podio"></i>Podio</span>
+        <span><i class="ld final"></i>Mesa final</span><span><i class="ld out"></i>Fuera</span>
+      </div>
+    </section>
+
+    <!-- FECHAS -->
+    <section class="screen" id="screen-fechas">
+      <div class="section-head"><div><span class="overline">Calendario</span><h1>Fechas</h1></div></div>
+      <div class="rule"></div>
+      <div class="pad stagger" id="fechas-list"></div>
+      <div class="btn-row" id="fechas-admin" style="display:none"><button class="btn primary full" onclick="setRole('admin');go('admin');adminTab('crear')">+ Nueva fecha</button></div>
+    </section>
+
+    <!-- FECHA DETAIL -->
+    <section class="screen" id="screen-fecha">
+      <button class="back" onclick="go('fechas')">← Fechas</button>
+      <div class="section-head" style="padding-top:10px"><div><span class="overline" id="fd-status">Próxima</span><h1 id="fd-title">Fecha 9</h1></div></div>
+      <div class="tc-sub" style="padding:0 18px 4px" id="fd-when">Sáb 26 Jul · 19:00 · Casa de Mau</div>
+      <div class="rule faint"></div>
+      <div class="geo" id="fd-geo">
+        <span class="ring">✓</span>
+        <div>Estás <b style="color:var(--ink)">dentro de la sede</b> — check-in disponible.<br><span style="color:var(--ink-3)">Radio 100 m · sin GPS, el admin te registra.</span></div>
+      </div>
+      <div class="att-head" id="fd-counts"></div>
+      <div class="btn-row" id="fd-actions"></div>
+      <div class="plist" id="fd-players"></div>
+    </section>
+
+    <!-- EN VIVO -->
+    <section class="screen" id="screen-vivo">
+      <div class="section-head"><div><span class="overline">Fecha 8 · En juego</span><h1>En vivo</h1></div><span class="badge live">Live</span></div>
+      <div class="live-wrap">
+        <div class="lvl">Nivel 5</div>
+        <div class="timer" id="timer">08:32</div>
+        <div class="blinds" id="blinds"></div>
+        <div class="next-lvl">Siguiente · Nivel 6 — 400 / 800 · 12:00</div>
+      </div>
+      <div class="live-stats">
+        <div class="c"><div class="v">₡140K</div><div class="k">Pozo</div></div>
+        <div class="c"><div class="v">6<span style="color:var(--ink-3);font-size:14px">/11</span></div><div class="k">Quedan</div></div>
+        <div class="c"><div class="v">124K</div><div class="k">Fichas en juego</div></div>
+      </div>
+      <div class="premios" id="premios"></div>
+      <div class="section-head" style="padding-bottom:6px"><div><span class="overline">Posiciones en vivo</span></div></div>
+      <div class="rule faint"></div>
+      <div id="vivo-standings"></div>
+      <div class="btn-row" id="vivo-actions"></div>
+    </section>
+
+    <!-- ADMIN -->
+    <section class="screen" id="screen-admin">
+      <div class="section-head"><div><span class="overline">Consola de admin</span><h1>Admin</h1></div></div>
+      <div class="subnav">
+        <button id="an-consola" class="on" onclick="adminTab('consola')">Consola</button>
+        <button id="an-crear" onclick="adminTab('crear')">Nueva fecha</button>
+        <button id="an-liga" onclick="adminTab('liga')">Liga</button>
+      </div>
+
+      <!-- consola -->
+      <div class="apanel on" id="ap-consola">
+        <div class="live-wrap" style="padding:16px"><div class="lvl">Nivel 5 · reloj</div><div class="timer" style="font-size:56px" id="timer2">08:32</div></div>
+        <div class="clock-grid">
+          <button class="btn primary wide" onclick="toast('⏸  Reloj en pausa')">⏸  Pausar</button>
+          <button class="btn" onclick="toast('−1 min')">−1 min</button>
+          <button class="btn" onclick="toast('+1 min')">+1 min</button>
+          <button class="btn ghost" onclick="toast('◀ Nivel 4')">◀ Nivel</button>
+          <button class="btn ghost" onclick="toast('Nivel 6 ▶')">Nivel ▶</button>
+          <button class="btn ghost wide" onclick="toast('Avance automático · editar blinds')">✎  Editar blinds · avance auto</button>
+        </div>
+        <div class="section-head" style="padding-bottom:6px"><div><span class="overline">Jugadores · toca para ajustar</span></div></div>
+        <div class="rule faint"></div>
+        <div class="plist" id="admin-players"></div>
+        <div class="btn-row" style="gap:10px">
+          <button class="btn ghost" style="flex:1" onclick="openWhats()">📲 Resumen</button>
+          <button class="btn blood" style="flex:2" onclick="toast('🏁  Fecha completada — puntos calculados')">🏁  Completar fecha</button>
+        </div>
+      </div>
+
+      <!-- crear fecha -->
+      <div class="apanel" id="ap-crear">
+        <div class="field"><label>Nombre de la fecha</label><input value="Fecha 10 — Casa de José"></div>
+        <div class="field"><label>Fecha y hora</label><div class="two"><input type="date" value="2026-08-09"><input type="time" value="19:00"></div></div>
+        <div class="field"><label>Sede (geocerca)</label><input value="Casa de José"><div class="hintline">📍 Usar mi ubicación actual · radio de check-in 100 m</div></div>
+        <div class="field"><label>Buy-in / Recompra</label><div class="two"><input value="₡20.000"><input value="₡20.000"></div></div>
+        <div class="field"><label>Stack inicial / Bonus llegada temprana</label><div class="two"><input value="10.000"><input value="+2.000"></div></div>
+        <div class="field"><label>Recompra permitida hasta</label><select><option>Nivel 6</option><option>Nivel 4</option><option>Nivel 8</option><option>Sin recompras</option></select></div>
+        <div class="field"><label>Estructura de blinds</label><select><option>Estándar 15 min</option><option>Turbo 10 min</option><option>Profunda 20 min</option></select></div>
+        <div class="toggle-row"><div><div class="tl">Usar ante</div><div class="ts">Normalmente sin ante</div></div><div class="switch" id="sw-ante" onclick="this.classList.toggle('on');toast(this.classList.contains('on')?'Ante activado':'Sin ante')"></div></div>
+        <div class="btn-row"><button class="btn blood full" onclick="toast('✓ Fecha creada · jugadores notificados');adminTab('consola')">Crear fecha</button></div>
+      </div>
+
+      <!-- liga / temporada -->
+      <div class="apanel" id="ap-liga">
+        <div class="field"><label>Temporada activa</label><input value="Liga 2026"></div>
+        <div class="field"><label>Multiplicador de puntos</label><input value="10"></div>
+        <div class="field"><label>Bonus Mesa Final / Top 3 / Asistencia</label><div class="two"><input value="5"><input value="8"></div><input style="margin-top:8px" value="Asistencia: 2"></div>
+        <div class="field"><label>Tamaño de mesa final</label><input value="8 jugadores"></div>
+        <div class="field"><label>Castigo no-show (confirmó y no llegó)</label><input value="−15 pts (máximo)"></div>
+        <div class="field" style="padding-bottom:2px"><label>Castigo por cancelar (según antelación)</label></div>
+        <div class="bands">
+          <div class="br"><span>Más de 24 h antes</span><b>0</b></div>
+          <div class="br"><span>24 h – 12 h</span><b>−5</b></div>
+          <div class="br"><span>12 h – 6 h</span><b>−10</b></div>
+          <div class="br"><span>Menos de 6 h</span><b>−15</b></div>
+        </div>
+        <div class="btn-row"><button class="btn primary full" onclick="toast('✓ Ajustes guardados')">Guardar ajustes</button></div>
+        <div class="rule faint"></div>
+        <div class="field" style="padding-top:14px"><label>Fin de temporada</label><div class="hintline">Cerrar 2026 (queda como historial) y abrir 2027 — el roster se mantiene, los puntos vuelven a cero.</div></div>
+        <div class="btn-row"><button class="btn ghost full" onclick="openSeason()">Cerrar liga actual</button></div>
+      </div>
+    </section>
+
+    <!-- PERFIL -->
+    <section class="screen" id="screen-perfil">
+      <div class="prof-hero">
+        <div class="avatar" style="width:54px;height:54px;font-size:20px">ED<span class="cam" title="Cambiar foto">📷</span></div>
+        <div><span class="overline">Tu perfil</span><h2>Edwin V.</h2><div class="sub">3.º en la general · 350 pts</div></div>
+      </div>
+      <div class="prof-stats">
+        <div class="c"><div class="v blood">350</div><div class="k">Puntos</div></div>
+        <div class="c"><div class="v">7</div><div class="k">Jugadas</div></div>
+        <div class="c"><div class="v">1</div><div class="k">Títulos</div></div>
+        <div class="c"><div class="v">3</div><div class="k">Podios</div></div>
+      </div>
+      <div class="btn-row"><button class="btn ghost full sm" onclick="toast('📷 Subir foto de perfil')" style="height:40px">📷 Cambiar foto de perfil</button></div>
+      <div class="section-head" style="padding-bottom:2px"><div><span class="overline">Historial de puntos</span></div></div>
+      <div class="spark" id="spark"></div>
+      <div class="rule faint"></div>
+      <div class="section-head" style="padding-bottom:2px"><div><span class="overline">Racha completa</span></div></div>
+      <div class="big-form" id="prof-form"></div>
+      <div class="btn-row"><button class="btn ghost full" onclick="go('login')">Cerrar sesión</button></div>
+    </section>
+
+    <!-- LOGIN -->
+    <section id="screen-login">
+      <div class="logo-emblem login-logo" style="width:152px;height:152px"></div>
+      <input class="login-in" placeholder="tu@correo.com" inputmode="email" />
+      <button class="btn blood full" style="margin-top:14px" onclick="toast('✉  Enlace enviado a tu correo')">Enviar enlace</button>
+      <button class="btn ghost full" style="margin-top:10px" onclick="go('liga')">← Volver al prototipo</button>
+    </section>
+
+  </div>
+
+  <nav class="tabs">
+    <button class="tab on" data-tab="liga" onclick="go('liga')"><span class="ic">♠</span><span class="lb">Liga</span></button>
+    <button class="tab" data-tab="fechas" onclick="go('fechas')"><span class="ic">▦</span><span class="lb">Fechas</span></button>
+    <button class="tab" data-tab="vivo" onclick="go('vivo')"><span class="ic">◷</span><span class="lb">En Vivo</span></button>
+    <button class="tab admin-only" data-tab="admin" onclick="go('admin')"><span class="ic">✦</span><span class="lb">Admin</span></button>
+    <button class="tab" data-tab="perfil" onclick="go('perfil')"><span class="ic">◑</span><span class="lb">Perfil</span></button>
+  </nav>
+
+  <div class="toast" id="toast"><span id="toast-msg">ok</span></div>
+
+  <div class="scrim" id="scrim" onclick="if(event.target===this)closeSheet()">
+    <div class="sheet" id="sheet"><div class="grip"></div><div id="sheet-body"></div></div>
+  </div>
+</div>
+
+<script>
+function form(arr){return arr.map(([n,t])=>`<span class="pill ${t}">${n}</span>`).join('')}
+// photos: CSS gradients stand in for uploaded avatars in the prototype
+const PH={mu:'linear-gradient(135deg,#c8763a,#7b2d1e)', an:'linear-gradient(135deg,#4f7bc8,#1e2d7b)'};
+const board = [
+  {r:1, ini:'MU', name:'Mauricio A.', pts:420, gp:8, w:3, pod:5, you:false, photo:PH.mu, f:[[1,'champ'],[2,'podio'],[1,'champ'],[4,'final'],[1,'champ']]},
+  {r:2, ini:'AN', name:'Andrés R.',   pts:385, gp:8, w:2, pod:4, you:false, photo:PH.an, f:[[3,'podio'],[1,'champ'],[2,'podio'],[5,'final'],[2,'podio']]},
+  {r:3, ini:'ED', name:'Edwin V.',    pts:350, gp:7, w:1, pod:3, you:true,  f:[[2,'podio'],[4,'final'],[1,'champ'],[6,'out'],[3,'podio']]},
+  {r:4, ini:'JO', name:'José M.',     pts:305, gp:8, w:1, pod:2, you:false, f:[[5,'final'],[3,'podio'],[7,'out'],[2,'podio'],[4,'final']]},
+  {r:5, ini:'CA', name:'Carlos S.',   pts:280, gp:7, w:0, pod:2, you:false, f:[[4,'final'],[6,'out'],[3,'podio'],[8,'out'],[5,'final']]},
+  {r:6, ini:'DI', name:'Diego P.',    pts:240, gp:8, w:1, pod:1, you:false, f:[[8,'out'],[1,'champ'],[9,'out'],[7,'out'],[6,'out']]},
+  {r:7, ini:'FA', name:'Fabián C.',   pts:205, gp:6, w:0, pod:1, you:false, f:[[6,'out'],[3,'podio'],[5,'final'],[9,'out'],[7,'out']]},
+  {r:8, ini:'RA', name:'Randall Q.',  pts:160, gp:6, w:0, pod:0, you:false, f:[[9,'out'],[7,'out'],[6,'out'],[4,'final'],[8,'out']]},
+];
+const fechas = [
+  {id:9, t:'Fecha 9 — Casa de Mau', when:'Sáb 26 Jul · 19:00', st:'up',   a:{conf:7,none:3}, buy:'₡20K'},
+  {id:8, t:'Fecha 8 — El Sótano',   when:'Hoy · 19:00',        st:'live', rem:'6/11', pot:'₡140K'},
+  {id:7, t:'Fecha 7 — Casa Andrés', when:'Sáb 12 Jul',         st:'done', win:'Mauricio A.', players:10, pot:'₡180K'},
+  {id:6, t:'Fecha 6 — La Bodega',   when:'Sáb 28 Jun',         st:'done', win:'Edwin V.',    players:9,  pot:'₡160K'},
+];
+const attendance = [
+  {ini:'MU', name:'Mauricio A.', photo:PH.mu, s:'checked', note:'Check-in 18:41 · +2.000 fichas'},
+  {ini:'ED', name:'Edwin V.',    s:'confirmed', note:'Confirmado · falta check-in', you:true},
+  {ini:'AN', name:'Andrés R.',   photo:PH.an, s:'checked', note:'Check-in 18:52 · +2.000 fichas'},
+  {ini:'JO', name:'José M.',     s:'confirmed', note:'Confirmado'},
+  {ini:'CA', name:'Carlos S.',   s:'confirmed', note:'Confirmado'},
+  {ini:'DI', name:'Diego P.',    s:'noshow',   note:'Confirmó y no llegó · −15 pts'},
+  {ini:'FA', name:'Fabián C.',   s:'declined', note:'Canceló hace 2 días · sin castigo'},
+  {ini:'RA', name:'Randall Q.',  s:'none',     note:'Sin responder'},
+];
+const standings = [
+  {name:'—', alive:true}, {name:'Mauricio A.', alive:true}, {name:'Andrés R.', alive:true}, {name:'Edwin V.', alive:true},
+  {name:'José M.', alive:true}, {name:'Carlos S.', alive:true}, {name:'Diego P.', alive:true},
+  {pos:7, name:'Fabián C.', out:true}, {pos:8, name:'Kevin B.', out:true}, {pos:9, name:'Randall Q.', out:true},
+  {pos:10, name:'Álvaro T.', out:true}, {pos:11, name:'Esteban H.', out:true},
+];
+const adminPlayers = [
+  {ini:'MU', name:'Mauricio A.', photo:PH.mu, s:'playing', paid:true, rebuys:1, chips:'22.000', bonus:true},
+  {ini:'AN', name:'Andrés R.',   photo:PH.an, s:'playing', paid:true, rebuys:0, chips:'12.000', bonus:true},
+  {ini:'ED', name:'Edwin V.',    s:'playing', paid:true, rebuys:1, chips:'19.500'},
+  {ini:'JO', name:'José M.',     s:'checked', paid:false, rebuys:0, needpay:true, chips:'—'},
+  {ini:'CA', name:'Carlos S.',   s:'confirmed', paid:false, rebuys:0, willnot:true, chips:'—'},
+  {ini:'FA', name:'Fabián C.',   s:'out', pos:7, paid:true, rebuys:0, chips:'0'},
+];
+const prizes = [{pl:'1º', nm:'Campeón', amt:'₡84.000', pct:'60%'},{pl:'2º', nm:'Subcampeón', amt:'₡39.200', pct:'28%'},{pl:'3º', nm:'Tercero', amt:'₡16.800', pct:'12%'}];
+const ST = {confirmed:['Confirmado','s-confirmed'],declined:['Canceló','s-declined'],none:['Sin resp.','s-none'],
+  checked:['Check-in','s-checked'],playing:['Jugando','s-playing'],noshow:['No-show','s-noshow'],out:['Fuera','s-out'],win:['Campeón','s-win']};
+function stFor(s){return ST[s]||['?','s-none']}
+function av(p,size){const st=size?`width:${size}px;height:${size}px;font-size:${Math.round(size*0.36)}px`:'';
+  return p.photo?`<div class="avatar" style="${st};background-image:${p.photo}"></div>`:`<div class="avatar" style="${st}">${p.ini}</div>`}
+
+let ANTE=false; // "usually we don't do ante"
+function renderBlinds(){
+  document.getElementById('blinds').innerHTML =
+    `<div class="b"><div class="v">300</div><div class="k">Small</div></div>
+     <div class="b"><div class="v">600</div><div class="k">Big</div></div>`+
+    (ANTE?`<div class="b"><div class="v">75</div><div class="k">Ante</div></div>`:'');
+}
+function renderBoard(){
+  document.getElementById('lb-rows').innerHTML = board.map(p=>`
+    <div class="lb-row ${p.you?'you':''}" onclick="go('perfil')">
+      <div class="rank ${p.r===1?'top1':''}">${p.r}</div>
+      <div class="who">${av(p,32)}<div class="name"><b>${p.name}${p.you?' · tú':''}</b><div class="form">${form(p.f)}</div></div></div>
+      <div class="lb-stats"><div class="stat"><span class="v">${p.gp}</span><span class="k">PJ</span></div>
+      <div class="stat"><span class="v">${p.w}</span><span class="k">Tít</span></div>
+      <div class="stat pts"><span class="v">${p.pts}</span><span class="k">Pts</span></div></div>
+    </div>`).join('');
+}
+function badgeFor(st){return st==='live'?'<span class="badge live">Live</span>':st==='up'?'<span class="badge up">Próxima</span>':'<span class="badge done">Jugada</span>'}
+function renderFechas(){
+  document.getElementById('fechas-list').innerHTML = fechas.map(f=>{
+    let foot;
+    if(f.st==='up') foot=`<div class="cell"><div class="v">${f.a.conf}</div><div class="k">Confirmados</div></div><div class="cell"><div class="v">${f.a.none}</div><div class="k">Sin resp.</div></div><div class="cell"><div class="v">${f.buy}</div><div class="k">Buy-in</div></div>`;
+    else if(f.st==='live') foot=`<div class="cell"><div class="v">${f.rem}</div><div class="k">Quedan</div></div><div class="cell"><div class="v">${f.pot}</div><div class="k">Pozo</div></div><div class="cell"><div class="v" style="color:var(--oxblood)">▶</div><div class="k">Entrar</div></div>`;
+    else foot=`<div class="cell"><div class="v" style="font-size:13px">${f.win}</div><div class="k">Campeón</div></div><div class="cell"><div class="v">${f.players}</div><div class="k">Jugadores</div></div><div class="cell"><div class="v">${f.pot}</div><div class="k">Pozo</div></div>`;
+    const target = f.st==='live'?'vivo':'fecha';
+    return `<button class="tourn-card" onclick="go('${target}')"><div class="tc-top"><div><div class="tc-title">${f.t}</div><div class="tc-sub">${f.when}</div></div>${badgeFor(f.st)}</div><div class="tc-foot">${foot}</div></button>`;
+  }).join('');
+  document.getElementById('fechas-admin').style.display = document.body.dataset.role==='admin'?'flex':'none';
+}
+function renderFecha(){
+  document.getElementById('fd-counts').innerHTML=`
+    <div class="chip-count"><span class="dot confirmed"></span><span class="n">7</span><span class="l">Voy</span></div>
+    <div class="chip-count"><span class="dot declined"></span><span class="n">2</span><span class="l">Cancelaron</span></div>
+    <div class="chip-count"><span class="dot none"></span><span class="n">3</span><span class="l">Sin resp.</span></div>`;
+  renderFechaActions(myRsvp);
+  document.getElementById('fd-players').innerHTML = attendance.map(p=>{
+    const [lab,cls]=stFor(p.s);
+    return `<div class="prow">${av(p,36)}<div class="pinfo"><b>${p.name}${p.you?' · tú':''}</b><div class="sub">${p.note}</div></div><span class="status ${cls}">${lab}</span></div>`;
+  }).join('');
+}
+let myRsvp='confirmed';
+function renderFechaActions(state){
+  const el=document.getElementById('fd-actions');
+  if(state==='confirmed') el.innerHTML=`<button class="btn blood" style="flex:2" onclick="checkin()">📍 Hacer check-in</button><button class="btn ghost" onclick="openCancel()">Cancelar</button>`;
+  else if(state==='declined') el.innerHTML=`<button class="btn primary full" onclick="setRsvp('confirmed')">Voy — confirmar asistencia</button>`;
+  else el.innerHTML=`<button class="btn full" disabled>✓ Ya hiciste check-in</button>`;
+}
+function setRsvp(s){myRsvp=s; renderFechaActions(s); toast(s==='confirmed'?'✓ Confirmado — ¡nos vemos!':'Asistencia cancelada');}
+function checkin(){renderFechaActions('done'); toast('✓ Check-in — llegaste temprano','+2.000 fichas');}
+function openCancel(){
+  openSheet(`<h3>Cancelar asistencia</h3>
+    <p>Faltan <b>~9 h</b> para el inicio. Cancelar ahora tiene una penalización de <b style="color:var(--oxblood)">−10 pts</b>.</p>
+    <div class="bands"><div class="br"><span>+24 h antes</span><b>0</b></div><div class="br"><span>24–12 h</span><b>−5</b></div><div class="br" style="background:color-mix(in srgb,var(--oxblood) 12%,transparent)"><span>12–6 h · tú estás aquí</span><b>−10</b></div><div class="br"><span>−6 h / no-show</span><b>−15</b></div></div>
+    <div class="btn-row"><button class="btn ghost" style="flex:1" onclick="closeSheet()">Volver</button><button class="btn blood" style="flex:1" onclick="setRsvp('declined');closeSheet()">Cancelar (−10)</button></div>`);
+}
+function renderStandings(){
+  document.getElementById('vivo-standings').innerHTML = standings.map(s=>{
+    if(s.alive) return `<div class="standing alive"><div class="pos">•</div><div class="nm">${s.name==='—'?'<span style="color:var(--ink-3)">Por definir</span>':s.name}</div><span class="mini-badge">Vivo</span></div>`;
+    return `<div class="standing out"><div class="pos">${s.pos}º</div><div class="nm">${s.name}</div></div>`;
+  }).join('');
+  document.getElementById('vivo-actions').innerHTML = document.body.dataset.role==='admin'
+    ? `<button class="btn primary full" onclick="go('admin')">Abrir consola de admin</button>`
+    : `<button class="btn blood full" onclick="toast('Reportado: 6.º lugar · el admin puede ajustar')">Estoy fuera — reportar</button>`;
+}
+function renderPremios(){
+  document.getElementById('premios').innerHTML=
+    `<div class="ph"><span class="t">Premios</span><span class="s">${document.body.dataset.role==='admin'?'<button class="btn sm ghost" style="height:30px" onclick="openPrizes()">Editar</button>':'según el pozo'}</span></div>`+
+    prizes.map(p=>`<div class="prow-prize"><span class="pl">${p.pl}</span><span class="nm">${p.nm}</span><span class="pct">${p.pct}</span><span class="amt">${p.amt}</span></div>`).join('');
+}
+function openPrizes(){
+  openSheet(`<h3>Editar premios</h3><p>El pozo (₡140.000) se define tarde, según quién pagó y las recompras.</p>
+    <div class="field"><label>1º lugar</label><input value="₡84.000"></div>
+    <div class="field"><label>2º lugar</label><input value="₡39.200"></div>
+    <div class="field"><label>3º lugar</label><input value="₡16.800"></div>
+    <div class="btn-row"><button class="btn blood full" onclick="toast('✓ Premios actualizados');closeSheet()">Guardar premios</button></div>`);
+}
+function renderAdmin(){
+  document.getElementById('admin-players').innerHTML = adminPlayers.map((p,i)=>{
+    const [lab,cls]=stFor(p.s);
+    const paid = p.paid?'<span class="paid-check">✓ Pagó</span>':'<span class="unpaid">● Sin pagar</span>';
+    const chips = p.chips&&p.chips!=='—'?`<span class="chips-badge">${p.chips} fichas${p.bonus?' · +2.000':''}</span>`:'';
+    const reb = p.rebuys?`<span class="mini-badge">↺ ${p.rebuys}</span>`:'';
+    let act='';
+    if(p.needpay) act=`<button class="btn sm blood" onclick="toast('✓ Pago confirmado — Jugando')">Confirmar pago</button>`;
+    else if(p.willnot) act=`<button class="btn sm ghost" onclick="toast('Marcado: no vendrá')">Marcar no-show</button>`;
+    else if(p.s==='playing') act=`<button class="btn sm ghost" onclick="toast('Eliminado · reordenable')">Eliminar</button>`;
+    else if(p.s==='out') act=`<button class="btn sm ghost" onclick="toast('↺ Reactivado (recompra)')">Reactivar</button>`;
+    return `<div class="prow">${av(p,36)}<div class="pinfo"><b>${p.name}${p.pos?' · '+p.pos+'º':''}</b><div class="sub">${paid} ${reb} ${chips}</div></div>
+      <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end"><span class="status ${cls}">${lab}</span>${act}</div></div>`;
+  }).join('');
+}
+function openWhats(){
+  const msg=`🃏 POKER FRIENDS · Fecha 8 — El Sótano%0A%0A🏆 Campeón: Mauricio A.%0A🥈 2º: Andrés R.%0A🥉 3º: Edwin V.%0A%0A💰 Pozo: ₡140.000%0A👥 11 jugadores · 2 recompras%0A%0A📊 Tabla general → poker-friends.app`;
+  openSheet(`<h3>Resumen para WhatsApp</h3><p>Copiá y pegá en el grupo (etapa 1). El envío directo llega después.</p>
+    <div class="field"><textarea rows="8" id="wa-text">${decodeURIComponent(msg)}</textarea></div>
+    <div class="btn-row"><button class="btn blood full" onclick="copyWa()">📋 Copiar resumen</button></div>`);
+}
+function copyWa(){const t=document.getElementById('wa-text'); t.select();
+  try{navigator.clipboard.writeText(t.value)}catch(e){} toast('📋 Resumen copiado'); closeSheet();}
+function openSeason(){
+  openSheet(`<h3>Cerrar liga actual</h3><p>La <b>Liga 2026</b> pasa a historial (solo lectura) y se abre una nueva liga. Los jugadores se mantienen; los puntos vuelven a cero. Esta acción no se puede deshacer.</p>
+    <div class="btn-row"><button class="btn ghost" style="flex:1" onclick="closeSheet()">Volver</button><button class="btn blood" style="flex:1" onclick="toast('✓ Liga cerrada · nueva liga iniciada');closeSheet()">Cerrar liga</button></div>`);
+}
+function renderProfile(){
+  const pts=[40,110,90,160,230,300,350], max=360, w=340, h=88, step=w/(pts.length-1);
+  const pp=pts.map((v,i)=>`${i*step},${h-(v/max)*h}`);
+  document.getElementById('spark').innerHTML=`
+    <svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+      <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="var(--oxblood)" stop-opacity=".28"/><stop offset="1" stop-color="var(--oxblood)" stop-opacity="0"/></linearGradient></defs>
+      <path d="M 0,${h} L ${pp.join(' L ')} L ${w},${h} Z" fill="url(#g)"/>
+      <path d="M ${pp.join(' L ')}" fill="none" stroke="var(--oxblood)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+      ${pp.map(p=>`<circle cx="${p.split(',')[0]}" cy="${p.split(',')[1]}" r="3.2" fill="var(--paper)" stroke="var(--oxblood)" stroke-width="2"/>`).join('')}
+    </svg>`;
+  document.getElementById('prof-form').innerHTML = form([[6,'out'],[2,'podio'],[3,'podio'],[8,'out'],[1,'champ'],[4,'final'],[2,'podio']]);
+}
+
+/* nav / theme / role / sheet */
+const titles={liga:'liga',fechas:'fechas',vivo:'vivo',admin:'admin',perfil:'perfil',fecha:'fechas',login:null};
+function go(name){
+  document.querySelectorAll('.screen,#screen-login').forEach(s=>s.classList.remove('active'));
+  document.getElementById('screen-'+name).classList.add('active');
+  document.getElementById('scroll').scrollTop=0;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.tab===titles[name]));
+  if(name==='fecha') renderFecha();
+  if(name==='vivo'){renderBlinds();renderPremios();renderStandings();}
+  if(name==='admin') renderAdmin();
+  if(name==='perfil') renderProfile();
+  if(name==='fechas') renderFechas();
+}
+function adminTab(t){
+  ['consola','crear','liga'].forEach(x=>{
+    document.getElementById('ap-'+x).classList.toggle('on',x===t);
+    document.getElementById('an-'+x).classList.toggle('on',x===t);
+  });
+  if(t==='consola') renderAdmin();
+}
+function setRole(r){
+  document.body.dataset.role=r;
+  document.getElementById('r-player').classList.toggle('on',r==='player');
+  document.getElementById('r-admin').classList.toggle('on',r==='admin');
+  toast(r==='admin'?'Modo admin — control total':'Modo jugador');
+  const cur=document.querySelector('.screen.active')?.id;
+  if(cur==='screen-vivo'){renderPremios();renderStandings();}
+  if(cur==='screen-fechas') renderFechas();
+}
+const THEMES=['light','dark','neon'], ICON={light:'☀',dark:'☾',neon:'⚡'}, TNAME={light:'Almanaque claro',dark:'Almanaque oscuro',neon:'Neón'};
+function cycleTheme(){
+  const cur=document.documentElement.getAttribute('data-theme');
+  const next=THEMES[(THEMES.indexOf(cur)+1)%THEMES.length];
+  setTheme(next); toast(ICON[next]+'  '+TNAME[next]);
+}
+function setTheme(t){
+  document.documentElement.setAttribute('data-theme',t);
+  document.getElementById('theme-btn').textContent=ICON[t];
+  try{localStorage.setItem('theme',t)}catch(e){}
+}
+let toastTimer;
+function toast(msg,big){
+  const t=document.getElementById('toast');
+  document.getElementById('toast-msg').innerHTML=(big?`<span class="big">${big}</span>  `:'')+msg;
+  t.classList.add('show'); clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),2600);
+}
+function openSheet(html){document.getElementById('sheet-body').innerHTML=html; document.getElementById('scrim').classList.add('show');}
+function closeSheet(){document.getElementById('scrim').classList.remove('show');}
+
+let secs=8*60+32;
+setInterval(()=>{secs=Math.max(0,secs-1);
+  const v=`${String(Math.floor(secs/60)).padStart(2,'0')}:${String(secs%60).padStart(2,'0')}`;
+  const a=document.getElementById('timer'), b=document.getElementById('timer2');
+  if(a)a.textContent=v; if(b)b.textContent=v;
+},1000);
+
+try{const s=localStorage.getItem('theme'); if(s)setTheme(s);}catch(e){}
+renderBoard(); renderFechas();
+</script>
+</body>
+</html>

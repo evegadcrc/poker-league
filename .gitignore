@@ -1,0 +1,42 @@
+# --- dh harness (local-only) ---
+.harness/audit/
+.harness/.runtime/
+
+# --- secrets / credentials (never commit) ---
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.sample
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+id_rsa
+id_ed25519
+*_rsa
+*.credentials
+credentials.json
+service-account*.json
+secrets.y*ml
+
+# --- node / vite (applies once scaffolded) ---
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+
+# --- supabase ---
+.branches/
+.temp/
+supabase/.temp/
+
+# --- test / tooling artifacts ---
+.playwright-mcp/
+
+# --- os / editor ---
+.DS_Store
+*.log
