@@ -23,6 +23,12 @@ vi.mock('@/lib/auth', () => ({
   useRole: () => ({ isAdmin: mockIsAdmin }),
 }))
 
+// Stub the Liga home so App-level routing tests don't hit Supabase; the real
+// leaderboard data flow is covered in src/routes/Leaderboard.test.tsx.
+vi.mock('@/routes/Leaderboard', () => ({
+  default: () => <div>TABLA STUB</div>,
+}))
+
 function renderApp() {
   return render(
     <ThemeProvider>
@@ -56,12 +62,25 @@ describe('App routing', () => {
     expect(screen.queryByText('POKER FRIENDS')).not.toBeInTheDocument()
   })
 
-  it('renders the authenticated home shell with the wordmark', () => {
-    signInAs({ name: 'Carlos Jiménez', is_admin: true })
+  it('renders the authenticated shell with the wordmark and Liga home', () => {
+    signInAs({ name: 'Carlos Jiménez', is_admin: false })
     renderApp()
     // Exact, case-sensitive match hits only the header wordmark.
     expect(screen.getByText('POKER FRIENDS')).toBeInTheDocument()
-    expect(screen.getByText(/Hola, Carlos/)).toBeInTheDocument()
+    expect(screen.getByText('TABLA STUB')).toBeInTheDocument()
+    // Bottom tab nav is present.
+    expect(screen.getByRole('link', { name: /liga/i })).toBeInTheDocument()
+  })
+
+  it('shows the Admin tab only for admins', () => {
+    signInAs({ name: 'Ana Admin', is_admin: true })
+    const { unmount } = renderApp()
+    expect(screen.getByRole('link', { name: /admin/i })).toBeInTheDocument()
+    unmount()
+
+    signInAs({ name: 'Pepe Player', is_admin: false })
+    renderApp()
+    expect(screen.queryByRole('link', { name: /admin/i })).not.toBeInTheDocument()
   })
 
   it('cycles the theme light → dark → neon → light and persists it', async () => {

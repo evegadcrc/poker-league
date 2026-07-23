@@ -1,9 +1,13 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import './App.css'
+import AppLayout from '@/components/AppLayout'
 import { RequireAdmin, RequireAuth } from '@/components/guards'
 import Admin from '@/routes/Admin'
-import Home from '@/routes/Home'
+import Fechas from '@/routes/Fechas'
+import Leaderboard from '@/routes/Leaderboard'
+import Live from '@/routes/Live'
 import Login from '@/routes/Login'
+import Profile from '@/routes/Profile'
 
 export default function App() {
   return (
@@ -12,17 +16,22 @@ export default function App() {
         {/* Public */}
         <Route path="/login" element={<Login />} />
 
-        {/* Authenticated (session + bound player) */}
+        {/* Authenticated (session + bound player) → themed shell + tab nav */}
         <Route element={<RequireAuth />}>
-          <Route path="/" element={<Home />} />
+          <Route element={<AppLayout />}>
+            <Route path="/" element={<Leaderboard />} />
+            <Route path="/fechas" element={<Fechas />} />
+            <Route path="/vivo" element={<Live />} />
+            <Route path="/perfil" element={<Profile />} />
 
-          {/* Admin-only */}
-          <Route element={<RequireAdmin />}>
-            <Route path="/admin" element={<Admin />} />
+            {/* Admin-only */}
+            <Route element={<RequireAdmin />}>
+              <Route path="/admin" element={<Admin />} />
+            </Route>
+
+            {/* Unknown authed path → Liga home */}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
-
-          {/* Unknown authed path → home */}
-          <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
     </BrowserRouter>
