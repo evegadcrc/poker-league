@@ -1,0 +1,115 @@
+/* ============================================================
+   POKER FRIENDS · Póker — design tokens
+   Ported VERBATIM from the approved prototype
+   (.harness/design/poker-league-prototype/prototype/index.html).
+   Theme 1: "Sports Almanac" (paper/ink + oxblood) — light & dark
+   Theme 2: "Neón" (Vegas nightlife) — magenta/cyan glass+glow
+   ============================================================ */
+:root {
+  --paper: #f5f1e6;
+  --paper-2: #fbf8f1;
+  --paper-3: #eee8d8;
+  --ink: #17130d;
+  --ink-2: #57503f;
+  --ink-3: #8c8472;
+  --rule: rgba(23, 19, 13, 0.14);
+  --rule-strong: rgba(23, 19, 13, 0.3);
+  --oxblood: #7b1e22;
+  --oxblood-2: #9a2a2e;
+  --on-oxblood: #fbf3e4;
+  /* form-guide tiers (monochrome + oxblood) */
+  --champ-bg: #7b1e22;
+  --champ-fg: #fbf3e4;
+  --podio-bg: #2b2620;
+  --podio-fg: #f3ecd9;
+  --final-bg: #c4bca8;
+  --final-fg: #2b2620;
+  --out-bg: #e6e0d0;
+  --out-fg: #8a8272;
+  --shadow: 0 1px 0 var(--rule), 0 18px 40px -28px rgba(23, 19, 13, 0.5);
+  --grain: 0.05;
+  --tab-h: 66px;
+  --disp-transform: none;
+  --disp-ls: -0.02em;
+}
+[data-theme='dark'] {
+  --paper: #12100a;
+  --paper-2: #1a160f;
+  --paper-3: #221d14;
+  --ink: #f0eadb;
+  --ink-2: #bbb2a0;
+  --ink-3: #837b6b;
+  --rule: rgba(240, 234, 219, 0.15);
+  --rule-strong: rgba(240, 234, 219, 0.32);
+  --oxblood: #da5e58;
+  --oxblood-2: #e7726b;
+  --on-oxblood: #17130d;
+  --champ-bg: #da5e58;
+  --champ-fg: #17130d;
+  --podio-bg: #ede7d7;
+  --podio-fg: #17130d;
+  --final-bg: #4a4636;
+  --final-fg: #efe9da;
+  --out-bg: #2a251a;
+  --out-fg: #9a927e;
+  --shadow: 0 1px 0 var(--rule), 0 22px 46px -26px rgba(0, 0, 0, 0.8);
+  --grain: 0.07;
+}
+[data-theme='neon'] {
+  --paper: #14101f;
+  --paper-2: rgba(150, 120, 220, 0.1);
+  --paper-3: rgba(150, 120, 220, 0.18);
+  --ink: #f4ecff;
+  --ink-2: #c3b2e6;
+  --ink-3: #8877b0;
+  --rule: rgba(180, 150, 255, 0.22);
+  --rule-strong: rgba(180, 150, 255, 0.42);
+  --oxblood: #ff2e88;
+  --oxblood-2: #22d3ee;
+  --on-oxblood: #14101f;
+  --champ-bg: #ff2e88;
+  --champ-fg: #14101f;
+  --podio-bg: #22d3ee;
+  --podio-fg: #14101f;
+  --final-bg: rgba(180, 150, 255, 0.3);
+  --final-fg: #f4ecff;
+  --out-bg: rgba(255, 255, 255, 0.08);
+  --out-fg: #9a8bc0;
+  --shadow: 0 0 0 1px rgba(255, 46, 136, 0.16), 0 20px 50px -24px rgba(255, 46, 136, 0.55);
+  --grain: 0;
+  --disp-transform: uppercase;
+  --disp-ls: 0.01em;
+}
+
+/* ---- base surface + paper-grain / glow treatments (ported) ---- */
+html,
+body,
+#root {
+  min-height: 100%;
+}
+body {
+  font-family: 'Archivo', system-ui, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-feature-settings: 'tnum' 1, 'ss01' 1;
+  -webkit-font-smoothing: antialiased;
+  transition: background 0.45s ease, color 0.45s ease;
+}
+[data-theme='neon'] body {
+  background:
+    radial-gradient(120% 80% at 8% -12%, rgba(255, 46, 136, 0.24), transparent 55%),
+    radial-gradient(110% 70% at 100% 0%, rgba(34, 211, 238, 0.2), transparent 55%), #14101f;
+}
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: var(--grain);
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+[data-theme='dark'] body::before {
+  mix-blend-mode: screen;
+}

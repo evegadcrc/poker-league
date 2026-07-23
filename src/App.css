@@ -1,0 +1,181 @@
+/* App-shell component styles (ported from the prototype's topbar / section-head /
+   card / pill primitives) — proves the design tokens render across all 3 themes.
+   Full screen components arrive in later slices. */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+/* ---- top bar ---- */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px 12px;
+  border-bottom: 1.5px solid var(--ink);
+  background: var(--paper);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.brandtext {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+}
+.brand .kick {
+  font: 600 9px/1 'Archivo';
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.brand .word {
+  font-family: 'Bricolage Grotesque';
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: var(--disp-ls);
+  text-transform: var(--disp-transform);
+  margin-top: 3px;
+  white-space: nowrap;
+}
+.logo-emblem {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #000 center/cover no-repeat;
+  flex: none;
+  border: 1.5px solid var(--rule-strong);
+}
+[data-theme='dark'] .logo-emblem {
+  border-color: var(--oxblood);
+}
+[data-theme='neon'] .logo-emblem {
+  border-color: #ff2e88;
+  box-shadow: 0 0 22px -4px #ff2e88, 0 0 34px -8px #22d3ee;
+}
+.icon-btn {
+  width: 38px;
+  height: 38px;
+  border: 1.5px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  font-size: 16px;
+  transition: transform 0.15s ease, background 0.2s ease;
+}
+.icon-btn:active {
+  transform: scale(0.92);
+}
+.icon-btn:hover {
+  background: var(--paper-3);
+}
+[data-theme='neon'] .icon-btn {
+  border-color: rgba(255, 46, 136, 0.55);
+}
+
+/* ---- content ---- */
+.app-main {
+  flex: 1;
+  padding-bottom: 32px;
+}
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 20px 18px 8px;
+}
+.section-head h1 {
+  font-family: 'Bricolage Grotesque';
+  font-weight: 800;
+  font-size: 30px;
+  letter-spacing: var(--disp-ls);
+  text-transform: var(--disp-transform);
+  line-height: 0.98;
+}
+.overline {
+  font: 700 10px 'Archivo';
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--oxblood);
+  display: block;
+  margin-bottom: 6px;
+}
+.rule {
+  height: 1.5px;
+  background: var(--ink);
+  margin: 0 18px;
+}
+.rule.faint {
+  background: var(--rule);
+}
+.pad {
+  padding: 0 18px;
+}
+.card {
+  border: 1.5px solid var(--ink);
+  border-radius: 16px;
+  background: var(--paper-2);
+  padding: 15px;
+  margin: 12px 0;
+  box-shadow: var(--shadow);
+}
+[data-theme='neon'] .card {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-color: rgba(255, 46, 136, 0.35);
+}
+.card p {
+  font: 600 13px/1.5 'Archivo';
+  color: var(--ink-2);
+}
+.card p b {
+  color: var(--ink);
+}
+
+/* ---- form-guide pills (showcase all tier tokens) ---- */
+.form {
+  display: flex;
+  gap: 6px;
+  margin-top: 12px;
+}
+.pill {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  font: 800 12px 'Archivo';
+  font-feature-settings: 'tnum' 1;
+}
+.pill.champ {
+  background: var(--champ-bg);
+  color: var(--champ-fg);
+}
+.pill.podio {
+  background: var(--podio-bg);
+  color: var(--podio-fg);
+}
+.pill.final {
+  background: var(--final-bg);
+  color: var(--final-fg);
+}
+.pill.out {
+  background: var(--out-bg);
+  color: var(--out-fg);
+}
+[data-theme='neon'] .pill.champ {
+  box-shadow: 0 0 12px -2px #ff2e88;
+}
+[data-theme='neon'] .pill.podio {
+  box-shadow: 0 0 12px -2px #22d3ee;
+}

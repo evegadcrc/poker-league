@@ -11,12 +11,12 @@ logic, and RLS. §11 lists open questions still to be resolved before/while buil
 
 ## Status
 
-🟡 **Greenfield — not yet scaffolded.** No source code, no commits, no package manager
-lockfile yet. The stack and commands below are the *intended* setup from the plan and are
-**unverified** — they must be re-confirmed (and this file updated) once the app is
-scaffolded. Do not trust the Commands section as a quality gate until then.
+🟢 **Scaffolded (slice 1).** Vite + React + TypeScript app at repo root with the 3-theme
+design system (Sports Almanac light/dark + Neón) ported from the approved prototype. Build,
+test, and lint commands below are **verified**. Backend (Supabase), auth, and screens land in
+later plan slices.
 
-## Stack (intended)
+## Stack
 
 - **Frontend:** React + Vite + TypeScript + Tailwind CSS
 - **UI kit:** shadcn/ui + lucide icons
@@ -25,19 +25,23 @@ scaffolded. Do not trust the Commands section as a quality gate until then.
 - **Realtime:** Supabase Realtime (live timer / blinds / eliminations sync)
 - **Storage:** Supabase Storage (photo galleries + tournament covers)
 - **Hosting:** Vercel or Netlify (PWA-friendly)
-- **Package manager:** TBD — decide on scaffold (Vite default = npm; pick one and record the lockfile here)
+- **Package manager:** **npm** (lockfile: `package-lock.json`, committed)
 
-## Commands (intended — NOT YET VERIFIED)
-
-Placeholders until the Vite app exists. Re-verify each against the real `package.json`
-`scripts` during the first build slice, then update this section.
+## Commands (verified — slice 1)
 
 - Install: `npm install`
-- Dev server: `npm run dev`
-- Build: `npm run build`
-- Lint: `npm run lint`            # not yet configured — no real quality gate yet
-- Test: _none configured yet_     # add a runner (e.g. Vitest) and record the invocation here
-- Supabase (local): `supabase start` / migrations via `supabase db push` (Supabase CLI, TBD)
+- Dev server: `npm run dev`          # Vite; long-running, do not use as a build gate
+- Build: `npm run build`             # `tsc -b && vite build` — typecheck + production bundle
+- Test: `npm test`                   # `vitest run` (non-watch); `npm run test:watch` to watch
+- Lint: `npm run lint`               # `oxlint src`
+- Supabase (local): `supabase start` / migrations via `supabase db push` (Supabase CLI — added in a later slice)
+
+**Toolchain notes (slice 1):** TypeScript **7.x** (native compiler) — `baseUrl` is removed in
+TS7, so path aliases use bare `paths` (`@/* → ./src/*`). Linter is **oxlint** (not
+eslint/typescript-eslint, which don't yet support TS7's peer range). shadcn/ui `components.json`
+is present (new-york, cssVariables, `@/*` alias) but its CLI was not run — add components with
+`npx shadcn@latest add <name>` as needed. Vitest uses an in-memory `localStorage` polyfill in
+`src/test/setup.ts` (Node 25's experimental global `localStorage` shadows jsdom's).
 
 ## Conventions
 
@@ -54,7 +58,9 @@ Placeholders until the Vite app exists. Re-verify each against the real `package
 
 ## Gotchas
 
-- **No code yet.** Bootstrap set up the harness only; nothing has been scaffolded or run.
+- **Design tokens are the source of truth.** The three themes live in `src/styles/tokens.css`
+  (ported verbatim from the approved prototype); the 3-way cycle + persistence is in
+  `src/lib/theme.tsx`. Do not hand-edit token values — re-port from the prototype if they change.
 - **Supabase secrets:** the app needs env vars (Supabase URL + anon key, plus a service-role
   key for admin/migrations). Keep them in `.env` / `.env.local` — never commit them. Only the
   anon key is safe client-side; the service-role key must stay server-side/local only.
