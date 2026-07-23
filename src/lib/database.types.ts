@@ -376,6 +376,36 @@ export type Database = {
     Functions: {
       auth_is_admin: { Args: never; Returns: boolean }
       auth_player_id: { Args: never; Returns: string }
+      cancel_rsvp: {
+        Args: { p_tournament_id: string }
+        Returns: {
+          cancelled_at: string | null
+          check_in_geo_ok: boolean | null
+          checked_in_at: string | null
+          chips: number | null
+          chop_group: number | null
+          chopped: boolean
+          created_at: string
+          early_bird: boolean
+          eliminated_at: string | null
+          final_position: number | null
+          id: string
+          made_final_table: boolean
+          paid: boolean
+          player_id: string
+          points_earned: number | null
+          rebuys_count: number
+          rsvp_at: string | null
+          status: Database["public"]["Enums"]["entry_status"]
+          tournament_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "entry"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       claim_player: {
         Args: never
         Returns: {
@@ -454,6 +484,36 @@ export type Database = {
       recompute_final_table_size: {
         Args: { p_tournament_id: string }
         Returns: number
+      }
+      rsvp: {
+        Args: { p_choice: string; p_tournament_id: string }
+        Returns: {
+          cancelled_at: string | null
+          check_in_geo_ok: boolean | null
+          checked_in_at: string | null
+          chips: number | null
+          chop_group: number | null
+          chopped: boolean
+          created_at: string
+          early_bird: boolean
+          eliminated_at: string | null
+          final_position: number | null
+          id: string
+          made_final_table: boolean
+          paid: boolean
+          player_id: string
+          points_earned: number | null
+          rebuys_count: number
+          rsvp_at: string | null
+          status: Database["public"]["Enums"]["entry_status"]
+          tournament_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "entry"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       set_prizes: { Args: { p_tournament_id: string }; Returns: Json }
       set_prizes_manual: {

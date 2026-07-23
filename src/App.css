@@ -593,3 +593,378 @@
 .tab.on {
   color: var(--ink);
 }
+
+/* ---- entrance stagger (Fechas list / leaderboard) ---- */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.stagger > * {
+  animation: rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.stagger > *:nth-child(1) {
+  animation-delay: 0.02s;
+}
+.stagger > *:nth-child(2) {
+  animation-delay: 0.06s;
+}
+.stagger > *:nth-child(3) {
+  animation-delay: 0.1s;
+}
+.stagger > *:nth-child(4) {
+  animation-delay: 0.14s;
+}
+.stagger > *:nth-child(5) {
+  animation-delay: 0.18s;
+}
+.stagger > *:nth-child(6) {
+  animation-delay: 0.22s;
+}
+.stagger > *:nth-child(7) {
+  animation-delay: 0.26s;
+}
+.stagger > *:nth-child(8) {
+  animation-delay: 0.3s;
+}
+
+/* ---- Fechas list — tournament cards (ported from prototype .tourn-card) ---- */
+.tourn-card {
+  display: block;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  color: inherit;
+  font: inherit;
+  border: 1.5px solid var(--ink);
+  border-radius: 16px;
+  background: var(--paper-2);
+  padding: 0;
+  margin: 12px 0;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+  transition: transform 0.15s ease;
+}
+[data-theme='neon'] .tourn-card {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-color: rgba(255, 46, 136, 0.35);
+}
+.tourn-card:active {
+  transform: scale(0.99);
+}
+.tc-top {
+  padding: 15px 15px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+.tc-title {
+  font-family: 'Bricolage Grotesque';
+  font-weight: 800;
+  font-size: 19px;
+  letter-spacing: -0.02em;
+  text-transform: var(--disp-transform);
+  line-height: 1.02;
+}
+.tc-sub {
+  font: 600 12px 'Archivo';
+  color: var(--ink-2);
+  margin-top: 5px;
+}
+.badge {
+  font: 800 10px 'Archivo';
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 5px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  border: 1.5px solid;
+}
+.badge.live {
+  background: var(--oxblood);
+  color: var(--on-oxblood);
+  border-color: var(--oxblood);
+  animation: pulse 1.8s infinite;
+}
+[data-theme='neon'] .badge.live {
+  box-shadow: 0 0 16px -2px #ff2e88;
+}
+.badge.up {
+  background: transparent;
+  color: var(--ink);
+  border-color: var(--ink);
+}
+.badge.done {
+  background: var(--paper-3);
+  color: var(--ink-2);
+  border-color: var(--rule-strong);
+}
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+.tc-foot {
+  display: flex;
+  border-top: 1.5px solid var(--ink);
+}
+.tc-foot .cell {
+  flex: 1;
+  padding: 10px 12px;
+  border-right: 1px solid var(--rule);
+}
+.tc-foot .cell:last-child {
+  border-right: 0;
+}
+.tc-foot .cell .v {
+  font: 800 16px 'Archivo';
+  font-feature-settings: 'tnum' 1;
+}
+.tc-foot .cell .k {
+  font: 700 9px 'Archivo';
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-top: 2px;
+}
+
+/* ---- Fecha detail — back link + geo hint ---- */
+.back {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 14px 18px 0;
+  cursor: pointer;
+  font: 700 12px 'Archivo';
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  background: none;
+  border: 0;
+  text-decoration: none;
+}
+.geo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 18px;
+  padding: 12px 14px;
+  border: 1.5px dashed var(--rule-strong);
+  border-radius: 13px;
+  font: 600 12.5px 'Archivo';
+  color: var(--ink-2);
+}
+.geo .ring {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid var(--rule-strong);
+  display: grid;
+  place-items: center;
+  color: var(--ink);
+  font-weight: 800;
+  flex: none;
+}
+
+/* ---- attendance counts + player rows ---- */
+.att-head {
+  display: flex;
+  gap: 8px;
+  padding: 14px 18px 6px;
+  flex-wrap: wrap;
+}
+.chip-count {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  padding: 6px 12px 6px 8px;
+}
+.chip-count .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+.chip-count .n {
+  font: 800 14px 'Archivo';
+  font-feature-settings: 'tnum' 1;
+}
+.chip-count .l {
+  font: 700 10px 'Archivo';
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.dot.confirmed {
+  background: var(--podio-bg);
+}
+.dot.declined {
+  background: var(--oxblood);
+}
+.dot.none {
+  background: var(--out-bg);
+}
+.plist {
+  border-top: 1.5px solid var(--ink);
+}
+.prow {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--rule);
+}
+.prow .pinfo {
+  flex: 1;
+  min-width: 0;
+}
+.prow .pinfo b {
+  font: 700 15px 'Archivo';
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.prow .pinfo .sub {
+  font: 600 11.5px 'Archivo';
+  color: var(--ink-2);
+  margin-top: 2px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.status {
+  font: 800 9.5px 'Archivo';
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  border: 1.5px solid transparent;
+}
+.s-confirmed {
+  background: color-mix(in srgb, var(--podio-bg) 16%, transparent);
+  color: var(--ink);
+}
+.s-declined {
+  background: var(--out-bg);
+  color: var(--ink-2);
+}
+.s-none {
+  background: transparent;
+  color: var(--ink-3);
+  border-color: var(--rule-strong);
+}
+.s-checked {
+  background: color-mix(in srgb, var(--final-bg) 40%, transparent);
+  color: var(--ink);
+}
+.s-playing {
+  background: color-mix(in srgb, var(--oxblood) 14%, transparent);
+  color: var(--oxblood);
+}
+.s-noshow {
+  background: color-mix(in srgb, var(--oxblood) 20%, transparent);
+  color: var(--oxblood);
+}
+.s-out {
+  background: var(--out-bg);
+  color: var(--ink-2);
+}
+.s-win {
+  background: var(--oxblood);
+  color: var(--on-oxblood);
+}
+
+/* ---- graduated late-cancel bands (cancel confirm sheet) ---- */
+.bands {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 8px 18px 4px;
+  border: 1.5px solid var(--ink);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.bands .br {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 13px;
+  border-bottom: 1px solid var(--rule);
+  font: 600 12.5px 'Archivo';
+}
+.bands .br:last-child {
+  border-bottom: 0;
+}
+.bands .br.here {
+  background: color-mix(in srgb, var(--oxblood) 12%, transparent);
+}
+.bands .br b {
+  font-weight: 800;
+  color: var(--oxblood);
+}
+
+/* ---- bottom sheet (scrim + panel) ---- */
+.scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 8, 4, 0.55);
+  z-index: 70;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.sheet {
+  width: 100%;
+  max-width: 480px;
+  background: var(--paper);
+  border-top-left-radius: 22px;
+  border-top-right-radius: 22px;
+  border-top: 1.5px solid var(--ink);
+  padding-bottom: 16px;
+  animation: rise 0.28s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.sheet .grip {
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--rule-strong);
+  margin: 8px auto 4px;
+}
+.sheet h3 {
+  font-family: 'Bricolage Grotesque';
+  font-weight: 800;
+  font-size: 22px;
+  padding: 10px 18px 4px;
+  text-transform: var(--disp-transform);
+}
+.sheet p {
+  font: 600 13px 'Archivo';
+  color: var(--ink-2);
+  padding: 2px 18px 8px;
+  line-height: 1.5;
+}
+.sheet p b {
+  color: var(--ink);
+}
+
+/* ---- detail message / states ---- */
+.fd-note {
+  padding: 22px 18px;
+  text-align: center;
+  color: var(--ink-2);
+  font: 600 13px/1.5 'Archivo';
+}
