@@ -140,9 +140,21 @@ BlindStructure/BlindLevel, GalleryPhoto (Phase 2), LearningContent (Phase 2).
   - *Detailed UX + the calc engine get their own `/dh:grill --ui-first` → `/dh:design` pass when
     Phase 2 starts; this entry just captures scope + intent.*
 
+- **Sound & notifications** (added 2026-07-23). Audio cues + alerts on key moments:
+  - **Timer sounds:** a warning in the final seconds of a blind level and a chime on level change.
+  - **Action sounds/alerts:** tournament **start**, tournament **opened** (check-in available), and a
+    player **going out** (elimination — "X quedó fuera").
+  - **Notifications:** in-app toasts always; optional local/push notifications via the PWA so alerts
+    reach players whose screen is off (esp. "opened" and level changes).
+  - **User-controllable:** mute + volume toggle; sounds pre-loaded; respect device silent mode.
+  - **Triggers off state changes**, consistent with the state-based timer (§8) — fire on level
+    advance / open / elimination events, never per tick.
+  - *Gets its own design/build pass when Phase 2 starts; this entry captures scope + intent.*
+
 ## Out of scope (Phase 1 prototype)
 
-- Everything in "Phase 2 features" above (gallery, history covers, learning, odds calculator).
+- Everything in "Phase 2 features" above (gallery, history covers, learning, odds calculator, sound
+  & notifications).
 - PWA offline, push notifications, i18n toggle/English (Phase 3).
 - Real Supabase wiring beyond what the prototype needs — the prototype uses mock/seed data;
   live backend is built in /dh:plan → /dh:build.

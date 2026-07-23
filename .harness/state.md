@@ -2,9 +2,9 @@
 goal: Build "Poker League" PWA (React+Vite+TS+Tailwind+shadcn / Supabase) per poker-league-app-plan.md — Phase 1 first
 task: poker-league-prototype
 step: build
-progress: 40%
+progress: 45%
 blockers: none
-updated: 2026-07-23T21:40:00Z
+updated: 2026-07-23T22:10:00Z
 ---
 
 ## What we're doing
@@ -13,11 +13,12 @@ UI-first design for the Poker League Phase 1 prototype. Grilling complete; spec 
 oxblood, big grotesk, tabular figures), light + dark first-class, identity from scratch.
 
 ## Last action
-/dh:run autopilot. Slices 1 (bc5f826) + 2 (3e15d8b) DONE + verified. Slice 2: schema/RLS/seed,
-`supabase db reset` clean, RLS probed. Local stack ports remapped to 553xx (543xx held by other
-project): API 55321, DB 55322, Studio 55323, Mailpit 55324. Keys via `supabase status`.
-User added Phase-2 feature: odds/hand calculator (friendly card picker) — logged in spec.
+/dh:run autopilot. Slices 1 (bc5f826), 2 (3e15d8b), 3 (c27f782) DONE + verified. Slice 3: typed
+client + generated types + env (.env gitignored, .env.example committed), tests 4/4. KEY: RLS is
+`to authenticated` → reads empty until magic-link login (slice 4's job). service-role key in
+gitignored .env for integration tests. Phase-2 additions logged in spec: odds calculator + sound/
+notifications.
 
 ## Next step
-/dh:run continues — slice 3/16: Supabase client + generated types + env (.env.example, gitignored
-.env). Then slice 4 (auth). Local API 55321; types via `supabase gen types typescript --local`.
+/dh:run continues — slice 4/16: magic-link auth + roles (src/lib/auth.tsx, Login.tsx, first-login
+binds player.auth_user_id by email, route guard + useRole). Local Mailpit at :55324 for magic links.
