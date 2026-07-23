@@ -32,3 +32,16 @@ DB-touching slice that resets the stack should expect this and restart those two
 - Auth binding: `AuthProvider` calls `claim_player()` on first session; `useAuth().player` is the
   bound row, `useRole().isAdmin` gates admin UI. Screens read the current player via `useAuth()`.
 - Local ports: API 55321, DB 55322, Studio 55323, Mailpit 55324.
+
+## Slice 5 — scoring model + a FE rendering gotcha
+2026-07-23 · slice 5 · tags: points, leaderboard, sql, frontend
+
+- `leaderboard(season_id)` RPC returns each player's `form` array **most-recent-first (index 0 =
+  latest game)**. The approved prototype renders form pills **newest-on-the-RIGHT** → the leaderboard
+  UI (slice 8) must REVERSE the array (or render right-to-left). Don't show it as-is.
+- N = field size = entries with non-null `final_position` (no-shows/cancels excluded from N). P =
+  final_position (1=champion). Attendance bonus gated on `paid`. no_show_penalty stored signed (−15).
+- Chop: all group members get `round(avg §5 point-values))` and `entry.chopped=true` → counted as
+  champions in wins/podiums/form. Podiums = positions 1–3 (includes wins).
+- `fn_tournament_points` is `service_role`-only (slice-12 admin RPC calls it); `leaderboard` is granted
+  to `authenticated`.

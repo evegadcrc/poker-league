@@ -2,9 +2,9 @@
 goal: Build "Poker League" PWA (React+Vite+TS+Tailwind+shadcn / Supabase) per poker-league-app-plan.md — Phase 1 first
 task: poker-league-prototype
 step: build
-progress: 50%
+progress: 55%
 blockers: none
-updated: 2026-07-23T22:40:00Z
+updated: 2026-07-23T23:10:00Z
 ---
 
 ## What we're doing
@@ -13,12 +13,12 @@ UI-first design for the Poker League Phase 1 prototype. Grilling complete; spec 
 oxblood, big grotesk, tabular figures), light + dark first-class, identity from scratch.
 
 ## Last action
-/dh:run autopilot. Slices 1-4 DONE + verified (bc5f826, 3e15d8b, c27f782, d984235). Slice 4: auth
-(claim_player RPC mig 0002, AuthProvider/useAuth/useRole, router, RequireAuth/RequireAdmin, Login).
-13 tests green. Screens read player via useAuth(), isAdmin via useRole(). Lesson logged: Kong 502
-after db reset → docker restart the auth+kong containers.
+/dh:run autopilot. Slices 1-5 DONE + verified (…, f143ba7). Slice 5: scoring engine (mig 0003) —
+fn_final_table_size, fn_tournament_points (§5 + penalties + chop=co-champions), leaderboard RPC.
+19 tests green. NOTE for slice 8: leaderboard form array is most-recent-FIRST; prototype renders
+newest-on-the-RIGHT → reverse it. N=field size (non-null final_position); no_show stored −15.
 
 ## Next step
-/dh:run continues — slice 5/16: points + leaderboard SQL (mig 0003). fn_final_table_size,
-fn_tournament_points (§5 + penalties + CHOP averaging + co-champions), leaderboard RPC (form tiers
-keyed off chopped, tiebreakers). Correctness-critical — integration tests per Approach.
+/dh:run continues — slice 6/16: pot + prizes SQL (mig 0004). fn_pot (COALESCE override, paid·buy_in
++ rebuys·rebuy_amount); set_prizes (payout_template×pot, round nearest ₡5.000, 1st absorbs remainder
+→ sum=pot); admin override preserved. Tests: 60/28/12 on ₡140K → 85/40/15K.
