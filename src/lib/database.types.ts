@@ -398,6 +398,10 @@ export type Database = {
         Args: { p_checked_in: number; p_season_id: string }
         Returns: number
       }
+      fn_pot: {
+        Args: { p_tournament_id: string }
+        Returns: number
+      }
       fn_tournament_points: {
         Args: { p_tournament_id: string }
         Returns: undefined
@@ -414,6 +418,14 @@ export type Database = {
           total_points: number
           wins: number
         }[]
+      }
+      set_prizes: {
+        Args: { p_tournament_id: string }
+        Returns: Json
+      }
+      set_prizes_manual: {
+        Args: { p_amounts: Json; p_tournament_id: string }
+        Returns: Json
       }
     }
     Enums: {
