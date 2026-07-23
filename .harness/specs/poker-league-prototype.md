@@ -124,9 +124,25 @@ scheduled_at, buy_in, rebuy_amount, starting_stack, blind structure, clock state
 timer mode), Entry (per-player status, paid, rebuys, check-in time+geo, final_position, points),
 BlindStructure/BlindLevel, GalleryPhoto (Phase 2), LearningContent (Phase 2).
 
+## Phase 2 features (deferred — NOT in the current Phase 1 build)
+
+- Memorable-hands gallery; tournament-history full-bleed cover cards; learning section.
+- **Odds / hand calculator** (added 2026-07-23). A menu where a player inputs the cards in play and
+  gets the odds of their hand (win / tie equity). Requirements:
+  - **Friendly card entry is the point:** a visual card picker (52-card grid or rank×suit selector
+    with the four suit glyphs ♠♥♦♣ colored), clear slots for **Tu mano** (2 hole cards), **Mesa**
+    (flop 3 / turn / river), and **# de rivales** (or specific opponent hands). Tap to fill a slot,
+    tap again to clear; used/duplicate cards disabled; live "cartas restantes" count.
+  - **Output:** win % / tie % (equity), and outs / hand-improvement odds where meaningful.
+  - **Client-side compute** — Monte-Carlo simulation (or enumeration) in the browser; NO backend,
+    no Supabase. Fits alongside the learning section.
+  - Styled in the same Sports-Almanac + Neón system; Spanish copy.
+  - *Detailed UX + the calc engine get their own `/dh:grill --ui-first` → `/dh:design` pass when
+    Phase 2 starts; this entry just captures scope + intent.*
+
 ## Out of scope (Phase 1 prototype)
 
-- Memorable-hands gallery, tournament-history full-bleed cover cards, learning section (Phase 2).
+- Everything in "Phase 2 features" above (gallery, history covers, learning, odds calculator).
 - PWA offline, push notifications, i18n toggle/English (Phase 3).
 - Real Supabase wiring beyond what the prototype needs — the prototype uses mock/seed data;
   live backend is built in /dh:plan → /dh:build.
