@@ -160,7 +160,8 @@ admin RPCs. Timer: admin device is the single writer for level advance.
    Cash **prizes** split the pot independently.
 2. **Prize distribution = % template, auto-computed then ROUNDED to clean amounts, admin-editable
    late.** Season holds a `payout_template` (e.g. top-3 `[0.60,0.28,0.12]`). App computes each
-   payout from the live pot and rounds (to nearest ₡1.000; ₡39.2K→₡40K), then admin may override
+   payout from the live pot and rounds (to nearest ₡5.000, 1st slice absorbs the remainder so the
+   payouts sum exactly to the pot; ₡39.2K→₡40K), then admin may override
    any amount once the pot is final. Stored per-tournament in `tournament.prizes` (jsonb).
 3. **Chop / split (deal).** Admin can end a tournament with the final K players splitting:
    - Money: the summed prize amounts for positions 1..K, divided equally (rounded), admin-adjustable.
