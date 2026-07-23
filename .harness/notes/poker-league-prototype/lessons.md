@@ -45,3 +45,16 @@ DB-touching slice that resets the stack should expect this and restart those two
   champions in wins/podiums/form. Podiums = positions 1–3 (includes wins).
 - `fn_tournament_points` is `service_role`-only (slice-12 admin RPC calls it); `leaderboard` is granted
   to `authenticated`.
+
+## Slice 7 — final_table_size recompute cadence (DEPENDENCY for slices 10 & 12)
+2026-07-23 · slice 7 · tags: open-tournament, final-table, dependency
+
+`open_tournament` opens the fecha **paused** at level 1 and stores a PROVISIONAL `final_table_size`
+(most players haven't checked in yet). A helper `recompute_final_table_size(tournament_id)`
+(service_role-only) recounts `checked_in_at IS NOT NULL` and re-resolves via `fn_final_table_size`.
+**MUST be honored by later slices:**
+- **Slice 10 (`check_in`)** → call `recompute_final_table_size` after each successful check-in.
+- **Slice 12 (`complete_tournament`)** → call it once after flipping ghosts→no_show, before points.
+- Slice-12 eliminate reads the stored `tournament.final_table_size` column.
+Backend migrations complete through 0005 (0001 schema/RLS/seed · 0002 auth · 0003 points · 0004
+prizes · 0005 open_tournament). Slices 8-16 are the React screens.
