@@ -20,3 +20,15 @@
   experimental global `localStorage` shadows jsdom's).
 - Verified commands: `npm run build` (`tsc -b && vite build`), `npm test` (`vitest run`),
   `npm run lint` (`oxlint src`). `npm run dev` is long-running — never a build gate.
+
+## Slice 4 — transient Kong/auth 502 after `supabase db reset`
+2026-07-23 · slice 4 · tags: supabase, docker, local-stack
+
+After `supabase db reset` restarts containers, the auth service behind Kong can briefly 502.
+Fix: `docker restart supabase_auth_poker-league supabase_kong_poker-league`, then retry. Any
+DB-touching slice that resets the stack should expect this and restart those two containers if a
+502 hits right after reset.
+
+- Auth binding: `AuthProvider` calls `claim_player()` on first session; `useAuth().player` is the
+  bound row, `useRole().isAdmin` gates admin UI. Screens read the current player via `useAuth()`.
+- Local ports: API 55321, DB 55322, Studio 55323, Mailpit 55324.
