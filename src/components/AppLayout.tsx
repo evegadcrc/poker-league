@@ -43,6 +43,14 @@ export default function AppLayout() {
         </div>
         <div className="tb-actions">
           <Link
+            to="/aprende"
+            className="icon-btn"
+            title="Aprende a jugar"
+            aria-label="Aprende a jugar"
+          >
+            ?
+          </Link>
+          <Link
             to="/calculadora"
             className="icon-btn"
             title="Calculadora de probabilidades"

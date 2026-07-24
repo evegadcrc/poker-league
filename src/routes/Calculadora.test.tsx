@@ -96,4 +96,20 @@ describe('Calculadora', () => {
     await u.click(screen.getByRole('link', { name: 'Calculadora de probabilidades' }))
     expect(await screen.findByTestId('calc-root')).toBeInTheDocument()
   })
+
+  it('shows the hand-rankings reference behind a "Ranking de manos" toggle', async () => {
+    const u = userEvent.setup()
+    render(<Calculadora />)
+
+    const toggle = screen.getByTestId('rankings-toggle')
+    // Collapsed by default: the ranking rows are not rendered yet.
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryAllByTestId('hr-row')).toHaveLength(0)
+
+    await u.click(toggle)
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getAllByTestId('hr-row')).toHaveLength(10)
+    expect(screen.getByText('Escalera Real')).toBeInTheDocument()
+  })
 })

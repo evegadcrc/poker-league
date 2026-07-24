@@ -3,6 +3,7 @@ import './App.css'
 import AppLayout from '@/components/AppLayout'
 import { RequireAdmin, RequireAuth } from '@/components/guards'
 import Admin from '@/routes/Admin'
+import Aprende from '@/routes/Aprende'
 import Calculadora from '@/routes/Calculadora'
 import Fechas from '@/routes/Fechas'
 import FechaDetail from '@/routes/FechaDetail'
@@ -29,6 +30,7 @@ export default function App() {
             <Route path="/fechas/:id" element={<FechaDetail />} />
             <Route path="/vivo" element={<Live />} />
             <Route path="/calculadora" element={<Calculadora />} />
+            <Route path="/aprende" element={<Aprende />} />
             <Route path="/perfil" element={<Profile />} />
 
             {/* Admin-only */}

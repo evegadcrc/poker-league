@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { makeCard, formatCard, type Card, type Suit } from '@/lib/poker/cards'
 import { categoryOf, evaluate7 } from '@/lib/poker/evaluator'
 import { createEquityWorker, type EquityResult } from '@/lib/equityWorker'
+import HandRankings from '@/components/HandRankings'
 
 // ---------------------------------------------------------------------------
 // Calculadora de probabilidades (Phase 2, plan step 10). A visual Texas
@@ -67,6 +68,7 @@ export default function Calculadora() {
   const [rivals, setRivals] = useState(1)
   const [status, setStatus] = useState<ComputeStatus>('idle')
   const [result, setResult] = useState<EquityResult | null>(null)
+  const [showRankings, setShowRankings] = useState(false)
 
   const workerRef = useRef<Worker | null>(null)
   // Guards against a stale worker reply landing after the inputs became
@@ -284,6 +286,27 @@ export default function Calculadora() {
             })}
           </div>
         ))}
+      </div>
+
+      <div className="calc-rankings">
+        <button
+          type="button"
+          className="calc-rankings-toggle"
+          aria-expanded={showRankings}
+          aria-controls="calc-rankings-body"
+          data-testid="rankings-toggle"
+          onClick={() => setShowRankings((v) => !v)}
+        >
+          <span>Ranking de manos</span>
+          <span className="chev" aria-hidden="true">
+            ⌄
+          </span>
+        </button>
+        {showRankings && (
+          <div className="calc-rankings-body" id="calc-rankings-body">
+            <HandRankings />
+          </div>
+        )}
       </div>
     </div>
   )
