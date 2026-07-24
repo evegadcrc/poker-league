@@ -1070,6 +1070,10 @@ function MultiBustSheet({
   // Selected ids in the displayed (shortest-first) order.
   const ids = inPlay.filter((e) => sel.has(e.id)).map((e) => e.id)
   const k = ids.length
+  // A multi-bust must leave ≥1 survivor: selecting the ENTIRE in-play field is a
+  // final-table/heads-up chop, which goes through "Completar fecha", not here.
+  const emptiesField = k >= inPlay.length
+  const canBust = k >= 2 && !emptiesField
 
   // Tie money preview: the tied group takes the bottom K positions of the
   // current in-play count → split the summed prize amounts for those positions.
@@ -1123,12 +1127,18 @@ function MultiBustSheet({
         </div>
       )}
 
+      {emptiesField && inPlay.length >= 2 && (
+        <div className="fd-note" data-testid="multibust-survivor-hint">
+          Debe quedar al menos un jugador en juego. Para un chop de mesa final usá “Completar fecha”.
+        </div>
+      )}
+
       <div className="btn-row" style={{ gap: 10 }}>
         <button
           type="button"
           className="btn ghost"
           style={{ flex: 1 }}
-          disabled={busy || k < 2}
+          disabled={busy || !canBust}
           onClick={() => onBust(ids, false)}
         >
           En orden ({k})
@@ -1137,7 +1147,7 @@ function MultiBustSheet({
           type="button"
           className="btn blood"
           style={{ flex: 1 }}
-          disabled={busy || k < 2}
+          disabled={busy || !canBust}
           onClick={() => onBust(ids, true)}
         >
           Empataron ({k})

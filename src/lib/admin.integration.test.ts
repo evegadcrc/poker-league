@@ -625,6 +625,52 @@ describe.skipIf(!canRun)('admin console RPCs (slice 12, local integration)', () 
     expect(rows.find((r) => r.player_id === a.player_id)!.form[0]).toBe('out')
   })
 
+  // ------------------------------------------------------------------------
+  // REQUIRED (review iter 1): a multi-bust must leave ≥1 survivor. Selecting the
+  // WHOLE in-play field raises in BOTH modes (a real final-table/heads-up chop
+  // goes through complete_tournament, not eliminate_multi). Leaving ≥1 works.
+  it('eliminate_multi RAISES when it would empty the field (ordered, all selected)', async () => {
+    const t = await mkTournament({ finalTableSize: 5 })
+    const a = await mkEntry(t, await mkPlayer())
+    const b = await mkEntry(t, await mkPlayer())
+    const c = await mkEntry(t, await mkPlayer())
+
+    const { error } = await admin.rpc('eliminate_multi', { p_entry_ids: [a, b, c], p_tied: false })
+    expect(error).not.toBeNull()
+    // Field untouched — nothing eliminated (whole tx rolled back).
+    for (const id of [a, b, c]) expect((await readEntry(id)).status).toBe('playing')
+  })
+
+  it('eliminate_multi RAISES when it would empty the field (tie, all selected)', async () => {
+    const t = await mkTournament({ finalTableSize: 5 })
+    const a = await mkEntry(t, await mkPlayer())
+    const b = await mkEntry(t, await mkPlayer())
+
+    const { error } = await admin.rpc('eliminate_multi', { p_entry_ids: [a, b], p_tied: true })
+    expect(error).not.toBeNull()
+    for (const id of [a, b]) {
+      const e = await readEntry(id)
+      expect(e.status).toBe('playing')
+      expect(e.final_position).toBeNull()
+      expect(e.chop_group).toBeNull()
+    }
+  })
+
+  it('eliminate_multi allows leaving exactly one survivor (tie of N−1 → lone winner)', async () => {
+    const t = await mkTournament({ finalTableSize: 5 })
+    const a = await mkEntry(t, await mkPlayer())
+    const b = await mkEntry(t, await mkPlayer())
+    const survivor = await mkEntry(t, await mkPlayer())
+
+    // 3 alive → tie-bust 2 → survivor is crowned winner at pos 1.
+    const { error } = await admin.rpc('eliminate_multi', { p_entry_ids: [a, b], p_tied: true })
+    expect(error).toBeNull()
+    expect([(await readEntry(a)).final_position, (await readEntry(b)).final_position].sort()).toEqual([2, 3])
+    const s = await readEntry(survivor)
+    expect(s.status).toBe('winner')
+    expect(s.final_position).toBe(1)
+  })
+
   // ========================================================================
   // Phase-2 step 7 — standalone fecha (counts_for_league).
   // ========================================================================

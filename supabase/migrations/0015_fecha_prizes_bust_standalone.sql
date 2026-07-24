@@ -71,7 +71,15 @@ update public.tournament t
  where s.id = t.season_id
    and t.payout_distribution is null
    and s.payout_template is not null
-   and jsonb_array_length(s.payout_template) > 0;
+   -- Guard against a non-array payout_template (reachable via update_season /
+   -- a direct service_role write): jsonb_array_length + jsonb_array_elements_text
+   -- throw 22023 on a non-array, and AND-predicate order is NOT guaranteed, so a
+   -- single malformed row would abort the WHOLE migration. A CASE short-circuits
+   -- safely; non-array rows are skipped (set_prizes then falls back to the
+   -- template's own no-op path for them).
+   and case when jsonb_typeof(s.payout_template) = 'array'
+            then jsonb_array_length(s.payout_template) > 0
+            else false end;
 
 -- ---------------------------------------------------------------------------
 -- create_tournament(payload jsonb) — REPLACES 0010's definition.
@@ -381,6 +389,22 @@ begin
     raise exception 'eliminación múltiple: todos los jugadores deben estar en juego en esta fecha';
   end if;
 
+  -- REQUIRED (review iter 1): a multi-bust must leave AT LEAST ONE survivor.
+  -- Emptying the whole field is broken in BOTH modes — ordered would call
+  -- fn_eliminate_entry on the just-crowned lone winner ('no está en juego' →
+  -- the whole tx rolls back with a generic error), and a dead-even tie would
+  -- assign positions 1..N with no `winner` row, mislabeling the leaderboard.
+  -- A genuine final-table / heads-up chop goes through complete_tournament
+  -- (which legitimately sets the co-champion flags), NOT here — eliminate_multi
+  -- stays strictly mid-field. (distinct-count is robust to a duplicated id.)
+  select count(*) into v_alive_incl
+  from public.entry
+  where tournament_id = v_tid and status in ('playing', 'checked_in');
+
+  if v_alive_incl - (select count(distinct cid) from unnest(p_entry_ids) cid) < 1 then
+    raise exception 'eliminación múltiple: debe quedar al menos un jugador en juego (un chop de mesa final va por Completar fecha)';
+  end if;
+
   if not p_tied then
     -- ORDERED: bust each in the given order (shortest stack FIRST → worst
     -- position). Sequential total−1 = N separate eliminations.
@@ -392,10 +416,7 @@ begin
     -- (v_alive_incl .. v_alive_incl−K+1) and share a NEW chop_group so
     -- fn_tournament_points averages their §5 points equally. They are NOT
     -- co-champions — see THE TRAP above: chopped / status='winner' stay FALSE.
-    select count(*) into v_alive_incl
-    from public.entry
-    where tournament_id = v_tid and status in ('playing', 'checked_in');
-
+    -- (v_alive_incl was resolved above for the ≥1-survivor guard; reuse it.)
     select coalesce(max(e.chop_group), 0) + 1 into v_group
     from public.entry e where e.tournament_id = v_tid;
 

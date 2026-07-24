@@ -222,6 +222,41 @@ describe('Admin console (slice 12)', () => {
     expect(call).toBeTruthy()
     expect((call!.args as Record<string, unknown>).p_chop_entry_ids).toBeUndefined()
   })
+
+  // Multi-bust must leave ≥1 survivor: selecting the WHOLE in-play field is a
+  // final-table/heads-up chop (→ "Completar fecha"), so both bust actions
+  // disable and a survivor hint appears. A subset (leaving ≥1) enables them.
+  it('MultiBustSheet disables En orden + Empataron when all in-play are selected', async () => {
+    const user = userEvent.setup()
+    h.list.entry = {
+      data: [
+        { id: 'e-a', player_id: 'p-a', status: 'playing', paid: true, chips: 10_000, rebuys_count: 0, early_bird: false, final_position: null, player: { name: 'Ana', avatar_url: null } },
+        { id: 'e-b', player_id: 'p-b', status: 'playing', paid: true, chips: 20_000, rebuys_count: 0, early_bird: false, final_position: null, player: { name: 'Bea', avatar_url: null } },
+        { id: 'e-c', player_id: 'p-c', status: 'playing', paid: true, chips: 30_000, rebuys_count: 0, early_bird: false, final_position: null, player: { name: 'Cid', avatar_url: null } },
+      ],
+      error: null,
+    }
+    renderAdmin()
+    await screen.findAllByTestId('admin-prow')
+
+    await user.click(screen.getByRole('button', { name: /Eliminar varios/ }))
+    const dialog = screen.getByRole('dialog', { name: /Eliminar varios/ })
+    const orden = within(dialog).getByRole('button', { name: /En orden/ })
+    const empate = within(dialog).getByRole('button', { name: /Empataron/ })
+
+    // Select 2 of 3 (leaves 1 survivor) → both actions enabled, no hint.
+    await user.click(within(dialog).getByLabelText('Eliminar Ana'))
+    await user.click(within(dialog).getByLabelText('Eliminar Bea'))
+    expect(orden).toBeEnabled()
+    expect(empate).toBeEnabled()
+    expect(within(dialog).queryByTestId('multibust-survivor-hint')).not.toBeInTheDocument()
+
+    // Select the 3rd too (whole field, 0 survivors) → both disabled + hint.
+    await user.click(within(dialog).getByLabelText('Eliminar Cid'))
+    expect(orden).toBeDisabled()
+    expect(empate).toBeDisabled()
+    expect(within(dialog).getByTestId('multibust-survivor-hint')).toBeInTheDocument()
+  })
 })
 
 describe('Admin console — edit prizes (payout distribution, Phase-2 step 5)', () => {
