@@ -977,6 +977,45 @@
   color: var(--on-oxblood);
 }
 
+/* ---- completed-fecha result: finishing place + points earned that fecha ---- */
+.fd-standalone {
+  padding: 0 18px 8px;
+  font: 700 11px 'Archivo';
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+}
+.fd-result {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  text-align: right;
+  white-space: nowrap;
+}
+.fd-result .place {
+  font: 800 16px 'Archivo';
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  line-height: 1;
+}
+.fd-result .place.champ {
+  color: var(--champ-bg);
+}
+.fd-result .place .crown {
+  font-size: 12px;
+}
+.fd-result .pts {
+  font: 700 11.5px 'Archivo';
+}
+.fd-result .pts.pos {
+  color: var(--ink-2);
+}
+.fd-result .pts.neg {
+  color: var(--oxblood);
+}
+
 /* ---- graduated late-cancel bands (cancel confirm sheet) ---- */
 .bands {
   display: flex;

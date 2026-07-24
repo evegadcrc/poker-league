@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth, useRole } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
+import { cn } from '@/lib/utils'
 import { useLoadable } from '@/lib/useLoadable'
 import Avatar from '@/components/Avatar'
 import Galeria, { galleryUrl } from '@/components/Galeria'
@@ -29,6 +30,7 @@ type TournamentRow = {
   status: TournamentStatus
   geofence_radius_m: number
   cover_url: string | null
+  counts_for_league: boolean
 }
 
 type EntryRow = {
@@ -42,6 +44,7 @@ type EntryRow = {
   chips: number | null
   points_earned: number | null
   final_position: number | null
+  chopped: boolean
   rebuys_count: number
   player: { name: string; avatar_url: string | null } | null
 }
@@ -84,7 +87,9 @@ const OVERLINE: Record<TournamentStatus, string> = {
 async function fetchDetail(id: string): Promise<State> {
   const { data: t, error: tErr } = await supabase
     .from('tournament')
-    .select('id, season_id, name, scheduled_at, status, geofence_radius_m, cover_url')
+    .select(
+      'id, season_id, name, scheduled_at, status, geofence_radius_m, cover_url, counts_for_league',
+    )
     .eq('id', id)
     .maybeSingle()
 
@@ -96,7 +101,7 @@ async function fetchDetail(id: string): Promise<State> {
     supabase
       .from('entry')
       .select(
-        'id, player_id, status, rsvp_at, cancelled_at, checked_in_at, early_bird, chips, points_earned, final_position, rebuys_count, player:player_id(name, avatar_url)',
+        'id, player_id, status, rsvp_at, cancelled_at, checked_in_at, early_bird, chips, points_earned, final_position, chopped, rebuys_count, player:player_id(name, avatar_url)',
       )
       .eq('tournament_id', id),
     supabase.from('season').select('cancel_bands').eq('id', tournament.season_id).maybeSingle(),
@@ -158,6 +163,7 @@ export default function FechaDetail() {
             chips: null,
             points_earned: null,
             final_position: null,
+            chopped: false,
             rebuys_count: 0,
             player: { name: player.name, avatar_url: player.avatar_url },
           })
@@ -272,6 +278,7 @@ export default function FechaDetail() {
   const myEntry = player ? entries.find((e) => e.player_id === player.id) ?? null : null
   const scheduled = tournament.status === 'scheduled'
   const live = tournament.status === 'live'
+  const completed = tournament.status === 'completed'
   const canCheckIn = live && myEntry?.status === 'confirmed'
   const alreadyCheckedIn = live && myEntry != null && CHECKED_IN_STATUSES.has(myEntry.status)
   const locating = checkIn.kind === 'locating' || checkIn.kind === 'submitting'
@@ -288,6 +295,11 @@ export default function FechaDetail() {
       <div className="tc-sub" style={{ padding: '0 18px 4px' }}>
         {formatWhen(tournament.scheduled_at)}
       </div>
+      {tournament.counts_for_league === false && (
+        <div className="fd-standalone" data-testid="fd-standalone">
+          Amistoso · no suma a la liga
+        </div>
+      )}
       <div className="rule faint" />
 
       <div className="att-head" data-testid="att-head">
@@ -339,6 +351,7 @@ export default function FechaDetail() {
             key={e.id}
             entry={e}
             isMe={player?.id === e.player_id}
+            completed={completed}
             canAdminCheckIn={isAdmin && live && e.status === 'confirmed'}
             onAdminCheckIn={doAdminCheckIn}
           />
@@ -433,16 +446,22 @@ function ChipCount({ tone, n, label }: { tone: string; n: number; label: string 
 function PlayerAttendanceRow({
   entry,
   isMe,
+  completed,
   canAdminCheckIn,
   onAdminCheckIn,
 }: {
   entry: EntryRow
   isMe: boolean
+  completed: boolean
   canAdminCheckIn: boolean
   onAdminCheckIn: (entryId: string) => void
 }) {
   const pill = statusPill(entry.status)
   const name = entry.player?.name ?? 'Jugador'
+  // On a COMPLETED fecha, finishers and no-shows swap their CAMPEÓN / FUERA /
+  // no-show status badge for their finishing PLACE + the POINTS they earned that
+  // fecha (entry.points_earned = the fn_tournament_points engine value).
+  const result = completed ? fechaResult(entry) : null
   return (
     <div className="prow" data-testid="prow">
       <Avatar name={name} url={entry.player?.avatar_url} size={36} />
@@ -451,7 +470,7 @@ function PlayerAttendanceRow({
           {name}
           {isMe ? ' · tú' : ''}
         </b>
-        <div className="sub">{noteFor(entry)}</div>
+        {!result && <div className="sub">{noteFor(entry)}</div>}
       </div>
       {canAdminCheckIn ? (
         <button
@@ -461,9 +480,70 @@ function PlayerAttendanceRow({
         >
           Registrar
         </button>
+      ) : result ? (
+        <FechaResult result={result} />
       ) : (
         <span className={`status ${pill.cls}`}>{pill.label}</span>
       )}
+    </div>
+  )
+}
+
+/** Completed-fecha per-player outcome shown in place of the status badge. */
+type FechaResultData =
+  | { kind: 'place'; place: number; isChamp: boolean; points: number }
+  | { kind: 'noshow'; points: number }
+
+/**
+ * For a completed fecha, the outcome to render for one entry — or null for rows
+ * that keep their ordinary status pill (declined / invited / non-participants).
+ * Ranked finishers show their place; chopped co-champions share `1º` (they sit
+ * at the top K positions) and keep the champion accent.
+ */
+function fechaResult(e: EntryRow): FechaResultData | null {
+  if (e.final_position != null) {
+    return {
+      kind: 'place',
+      place: e.chopped ? 1 : e.final_position,
+      isChamp: e.chopped || e.final_position === 1,
+      points: e.points_earned ?? 0,
+    }
+  }
+  if (e.status === 'no_show') {
+    return { kind: 'noshow', points: e.points_earned ?? 0 }
+  }
+  return null
+}
+
+/** Signed points label: "+34 pts", "−15 pts", "0 pts" (U+2212 minus). */
+function signedPoints(pts: number): string {
+  if (pts > 0) return `+${pts} pts`
+  if (pts < 0) return `−${Math.abs(pts)} pts`
+  return '0 pts'
+}
+
+function FechaResult({ result }: { result: FechaResultData }) {
+  if (result.kind === 'noshow') {
+    return (
+      <div className="fd-result" data-testid="fd-result">
+        <span className="status s-noshow">No Show</span>
+        <span className="pts neg">{signedPoints(result.points)}</span>
+      </div>
+    )
+  }
+  return (
+    <div className="fd-result" data-testid="fd-result">
+      <span className={cn('place', result.isChamp && 'champ')}>
+        {result.isChamp && (
+          <span className="crown" aria-hidden="true">
+            👑
+          </span>
+        )}
+        {result.place}º
+      </span>
+      <span className={cn('pts', result.points < 0 ? 'neg' : 'pos')}>
+        {signedPoints(result.points)}
+      </span>
     </div>
   )
 }

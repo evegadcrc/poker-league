@@ -81,6 +81,29 @@ function setEntries(myStatus: string) {
   }
 }
 
+// A finished fecha: ranked finishers (winner + eliminated) each carry a
+// final_position and the engine's points_earned; a confirmed-but-ghosted player
+// is a no_show with the negative penalty.
+function setCompletedEntries() {
+  const base = {
+    rsvp_at: null,
+    cancelled_at: null,
+    checked_in_at: null,
+    early_bird: false,
+    rebuys_count: 0,
+    chopped: false,
+  }
+  h.list.entry = {
+    data: [
+      { id: 'w', player_id: 'pw', status: 'winner', points_earned: 45, final_position: 1, ...base, player: { name: 'Mauricio A.', avatar_url: null } },
+      { id: 'e2', player_id: 'p2', status: 'eliminated', points_earned: 34, final_position: 2, ...base, player: { name: 'Andrés R.', avatar_url: null } },
+      { id: 'e3', player_id: 'p3', status: 'eliminated', points_earned: 20, final_position: 3, ...base, player: { name: 'Sofía M.', avatar_url: null } },
+      { id: 'ns', player_id: 'pns', status: 'no_show', points_earned: -15, final_position: null, ...base, player: { name: 'Luis C.', avatar_url: null } },
+    ],
+    error: null,
+  }
+}
+
 const renderDetail = () =>
   render(
     <MemoryRouter initialEntries={['/fechas/t-1']}>
@@ -181,5 +204,78 @@ describe('FechaDetail', () => {
     expect(screen.queryByRole('button', { name: 'Cancelar' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Voy' })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: /en vivo/i })).toBeInTheDocument()
+  })
+
+  it('completed fecha shows finishing place + points per player (winner accented)', async () => {
+    setTournament('completed')
+    setCompletedEntries()
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    const rows = screen.getAllByTestId('prow')
+    const byName = (n: string) => rows.find((r) => within(r).queryByText(new RegExp(n)))!
+
+    // Winner: 1º + champion accent + positive points; no CAMPEÓN status badge.
+    const champ = within(byName('Mauricio')).getByTestId('fd-result')
+    expect(champ.textContent).toContain('1º')
+    expect(champ.textContent).toContain('+45 pts')
+    expect(champ.querySelector('.place.champ')).not.toBeNull()
+    expect(within(byName('Mauricio')).queryByText('Campeón')).not.toBeInTheDocument()
+
+    // Runner-up: 2º + points, not champ-accented; no FUERA badge.
+    const second = within(byName('Andrés')).getByTestId('fd-result')
+    expect(second.textContent).toContain('2º')
+    expect(second.textContent).toContain('+34 pts')
+    expect(second.querySelector('.place.champ')).toBeNull()
+    expect(within(byName('Andrés')).queryByText('Fuera')).not.toBeInTheDocument()
+
+    // 3rd place renders its ordinal too.
+    expect(within(byName('Sofía')).getByTestId('fd-result').textContent).toContain('3º')
+  })
+
+  it('completed fecha: a no-show shows "No Show" + the penalty points', async () => {
+    setTournament('completed')
+    setCompletedEntries()
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    const noShow = screen
+      .getAllByTestId('prow')
+      .find((r) => within(r).queryByText(/Luis/))!
+    const result = within(noShow).getByTestId('fd-result')
+    expect(result.textContent).toContain('No Show')
+    expect(result.textContent).toContain('−15 pts')
+  })
+
+  it('completed fecha: chopped co-champions share 1º and keep the champion accent', async () => {
+    setTournament('completed')
+    const base = {
+      rsvp_at: null,
+      cancelled_at: null,
+      checked_in_at: null,
+      early_bird: false,
+      rebuys_count: 0,
+      points_earned: 40,
+    }
+    h.list.entry = {
+      data: [
+        { id: 'ca', player_id: 'pca', status: 'winner', final_position: 1, chopped: true, ...base, player: { name: 'Ana M.', avatar_url: null } },
+        // Co-champion with final_position=2 must still render 1º (shared place).
+        { id: 'cb', player_id: 'pcb', status: 'winner', final_position: 2, chopped: true, ...base, player: { name: 'Beto S.', avatar_url: null } },
+      ],
+      error: null,
+    }
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    const rows = screen.getAllByTestId('prow')
+    for (const nm of ['Ana', 'Beto']) {
+      const res = within(rows.find((r) => within(r).queryByText(new RegExp(nm)))!).getByTestId(
+        'fd-result',
+      )
+      expect(res.textContent).toContain('1º')
+      expect(res.textContent).toContain('+40 pts')
+      expect(res.querySelector('.place.champ')).not.toBeNull()
+    }
   })
 })
