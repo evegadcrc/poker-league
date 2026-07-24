@@ -374,6 +374,36 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_rebuy: {
+        Args: { p_entry_id: string }
+        Returns: {
+          cancelled_at: string | null
+          check_in_geo_ok: boolean | null
+          checked_in_at: string | null
+          chips: number | null
+          chop_group: number | null
+          chopped: boolean
+          created_at: string
+          early_bird: boolean
+          eliminated_at: string | null
+          final_position: number | null
+          id: string
+          made_final_table: boolean
+          paid: boolean
+          player_id: string
+          points_earned: number | null
+          rebuys_count: number
+          rsvp_at: string | null
+          status: Database["public"]["Enums"]["entry_status"]
+          tournament_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "entry"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       admin_check_in: {
         Args: { p_entry_id: string }
         Returns: {
@@ -484,9 +514,144 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      clock: {
+        Args: { p_action: string; p_payload?: Json; p_tournament_id: string }
+        Returns: {
+          ante_enabled: boolean
+          blind_structure_id: string | null
+          buy_in: number
+          created_at: string
+          created_by: string | null
+          current_level: number
+          final_table_size: number | null
+          geofence_radius_m: number
+          id: string
+          is_paused: boolean
+          level_started_at: string | null
+          name: string
+          paused_remaining_seconds: number | null
+          prize_pool_override: number | null
+          prizes: Json | null
+          rebuy_amount: number | null
+          rebuy_until_level: number | null
+          scheduled_at: string
+          season_id: string
+          starting_stack: number | null
+          status: Database["public"]["Enums"]["tournament_status"]
+          timer_mode: Database["public"]["Enums"]["timer_mode"]
+          venue_lat: number | null
+          venue_lng: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "tournament"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      complete_tournament: {
+        Args: { p_chop_entry_ids?: string[]; p_tournament_id: string }
+        Returns: {
+          ante_enabled: boolean
+          blind_structure_id: string | null
+          buy_in: number
+          created_at: string
+          created_by: string | null
+          current_level: number
+          final_table_size: number | null
+          geofence_radius_m: number
+          id: string
+          is_paused: boolean
+          level_started_at: string | null
+          name: string
+          paused_remaining_seconds: number | null
+          prize_pool_override: number | null
+          prizes: Json | null
+          rebuy_amount: number | null
+          rebuy_until_level: number | null
+          scheduled_at: string
+          season_id: string
+          starting_stack: number | null
+          status: Database["public"]["Enums"]["tournament_status"]
+          timer_mode: Database["public"]["Enums"]["timer_mode"]
+          venue_lat: number | null
+          venue_lng: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "tournament"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      confirm_payment: {
+        Args: { p_entry_id: string }
+        Returns: {
+          cancelled_at: string | null
+          check_in_geo_ok: boolean | null
+          checked_in_at: string | null
+          chips: number | null
+          chop_group: number | null
+          chopped: boolean
+          created_at: string
+          early_bird: boolean
+          eliminated_at: string | null
+          final_position: number | null
+          id: string
+          made_final_table: boolean
+          paid: boolean
+          player_id: string
+          points_earned: number | null
+          rebuys_count: number
+          rsvp_at: string | null
+          status: Database["public"]["Enums"]["entry_status"]
+          tournament_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "entry"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      eliminate: {
+        Args: { p_entry_id: string }
+        Returns: {
+          cancelled_at: string | null
+          check_in_geo_ok: boolean | null
+          checked_in_at: string | null
+          chips: number | null
+          chop_group: number | null
+          chopped: boolean
+          created_at: string
+          early_bird: boolean
+          eliminated_at: string | null
+          final_position: number | null
+          id: string
+          made_final_table: boolean
+          paid: boolean
+          player_id: string
+          points_earned: number | null
+          rebuys_count: number
+          rsvp_at: string | null
+          status: Database["public"]["Enums"]["entry_status"]
+          tournament_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "entry"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      fn_eliminate_entry: { Args: { p_entry_id: string }; Returns: string }
       fn_final_table_size: {
         Args: { p_checked_in: number; p_season_id: string }
         Returns: number
+      }
+      fn_is_tournament_admin: {
+        Args: { p_tournament_id: string }
+        Returns: boolean
       }
       fn_pot: { Args: { p_tournament_id: string }; Returns: number }
       fn_tournament_points: {
@@ -505,6 +670,36 @@ export type Database = {
           total_points: number
           wins: number
         }[]
+      }
+      mark_no_show: {
+        Args: { p_entry_id: string; p_excused: boolean }
+        Returns: {
+          cancelled_at: string | null
+          check_in_geo_ok: boolean | null
+          checked_in_at: string | null
+          chips: number | null
+          chop_group: number | null
+          chopped: boolean
+          created_at: string
+          early_bird: boolean
+          eliminated_at: string | null
+          final_position: number | null
+          id: string
+          made_final_table: boolean
+          paid: boolean
+          player_id: string
+          points_earned: number | null
+          rebuys_count: number
+          rsvp_at: string | null
+          status: Database["public"]["Enums"]["entry_status"]
+          tournament_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "entry"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       open_tournament: {
         Args: { p_tournament_id: string }
@@ -575,10 +770,70 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      self_bust: {
+        Args: { p_tournament_id: string }
+        Returns: {
+          cancelled_at: string | null
+          check_in_geo_ok: boolean | null
+          checked_in_at: string | null
+          chips: number | null
+          chop_group: number | null
+          chopped: boolean
+          created_at: string
+          early_bird: boolean
+          eliminated_at: string | null
+          final_position: number | null
+          id: string
+          made_final_table: boolean
+          paid: boolean
+          player_id: string
+          points_earned: number | null
+          rebuys_count: number
+          rsvp_at: string | null
+          status: Database["public"]["Enums"]["entry_status"]
+          tournament_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "entry"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       set_prizes: { Args: { p_tournament_id: string }; Returns: Json }
       set_prizes_manual: {
         Args: { p_amounts: Json; p_tournament_id: string }
         Returns: Json
+      }
+      undo_last_elimination: {
+        Args: { p_tournament_id: string }
+        Returns: {
+          cancelled_at: string | null
+          check_in_geo_ok: boolean | null
+          checked_in_at: string | null
+          chips: number | null
+          chop_group: number | null
+          chopped: boolean
+          created_at: string
+          early_bird: boolean
+          eliminated_at: string | null
+          final_position: number | null
+          id: string
+          made_final_table: boolean
+          paid: boolean
+          player_id: string
+          points_earned: number | null
+          rebuys_count: number
+          rsvp_at: string | null
+          status: Database["public"]["Enums"]["entry_status"]
+          tournament_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "entry"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
     }
     Enums: {
