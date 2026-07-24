@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 
@@ -24,8 +24,28 @@ vi.mock('@/lib/equityWorker', () => {
   return { createEquityWorker: () => new FakeWorker() }
 })
 
-// AppLayout needs a role; the calc screen itself has no auth/supabase deps.
+// AppLayout needs a role.
 vi.mock('@/lib/auth', () => ({ useRole: () => ({ isAdmin: false }) }))
+
+// The calc gate queries a LIVE fecha with odds_enabled=false on mount. Hoisted
+// state lets a test pick the response: a row → the calculator is disabled; null
+// (default) → it renders normally.
+const sb = vi.hoisted(() => ({
+  gate: { data: null as unknown, error: null as unknown },
+}))
+vi.mock('@/lib/supabase', () => ({
+  supabase: {
+    from: () => {
+      const b: Record<string, unknown> = {
+        select: () => b,
+        eq: () => b,
+        limit: () => b,
+        maybeSingle: () => Promise.resolve(sb.gate),
+      }
+      return b
+    },
+  },
+}))
 
 import Calculadora from './Calculadora'
 import AppLayout from '@/components/AppLayout'
@@ -34,6 +54,7 @@ import { ThemeProvider } from '@/lib/theme'
 beforeEach(() => {
   wh.result = { win: 0.82, tie: 0.02, lose: 0.16 }
   wh.lastReq = null
+  sb.gate = { data: null, error: null }
 })
 
 describe('Calculadora', () => {
@@ -132,5 +153,27 @@ describe('Calculadora', () => {
     expect(toggle).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getAllByTestId('hr-row')).toHaveLength(10)
     expect(screen.getByText('Escalera Real')).toBeInTheDocument()
+  })
+
+  it('renders the calculator when no live fecha disables it', async () => {
+    render(<Calculadora />)
+    // The gate check resolves to "enabled" (no disabling live fecha) → the full
+    // calculator (with the Limpiar action + card picker) stays, no disabled note.
+    await waitFor(() => expect(screen.getByTestId('calc-reset')).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: 'A de picas' })).toBeInTheDocument()
+    expect(screen.queryByTestId('calc-disabled')).not.toBeInTheDocument()
+  })
+
+  it('shows the disabled message when a live fecha has odds_enabled=false', async () => {
+    sb.gate = { data: { id: 't-live' }, error: null }
+    render(<Calculadora />)
+    expect(await screen.findByTestId('calc-disabled')).toHaveTextContent(
+      'La calculadora está deshabilitada durante la fecha en curso.',
+    )
+    // The interactive calculator (Limpiar / card picker) is gone …
+    expect(screen.queryByTestId('calc-reset')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'A de picas' })).not.toBeInTheDocument()
+    // … but the hand-rankings reference stays available.
+    expect(screen.getByTestId('rankings-toggle')).toBeInTheDocument()
   })
 })

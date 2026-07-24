@@ -122,6 +122,7 @@ type ConsoleTournament = {
   payout_distribution: unknown
   final_table_size: number | null
   starting_stack: number | null
+  odds_enabled: boolean
 }
 
 type ConsoleEntry = {
@@ -151,7 +152,7 @@ type State = { phase: 'loading' } | { phase: 'error' } | { phase: 'no-live' } | 
 type Conn = 'connecting' | 'live' | 'reconnecting'
 
 const TOURNAMENT_COLUMNS =
-  'id, name, season_id, ante_enabled, timer_mode, current_level, level_started_at, is_paused, paused_remaining_seconds, blind_structure_id, prizes, payout_distribution, final_table_size, starting_stack'
+  'id, name, season_id, ante_enabled, timer_mode, current_level, level_started_at, is_paused, paused_remaining_seconds, blind_structure_id, prizes, payout_distribution, final_table_size, starting_stack, odds_enabled'
 
 async function fetchConsole(): Promise<State> {
   const { data: t, error: tErr } = await supabase
@@ -531,6 +532,32 @@ function ConsolePanel() {
           <div className="v">{tournament.final_table_size ?? '—'}</div>
           <div className="k">Mesa final</div>
         </div>
+      </div>
+
+      <div className="toggle-row">
+        <div>
+          <div className="tl">
+            Calculadora de probabilidades: {tournament.odds_enabled ? 'Activada' : 'Desactivada'}
+          </div>
+          <div className="ts">Apagala para que nadie la use mientras juegan esta fecha</div>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          data-testid="admin-odds-toggle"
+          aria-checked={tournament.odds_enabled}
+          aria-label="Calculadora de probabilidades"
+          className={`switch${tournament.odds_enabled ? ' on' : ''}`}
+          disabled={busy}
+          onClick={() =>
+            void runAction(() =>
+              supabase
+                .from('tournament')
+                .update({ odds_enabled: !tournament.odds_enabled })
+                .eq('id', tournament.id),
+            )
+          }
+        />
       </div>
 
       <div className="section-head" style={{ paddingBottom: 6 }}>

@@ -98,6 +98,7 @@ function setLive() {
       ],
       final_table_size: 5,
       starting_stack: 10_000,
+      odds_enabled: true,
     },
     error: null,
   }
@@ -256,6 +257,27 @@ describe('Admin console (slice 12)', () => {
     expect(orden).toBeDisabled()
     expect(empate).toBeDisabled()
     expect(within(dialog).getByTestId('multibust-survivor-hint')).toBeInTheDocument()
+  })
+})
+
+describe('Admin console — odds-calculator toggle (Phase-2 step 7)', () => {
+  it('flips odds_enabled on the live fecha via .update()', async () => {
+    const user = userEvent.setup()
+    renderAdmin()
+    await screen.findAllByTestId('admin-prow')
+
+    // Fixture starts enabled → the switch reflects that.
+    const toggle = screen.getByTestId('admin-odds-toggle')
+    expect(toggle).toHaveAttribute('aria-checked', 'true')
+
+    await user.click(toggle)
+
+    // The live console writes the flipped value to the tournament row.
+    await waitFor(() => expect(h.updates.find((u) => u.table === 'tournament')).toBeTruthy())
+    const upd = h.updates.find((u) => u.table === 'tournament')!.payload as {
+      odds_enabled?: boolean
+    }
+    expect(upd.odds_enabled).toBe(false)
   })
 })
 

@@ -219,6 +219,27 @@ describe('Admin · Nueva fecha (slice 13)', () => {
       { place: 3, pct: 0.12 },
     ])
   })
+
+  it('persists odds_enabled=false when the calculator toggle is turned off', async () => {
+    const user = userEvent.setup()
+    renderAdmin()
+    await user.click(screen.getByRole('tab', { name: 'Nueva fecha' }))
+    await screen.findByTestId('create-fecha')
+
+    // Default ON (the calculator is allowed) → turn it off for this fecha.
+    const toggle = screen.getByRole('switch', { name: 'Permitir calculadora de probabilidades' })
+    expect(toggle).toHaveAttribute('aria-checked', 'true')
+    await user.click(toggle)
+
+    await user.click(screen.getByRole('button', { name: 'Crear fecha' }))
+    await waitFor(() => expect(rpc('create_tournament')).toBeTruthy())
+    // The new tournament id is patched with odds_enabled=false via .update().
+    await waitFor(() => expect(h.updates.find((u) => u.table === 'tournament')).toBeTruthy())
+    const upd = h.updates.find((u) => u.table === 'tournament')!.payload as {
+      odds_enabled?: boolean
+    }
+    expect(upd.odds_enabled).toBe(false)
+  })
 })
 
 describe('Admin · Liga · temporada (slice 13)', () => {

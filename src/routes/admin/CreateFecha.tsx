@@ -127,6 +127,10 @@ export default function CreateFecha() {
   // toward the season standings. OFF → it runs fully (clock / eliminations /
   // prizes) but adds 0 to every player's season total.
   const [countsForLeague, setCountsForLeague] = useState(true)
+  // Odds-calculator toggle (Phase-2 step 7). ON by default → the Calculadora is
+  // available. OFF → players can't use it while THIS fecha is live (the admin can
+  // also flip it mid-game from the live console). Persisted to odds_enabled.
+  const [oddsEnabled, setOddsEnabled] = useState(true)
 
   const [locating, setLocating] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -234,6 +238,7 @@ export default function CreateFecha() {
     if (id) {
       const update: Database['public']['Tables']['tournament']['Update'] = {
         counts_for_league: countsForLeague,
+        odds_enabled: oddsEnabled,
       }
       if (isValidDist(distRows)) {
         update.payout_distribution = rowsToDist(distRows) as unknown as Json
@@ -256,6 +261,7 @@ export default function CreateFecha() {
     structureId,
     distRows,
     countsForLeague,
+    oddsEnabled,
     navigate,
   ])
 
@@ -437,6 +443,21 @@ export default function CreateFecha() {
           aria-label="Cuenta para la liga"
           className={`switch${countsForLeague ? ' on' : ''}`}
           onClick={() => setCountsForLeague((v) => !v)}
+        />
+      </div>
+
+      <div className="toggle-row">
+        <div>
+          <div className="tl">Permitir calculadora de probabilidades</div>
+          <div className="ts">Si lo apagás, la calculadora queda deshabilitada mientras la fecha esté en vivo</div>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={oddsEnabled}
+          aria-label="Permitir calculadora de probabilidades"
+          className={`switch${oddsEnabled ? ' on' : ''}`}
+          onClick={() => setOddsEnabled((v) => !v)}
         />
       </div>
 

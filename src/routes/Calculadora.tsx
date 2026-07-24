@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { makeCard, formatCard, type Card, type Suit } from '@/lib/poker/cards'
 import { categoryOf, evaluate7 } from '@/lib/poker/evaluator'
 import { createEquityWorker, type EquityResult } from '@/lib/equityWorker'
+import { supabase } from '@/lib/supabase'
 import HandRankings from '@/components/HandRankings'
 
 // ---------------------------------------------------------------------------
@@ -62,7 +63,34 @@ const N_SLOTS = 7
 
 type ComputeStatus = 'idle' | 'computing' | 'ready'
 
+// Gate: the calculator is disabled while a LIVE fecha has odds_enabled=false (an
+// admin can turn it off so nobody uses it mid-game). 'loading' renders the
+// calculator optimistically — we never flash the disabled state before we know.
+type GateState = 'loading' | 'enabled' | 'disabled'
+
 export default function Calculadora() {
+  const [gate, setGate] = useState<GateState>('loading')
+
+  // One-shot check on mount: is there a live fecha that disables the calculator?
+  // Fail open (enabled) on any error — the calculator is a harmless reference.
+  useEffect(() => {
+    let alive = true
+    void (async () => {
+      const { data, error } = await supabase
+        .from('tournament')
+        .select('id')
+        .eq('status', 'live')
+        .eq('odds_enabled', false)
+        .limit(1)
+        .maybeSingle()
+      if (!alive) return
+      setGate(!error && data ? 'disabled' : 'enabled')
+    })()
+    return () => {
+      alive = false
+    }
+  }, [])
+
   const [slots, setSlots] = useState<(Card | null)[]>(() => Array(N_SLOTS).fill(null))
   const [active, setActive] = useState<number | null>(0)
   const [rivals, setRivals] = useState(1)
@@ -174,6 +202,46 @@ export default function Calculadora() {
     setActive(0)
     setResult(null)
     setStatus('idle')
+  }
+
+  // Disabled by a live fecha (odds_enabled=false): show the message, keep the
+  // hand-rankings reference available. 'loading' falls through to the calculator
+  // so the normal case never flashes a disabled state before the check resolves.
+  if (gate === 'disabled') {
+    return (
+      <div data-testid="calc-root">
+        <div className="section-head" style={{ paddingTop: 10 }}>
+          <div>
+            <span className="overline">Probabilidades</span>
+            <h1>Calculadora</h1>
+          </div>
+        </div>
+        <div className="rule" />
+        <div className="calc-disabled" data-testid="calc-disabled" role="status">
+          <p>La calculadora está deshabilitada durante la fecha en curso.</p>
+        </div>
+        <div className="calc-rankings">
+          <button
+            type="button"
+            className="calc-rankings-toggle"
+            aria-expanded={showRankings}
+            aria-controls="calc-rankings-body"
+            data-testid="rankings-toggle"
+            onClick={() => setShowRankings((v) => !v)}
+          >
+            <span>Ranking de manos</span>
+            <span className="chev" aria-hidden="true">
+              ⌄
+            </span>
+          </button>
+          {showRankings && (
+            <div className="calc-rankings-body" id="calc-rankings-body">
+              <HandRankings />
+            </div>
+          )}
+        </div>
+      </div>
+    )
   }
 
   return (
