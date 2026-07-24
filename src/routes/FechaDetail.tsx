@@ -727,12 +727,14 @@ function CoverControl({
         </div>
         <button
           type="button"
-          className="btn ghost sm"
+          className="upload-icon"
           disabled={busy}
           onClick={() => inputRef.current?.click()}
+          aria-label={coverUrl ? 'Cambiar portada' : 'Subir portada'}
+          title={busy ? 'Subiendo…' : coverUrl ? 'Cambiar portada' : 'Subir portada'}
           data-testid="cover-upload"
         >
-          🖼️ {busy ? 'Subiendo…' : coverUrl ? 'Cambiar portada' : 'Subir portada'}
+          🖼️
         </button>
       </div>
       {coverUrl && (

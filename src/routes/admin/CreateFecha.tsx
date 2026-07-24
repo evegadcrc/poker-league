@@ -35,6 +35,10 @@ type FechaDefaults = {
   startingStack: number
   bonusStack: number
   rebuyUntil: number | null
+  // Max re-entries a single player may buy in a fecha. COUNT of rebuys — distinct
+  // from rebuyUntil (the level the rebuy window stays open). No DB column yet, so
+  // this is a saved form default only (not persisted onto the tournament row).
+  maxRebuys: number
 }
 
 const HARDCODED_FECHA_DEFAULTS: FechaDefaults = {
@@ -43,6 +47,7 @@ const HARDCODED_FECHA_DEFAULTS: FechaDefaults = {
   startingStack: 20000,
   bonusStack: 5000,
   rebuyUntil: 8,
+  maxRebuys: 8,
 }
 
 function loadFechaDefaults(): FechaDefaults {
@@ -58,6 +63,7 @@ function loadFechaDefaults(): FechaDefaults {
       startingStack: num(parsed.startingStack, HARDCODED_FECHA_DEFAULTS.startingStack),
       bonusStack: num(parsed.bonusStack, HARDCODED_FECHA_DEFAULTS.bonusStack),
       rebuyUntil: parsed.rebuyUntil === null ? null : num(parsed.rebuyUntil, 8),
+      maxRebuys: num(parsed.maxRebuys, HARDCODED_FECHA_DEFAULTS.maxRebuys),
     }
   } catch {
     return { ...HARDCODED_FECHA_DEFAULTS }
@@ -113,6 +119,7 @@ export default function CreateFecha() {
   const [startingStack, setStartingStack] = useState(seeded.startingStack)
   const [bonusStack, setBonusStack] = useState(seeded.bonusStack)
   const [rebuyUntil, setRebuyUntil] = useState<number | null>(seeded.rebuyUntil)
+  const [maxRebuys, setMaxRebuys] = useState(seeded.maxRebuys)
   const [savedDefaults, setSavedDefaults] = useState(false)
   const [structureId, setStructureId] = useState('')
   const [anteEnabled, setAnteEnabled] = useState(false)
@@ -188,9 +195,9 @@ export default function CreateFecha() {
 
   // Persist the current money/rebuy values as the defaults for future fechas.
   const guardarAjustes = useCallback(() => {
-    saveFechaDefaults({ buyIn, rebuyAmount, startingStack, bonusStack, rebuyUntil })
+    saveFechaDefaults({ buyIn, rebuyAmount, startingStack, bonusStack, rebuyUntil, maxRebuys })
     setSavedDefaults(true)
-  }, [buyIn, rebuyAmount, startingStack, bonusStack, rebuyUntil])
+  }, [buyIn, rebuyAmount, startingStack, bonusStack, rebuyUntil, maxRebuys])
 
   const submit = useCallback(async () => {
     setBusy(true)
@@ -369,6 +376,20 @@ export default function CreateFecha() {
             </option>
           ))}
         </select>
+      </div>
+
+      <div className="field">
+        <label htmlFor="cf-max-rebuys">Máx recompras por jugador</label>
+        <input
+          id="cf-max-rebuys"
+          inputMode="numeric"
+          value={String(maxRebuys)}
+          onChange={(e) => {
+            const digits = e.target.value.replace(/\D/g, '')
+            setMaxRebuys(digits === '' ? 0 : Number(digits))
+            setSavedDefaults(false)
+          }}
+        />
       </div>
 
       <div className="field">

@@ -98,12 +98,14 @@ export default function Galeria({ tournamentId }: { tournamentId: string }) {
         {player && (
           <button
             type="button"
-            className="btn ghost sm"
+            className="upload-icon"
             onClick={openPicker}
             disabled={uploading}
+            aria-label="Subir foto"
+            title={uploading ? 'Subiendo…' : 'Subir foto'}
             data-testid="gallery-upload"
           >
-            📷 {uploading ? 'Subiendo…' : 'Subir foto'}
+            📷
           </button>
         )}
       </div>

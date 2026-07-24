@@ -72,4 +72,13 @@ describe('Galeria', () => {
     expect(screen.getByTestId('gallery-upload')).toBeInTheDocument()
     expect(screen.queryByTestId('gal-grid')).not.toBeInTheDocument()
   })
+
+  it('the upload trigger is an icon button — aria-label only, no visible "Subir foto" text', async () => {
+    render(<Galeria tournamentId="t1" />)
+    await screen.findByText(/aún no hay fotos/i)
+    const btn = screen.getByTestId('gallery-upload')
+    // Accessible name comes from aria-label; no visible text label repeats the header.
+    expect(btn).toHaveAccessibleName('Subir foto')
+    expect(btn.textContent).not.toMatch(/Subir foto/)
+  })
 })

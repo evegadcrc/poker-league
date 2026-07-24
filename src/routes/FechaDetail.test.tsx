@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
+// Inject App.css so class-based layout (e.g. .att-head centering) is computable.
+import '@/App.css'
 
 const h = vi.hoisted(() => ({
   player: { id: 'p-me', name: 'Edwin V.', avatar_url: null } as {
@@ -273,6 +275,13 @@ describe('FechaDetail', () => {
 
     // 4º+ show no medal (just the ordinal).
     expect(within(byName('Cuatro')).queryByTestId('fd-medal')).toBeNull()
+  })
+
+  it('centers the RSVP summary chips row', async () => {
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+    const head = screen.getByTestId('att-head')
+    expect(getComputedStyle(head).justifyContent).toBe('center')
   })
 
   it('completed fecha: a no-show shows "No Show" + the penalty points', async () => {
