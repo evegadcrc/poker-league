@@ -3,7 +3,7 @@ goal: Build "Poker League" PWA (React+Vite+TS+Tailwind+shadcn / Supabase) per po
 task: poker-league-prototype
 step: review
 progress: 97%
-blockers: none
+blockers: review-iter-1 CRITICAL RLS privilege-escalation — fixing
 updated: 2026-07-24T04:40:00Z
 ---
 
