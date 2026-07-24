@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { Link, NavLink, Outlet } from 'react-router-dom'
 import logo from '@/assets/poker-friends.jpg'
 import { useRole } from '@/lib/auth'
 import { THEME_ICONS, THEME_LABELS, useTheme } from '@/lib/theme'
@@ -42,6 +42,14 @@ export default function AppLayout() {
           </div>
         </div>
         <div className="tb-actions">
+          <Link
+            to="/calculadora"
+            className="icon-btn"
+            title="Calculadora de probabilidades"
+            aria-label="Calculadora de probabilidades"
+          >
+            %
+          </Link>
           <button
             type="button"
             className="icon-btn"

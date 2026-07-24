@@ -1557,3 +1557,257 @@
   margin: 16px 18px;
   border-radius: 12px;
 }
+
+/* ---- Calculadora de probabilidades (odds calculator, plan step 10) ---- */
+/* Suit color scheme is token-driven so it works in all 3 themes: black suits
+   (♠♣) take --ink, red suits (♥♦) take --oxblood (red in Almanaque, magenta in
+   Neón). */
+.calc-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px 18px 4px;
+}
+.calc-group {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.calc-cap {
+  font: 700 10px 'Archivo';
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.calc-subcap {
+  font: 600 11px 'Archivo';
+  color: var(--ink-3);
+}
+.calc-slot-row {
+  display: flex;
+  gap: 8px;
+}
+.calc-slot {
+  flex: 1 1 0;
+  min-width: 0;
+  height: 74px;
+  border: 1.5px dashed var(--rule-strong);
+  border-radius: 12px;
+  background: var(--paper-2);
+  color: var(--ink-3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  cursor: pointer;
+  transition: transform 0.14s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.calc-slot.sm {
+  height: 62px;
+}
+.calc-slot.gap {
+  margin-left: 12px;
+}
+.calc-slot:active {
+  transform: scale(0.96);
+}
+.calc-slot.filled {
+  border-style: solid;
+  border-color: var(--ink);
+  background: var(--paper-2);
+}
+.calc-slot.on {
+  border-color: var(--oxblood);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--oxblood) 22%, transparent);
+}
+.calc-slot .ph {
+  font: 700 22px 'Archivo';
+  color: var(--ink-3);
+  opacity: 0.6;
+}
+.calc-slot .rk {
+  font: 800 22px 'Archivo';
+  line-height: 1;
+}
+.calc-slot .st {
+  font-size: 18px;
+  line-height: 1;
+}
+.calc-slot.sm .rk {
+  font-size: 18px;
+}
+.calc-slot.sm .st {
+  font-size: 15px;
+}
+.red {
+  color: var(--oxblood);
+}
+.blk {
+  color: var(--ink);
+}
+
+.calc-rivals {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  margin-top: 10px;
+}
+.calc-stepper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.calc-stepper .btn.sm {
+  width: 38px;
+  padding: 0;
+  font-size: 18px;
+}
+.calc-riv-n {
+  font: 800 20px 'Archivo';
+  font-feature-settings: 'tnum' 1;
+  min-width: 22px;
+  text-align: center;
+}
+.calc-restantes {
+  font: 600 12px 'Archivo';
+  color: var(--ink-3);
+  padding: 10px 18px 4px;
+}
+.calc-restantes b {
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.calc-results {
+  margin: 8px 18px 14px;
+  border: 1.5px solid var(--ink);
+  border-radius: 16px;
+  background: var(--paper-2);
+  box-shadow: var(--shadow);
+  padding: 14px;
+  min-height: 84px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  justify-content: center;
+}
+[data-theme='neon'] .calc-results {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-color: rgba(255, 46, 136, 0.35);
+}
+.calc-results.empty {
+  align-items: center;
+  text-align: center;
+  border-style: dashed;
+  border-color: var(--rule-strong);
+  box-shadow: none;
+  background: transparent;
+}
+.calc-results.empty p {
+  font: 600 13px/1.5 'Archivo';
+  color: var(--ink-2);
+}
+.calc-results[aria-busy='true'] {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+.calc-eq {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+}
+.calc-eq .c {
+  text-align: center;
+  border-right: 1px solid var(--rule);
+}
+.calc-eq .c:last-child {
+  border-right: 0;
+}
+.calc-eq .c .v {
+  font: 800 26px 'Archivo';
+  font-feature-settings: 'tnum' 1;
+}
+.calc-eq .c.win .v {
+  color: var(--oxblood);
+}
+.calc-eq .c .k {
+  font: 700 10px 'Archivo';
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-top: 2px;
+}
+.calc-hand {
+  font: 600 13px 'Archivo';
+  color: var(--ink-2);
+  text-align: center;
+  border-top: 1px solid var(--rule);
+  padding-top: 10px;
+}
+.calc-hand b {
+  color: var(--ink);
+  font-weight: 800;
+}
+.calc-computing {
+  font: 700 12px 'Archivo';
+  letter-spacing: 0.06em;
+  color: var(--ink-2);
+}
+.calc-spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2.5px solid var(--rule-strong);
+  border-top-color: var(--oxblood);
+  animation: calc-spin 0.7s linear infinite;
+  flex: none;
+}
+@keyframes calc-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.calc-picker {
+  padding: 4px 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.calc-prow {
+  display: grid;
+  grid-template-columns: 20px repeat(13, 1fr);
+  gap: 4px;
+  align-items: center;
+}
+.calc-suit {
+  font-size: 15px;
+  text-align: center;
+  line-height: 1;
+}
+.calc-card {
+  min-width: 0;
+  height: 34px;
+  padding: 0;
+  border: 1.5px solid var(--rule-strong);
+  border-radius: 8px;
+  background: var(--paper-2);
+  font: 800 12px 'Archivo';
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.18s ease, border-color 0.18s ease;
+}
+.calc-card:not(:disabled):active {
+  transform: scale(0.9);
+}
+.calc-card:not(:disabled):hover {
+  border-color: var(--ink);
+}
+.calc-card:disabled {
+  opacity: 0.24;
+  cursor: not-allowed;
+}
