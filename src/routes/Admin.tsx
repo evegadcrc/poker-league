@@ -3,6 +3,12 @@ import { useRole } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import Avatar from '@/components/Avatar'
 import Sheet from '@/components/Sheet'
+import PrizeDistributionEditor, {
+  distToRows,
+  isValidDist,
+  rowsToDist,
+  type PctRow,
+} from '@/components/PrizeDistributionEditor'
 import CreateFecha from '@/routes/admin/CreateFecha'
 import LeagueSettings from '@/routes/admin/LeagueSettings'
 import type { Json } from '@/lib/database.types'
@@ -25,10 +31,12 @@ import {
   formatClock,
   nextLevel,
   ordinal,
+  parseDistribution,
   parsePrizes,
   remainingSeconds,
   showAnte,
   type BlindLevel,
+  type DistSlice,
   type Prize,
 } from '@/lib/live'
 
@@ -109,6 +117,7 @@ type ConsoleTournament = {
   paused_remaining_seconds: number | null
   blind_structure_id: string | null
   prizes: unknown
+  payout_distribution: unknown
   final_table_size: number | null
   starting_stack: number | null
 }
@@ -140,7 +149,7 @@ type State = { phase: 'loading' } | { phase: 'error' } | { phase: 'no-live' } | 
 type Conn = 'connecting' | 'live' | 'reconnecting'
 
 const TOURNAMENT_COLUMNS =
-  'id, name, season_id, ante_enabled, timer_mode, current_level, level_started_at, is_paused, paused_remaining_seconds, blind_structure_id, prizes, final_table_size, starting_stack'
+  'id, name, season_id, ante_enabled, timer_mode, current_level, level_started_at, is_paused, paused_remaining_seconds, blind_structure_id, prizes, payout_distribution, final_table_size, starting_stack'
 
 async function fetchConsole(): Promise<State> {
   const { data: t, error: tErr } = await supabase
@@ -204,6 +213,7 @@ function ConsolePanel() {
   const [confirmKill, setConfirmKill] = useState<ConsoleEntry | null>(null)
   const [noShowFor, setNoShowFor] = useState<ConsoleEntry | null>(null)
   const [blindsOpen, setBlindsOpen] = useState(false)
+  const [prizesOpen, setPrizesOpen] = useState(false)
   const [completeOpen, setCompleteOpen] = useState(false)
   const [whatsOpen, setWhatsOpen] = useState(false)
   // Realtime health → subtle reconnect banner (mirrors the En Vivo screen).
@@ -290,6 +300,35 @@ function ConsolePanel() {
       }
       void load()
       return true
+    },
+    [tid, load],
+  )
+
+  // Edit the live fecha's payout SPLIT (not just amounts): write the new
+  // distribution to tournament.payout_distribution directly (existing admin
+  // update-tournament RLS policy — no new RPC), then re-run set_prizes to
+  // re-materialize prizes against the current pot, and reload.
+  const saveDistribution = useCallback(
+    async (dist: DistSlice[]) => {
+      if (!tid) return
+      setBusy(true)
+      setToast(null)
+      const { error: upErr } = await supabase
+        .from('tournament')
+        .update({ payout_distribution: dist as unknown as Json })
+        .eq('id', tid)
+      if (upErr) {
+        setBusy(false)
+        setToast('No se pudieron guardar los premios. Reintentá.')
+        void load()
+        return
+      }
+      const { error: rpcErr } = await supabase.rpc('set_prizes', { p_tournament_id: tid })
+      setBusy(false)
+      if (rpcErr) {
+        setToast('No se pudieron recalcular los premios. Reintentá.')
+      }
+      void load()
     },
     [tid, load],
   )
@@ -443,6 +482,14 @@ function ConsolePanel() {
         >
           ✎  Editar blinds
         </button>
+        <button
+          type="button"
+          className="btn ghost wide"
+          disabled={busy}
+          onClick={() => setPrizesOpen(true)}
+        >
+          🏆  Editar premios
+        </button>
       </div>
 
       <div className="live-stats" style={{ marginBottom: 6 }}>
@@ -586,6 +633,18 @@ function ConsolePanel() {
         onSave={(payload) => {
           setBlindsOpen(false)
           void doClock('edit_blinds', payload)
+        }}
+      />
+
+      {/* Edit prizes (payout distribution → re-materialize) */}
+      <EditPrizesSheet
+        open={prizesOpen}
+        onClose={() => setPrizesOpen(false)}
+        distribution={parseDistribution(tournament.payout_distribution)}
+        busy={busy}
+        onSave={(dist) => {
+          setPrizesOpen(false)
+          void saveDistribution(dist)
         }}
       />
 
@@ -858,6 +917,51 @@ function EditBlindsSheet({
           }
         >
           Guardar blinds
+        </button>
+      </div>
+    </Sheet>
+  )
+}
+
+function EditPrizesSheet({
+  open,
+  onClose,
+  distribution,
+  busy,
+  onSave,
+}: {
+  open: boolean
+  onClose: () => void
+  distribution: DistSlice[]
+  busy: boolean
+  onSave: (dist: DistSlice[]) => void
+}) {
+  const [rows, setRows] = useState<PctRow[]>([])
+  const wasOpen = useRef(false)
+
+  // Seed the editor from the fecha's current split ONLY on the open transition
+  // (the `distribution` prop is a fresh array each render — seeding on every
+  // render would wipe the admin's in-progress edits once per clock tick).
+  useEffect(() => {
+    if (open && !wasOpen.current) setRows(distToRows(distribution))
+    wasOpen.current = open
+  }, [open, distribution])
+
+  return (
+    <Sheet open={open} onClose={onClose} title="Editar premios del torneo">
+      <p>
+        Cambiá el reparto de premios de esta fecha. Al guardar se recalculan los montos según el
+        pozo actual.
+      </p>
+      <PrizeDistributionEditor rows={rows} onChange={setRows} disabled={busy} />
+      <div className="btn-row">
+        <button
+          type="button"
+          className="btn blood full"
+          disabled={busy || !isValidDist(rows)}
+          onClick={() => onSave(rowsToDist(rows))}
+        >
+          Guardar premios
         </button>
       </div>
     </Sheet>

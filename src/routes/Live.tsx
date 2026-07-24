@@ -13,8 +13,10 @@ import {
   liveStandings,
   nextLevel,
   ordinal,
+  parseDistribution,
   parsePrizes,
   pctLabel,
+  proposedPrizes,
   remainingSeconds,
   showAnte,
   type BlindLevel,
@@ -32,6 +34,7 @@ type LiveTournament = {
   paused_remaining_seconds: number | null
   blind_structure_id: string | null
   prizes: unknown
+  payout_distribution: unknown
 }
 
 type EntryRow = StandingEntry & { player_id: string }
@@ -54,7 +57,7 @@ type State =
 type Conn = 'connecting' | 'live' | 'reconnecting'
 
 const TOURNAMENT_COLUMNS =
-  'id, name, ante_enabled, current_level, level_started_at, is_paused, paused_remaining_seconds, blind_structure_id, prizes'
+  'id, name, ante_enabled, current_level, level_started_at, is_paused, paused_remaining_seconds, blind_structure_id, prizes, payout_distribution'
 
 async function fetchLive(): Promise<State> {
   // A single fecha is live at a time; take the most recent just in case.
@@ -241,6 +244,12 @@ export default function Live() {
   const alive = aliveCount(entries)
   const played = playedCount(entries)
   const chips = chipsInPlay(entries)
+  // Always show a split: materialized prizes when set_prizes has run, otherwise
+  // the PROPOSED split (payout_distribution × pot) — visible even pre-final.
+  const proposed = prizes.length === 0
+  const displayPrizes = proposed
+    ? proposedPrizes(parseDistribution(tournament.payout_distribution), pot)
+    : prizes
 
   return (
     <>
@@ -291,7 +300,7 @@ export default function Live() {
         <Stat value={compactChips(chips)} label="Fichas en juego" />
       </div>
 
-      <Premios prizes={prizes} />
+      <Premios prizes={displayPrizes} proposed={proposed} />
 
       <div className="section-head" style={{ paddingBottom: 6 }}>
         <div>
@@ -393,12 +402,12 @@ function Stat({ value, label }: { value: string; label: string }) {
   )
 }
 
-function Premios({ prizes }: { prizes: Prize[] }) {
+function Premios({ prizes, proposed = false }: { prizes: Prize[]; proposed?: boolean }) {
   return (
     <div className="premios" data-testid="premios">
       <div className="ph">
         <span className="t">Premios</span>
-        <span className="s">según el pozo</span>
+        <span className="s">{proposed ? 'reparto propuesto' : 'según el pozo'}</span>
       </div>
       {prizes.length === 0 ? (
         <div className="prow-prize">

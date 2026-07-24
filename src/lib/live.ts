@@ -107,6 +107,42 @@ export function pctLabel(pct: number | null): string {
 }
 
 // ---------------------------------------------------------------------------
+// Payout distribution (tournament.payout_distribution jsonb → [{place, pct}]).
+// `pct` is a FRACTION (0.60). set_prizes materializes this × pot into the
+// real `prizes`; before that runs (or when a live fecha hasn't materialized
+// yet) we preview the PROPOSED split with the same maths.
+// ---------------------------------------------------------------------------
+export type DistSlice = { place: number; pct: number }
+
+export function parseDistribution(raw: unknown): DistSlice[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((d) => {
+      const r = (d ?? {}) as Record<string, unknown>
+      return { place: Number(r.place), pct: Number(r.pct) }
+    })
+    .filter((d) => Number.isFinite(d.place) && Number.isFinite(d.pct))
+    .sort((a, b) => a.place - b.place)
+}
+
+/**
+ * Proposed prize amounts from a distribution × pot — mirrors set_prizes (mig
+ * 0015): each place rounds to the nearest ₡5.000, and 1st place absorbs the
+ * remainder so the amounts sum to the pot EXACTLY. Amounts are 0 when the pot
+ * is not yet known (pot ≤ 0), so the split still renders before entries exist.
+ */
+export function proposedPrizes(dist: readonly DistSlice[], pot: number): Prize[] {
+  const rows = [...dist].sort((a, b) => a.place - b.place)
+  if (rows.length === 0) return []
+  if (pot <= 0) return rows.map((r) => ({ position: r.place, pct: r.pct, amount: 0 }))
+  const step = 5000
+  const amounts = rows.map((r) => Math.round((r.pct * pot) / step) * step)
+  const rest = amounts.slice(1).reduce((s, a) => s + a, 0)
+  amounts[0] = pot - rest // 1st place absorbs the rounding remainder
+  return rows.map((r, i) => ({ position: r.place, pct: r.pct, amount: Math.max(0, amounts[i]!) }))
+}
+
+// ---------------------------------------------------------------------------
 // Live standings
 // ---------------------------------------------------------------------------
 export type StandingEntry = {

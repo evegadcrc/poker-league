@@ -2,6 +2,12 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { requestPosition } from '@/lib/checkin'
+import PrizeDistributionEditor, {
+  defaultRows,
+  isValidDist,
+  rowsToDist,
+  type PctRow,
+} from '@/components/PrizeDistributionEditor'
 import type { Json } from '@/lib/database.types'
 
 type Structure = { id: string; name: string }
@@ -24,6 +30,9 @@ export default function CreateFecha() {
   const navigate = useNavigate()
   const [structures, setStructures] = useState<Structure[]>([])
   const [earlyBirdChips, setEarlyBirdChips] = useState<number | null>(null)
+  // Payout split for this fecha — seeded from the season default template, then
+  // fully editable. Persisted to tournament.payout_distribution after create.
+  const [distRows, setDistRows] = useState<PctRow[]>(defaultRows)
 
   const [name, setName] = useState('')
   const [date, setDate] = useState('')
@@ -49,7 +58,7 @@ export default function CreateFecha() {
         supabase.from('blind_structure').select('id, name').order('name'),
         supabase
           .from('season')
-          .select('early_bird_bonus_chips')
+          .select('early_bird_bonus_chips, payout_template')
           .eq('status', 'active')
           .order('year', { ascending: false })
           .limit(1)
@@ -59,8 +68,21 @@ export default function CreateFecha() {
       const list = (structRes.data ?? []) as Structure[]
       setStructures(list)
       if (list.length > 0 && !structureId) setStructureId(list[0]!.id)
-      const season = seasonRes.data as { early_bird_bonus_chips: number } | null
-      if (season) setEarlyBirdChips(season.early_bird_bonus_chips)
+      const season = seasonRes.data as {
+        early_bird_bonus_chips: number
+        payout_template: unknown
+      } | null
+      if (season) {
+        setEarlyBirdChips(season.early_bird_bonus_chips)
+        // Seed the editor from the season's default template (raw fraction array,
+        // e.g. [0.60, 0.28, 0.12] → 60 / 28 / 12); fall back to the top-3 default.
+        const tmpl = Array.isArray(season.payout_template) ? season.payout_template : []
+        const rows = tmpl
+          .map((v) => Number(v))
+          .filter((v) => Number.isFinite(v))
+          .map((v) => ({ pct: String(Math.round(v * 1000) / 10) }))
+        setDistRows(rows.length > 0 ? rows : defaultRows())
+      }
     })()
     return () => {
       alive = false
@@ -109,6 +131,15 @@ export default function CreateFecha() {
     }
     const rows = (data ?? []) as { id: string }[]
     const id = rows[0]?.id
+    // Persist the fecha's payout split. create_tournament seeds a turnout-scaled
+    // default; the admin's edited distribution is authoritative, so overwrite it.
+    // Non-blocking: a create succeeds regardless — the split can be fixed live.
+    if (id && isValidDist(distRows)) {
+      await supabase
+        .from('tournament')
+        .update({ payout_distribution: rowsToDist(distRows) as unknown as Json })
+        .eq('id', id)
+    }
     navigate(id ? `/fechas/${id}` : '/fechas')
   }, [
     name,
@@ -123,6 +154,7 @@ export default function CreateFecha() {
     startingStack,
     anteEnabled,
     structureId,
+    distRows,
     navigate,
   ])
 
@@ -254,6 +286,8 @@ export default function CreateFecha() {
         </select>
       </div>
 
+      <PrizeDistributionEditor rows={distRows} onChange={setDistRows} disabled={busy} />
+
       <div className="toggle-row">
         <div>
           <div className="tl">Usar ante</div>
@@ -279,7 +313,7 @@ export default function CreateFecha() {
         <button
           type="button"
           className="btn blood full"
-          disabled={busy}
+          disabled={busy || !isValidDist(distRows)}
           onClick={() => void submit()}
         >
           {busy ? 'Creando…' : 'Crear fecha'}

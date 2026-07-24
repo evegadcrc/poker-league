@@ -11,6 +11,7 @@ const h = vi.hoisted(() => ({
   list: {} as Record<string, { data: unknown; error: unknown }>,
   rpcResults: {} as Record<string, { data: unknown; error: unknown }>,
   rpcCalls: [] as Array<{ name: string; args: unknown }>,
+  updates: [] as Array<{ table: string; payload: unknown }>,
 }))
 
 vi.mock('@/lib/auth', () => ({
@@ -27,6 +28,10 @@ vi.mock('@/lib/supabase', () => ({
         in: () => b,
         order: () => b,
         limit: () => b,
+        update: (payload: unknown) => {
+          h.updates.push({ table, payload })
+          return b
+        },
         maybeSingle: () => Promise.resolve(h.single[table] ?? { data: null, error: null }),
         single: () => Promise.resolve(h.single[table] ?? { data: null, error: null }),
         then: (resolve: (v: unknown) => void) => resolve(h.list[table] ?? { data: [], error: null }),
@@ -80,6 +85,7 @@ beforeEach(() => {
     close_season: { data: [{ ...SEASON, id: 's-2027', name: 'Liga 2027', year: 2027 }], error: null },
   }
   h.rpcCalls = []
+  h.updates = []
 })
 
 describe('Admin · Nueva fecha (slice 13)', () => {
@@ -122,6 +128,32 @@ describe('Admin · Nueva fecha (slice 13)', () => {
       .p_payload
     expect(payload.venue_lat).toBe(9.9281)
     expect(payload.venue_lng).toBe(-84.0907)
+  })
+
+  it('seeds the prize-distribution editor from the season template and persists it on create', async () => {
+    const user = userEvent.setup()
+    renderAdmin()
+    await user.click(screen.getByRole('tab', { name: 'Nueva fecha' }))
+    await screen.findByTestId('create-fecha')
+
+    // Seeded from season.payout_template [0.6, 0.28, 0.12] → 60 / 28 / 12, sum 100%.
+    const editor = screen.getByTestId('prize-dist-editor')
+    expect(within(editor).getAllByRole('textbox')).toHaveLength(3)
+    expect(within(editor).getByTestId('dist-sum')).toHaveTextContent('Suma: 100%')
+
+    await user.click(screen.getByRole('button', { name: 'Crear fecha' }))
+
+    await waitFor(() => expect(rpc('create_tournament')).toBeTruthy())
+    // After create, the fecha's payout_distribution is persisted via .update().
+    await waitFor(() => expect(h.updates.find((u) => u.table === 'tournament')).toBeTruthy())
+    const upd = h.updates.find((u) => u.table === 'tournament')!.payload as {
+      payout_distribution: Array<{ place: number; pct: number }>
+    }
+    expect(upd.payout_distribution).toEqual([
+      { place: 1, pct: 0.6 },
+      { place: 2, pct: 0.28 },
+      { place: 3, pct: 0.12 },
+    ])
   })
 })
 

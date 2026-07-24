@@ -76,6 +76,7 @@ type TournamentOverrides = Partial<{
   is_paused: boolean
   paused_remaining_seconds: number | null
   prizes: unknown
+  payout_distribution: unknown
 }>
 
 const LEVELS = [
@@ -101,6 +102,7 @@ function setTournament(over: TournamentOverrides = {}) {
         { position: 2, pct: 0.28, amount: 40000 },
         { position: 3, pct: 0.12, amount: 15000 },
       ],
+      payout_distribution: null,
       ...over,
     },
     error: null,
@@ -186,6 +188,27 @@ describe('Live — state-based timer + scoreboard', () => {
     expect(within(premios).getByText('₡85K')).toBeInTheDocument()
     expect(within(premios).getByText('60%')).toBeInTheDocument()
     expect(within(premios).getByText('₡15K')).toBeInTheDocument()
+  })
+
+  it('shows the PROPOSED split (payout_distribution × pot) before prizes are materialized', async () => {
+    // No materialized prizes yet, but the fecha has a distribution + a live pot.
+    setTournament({
+      prizes: [],
+      payout_distribution: [
+        { place: 1, pct: 0.6 },
+        { place: 2, pct: 0.28 },
+        { place: 3, pct: 0.12 },
+      ],
+    })
+    renderLive()
+    const premios = await screen.findByTestId('premios')
+    // pot = fn_pot (₡140K) → 85K / 40K / 15K (1st absorbs the ₡5.000 remainder).
+    expect(within(premios).getByText('reparto propuesto')).toBeInTheDocument()
+    expect(within(premios).getByText('₡85K')).toBeInTheDocument()
+    expect(within(premios).getByText('₡40K')).toBeInTheDocument()
+    expect(within(premios).getByText('₡15K')).toBeInTheDocument()
+    // The fallback "se definen según el pozo final" message is NOT shown.
+    expect(within(premios).queryByText(/se definen según el pozo final/)).not.toBeInTheDocument()
   })
 
   it('renders live stats: pozo, quedan and fichas en juego', async () => {
