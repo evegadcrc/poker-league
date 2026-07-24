@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth, useRole } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
+import { useLiveEventCues, type LiveEventSignal } from '@/lib/notify'
 import Sheet from '@/components/Sheet'
 import { aliveCount, colonesCompact, playedCount, type EntryStatus } from '@/lib/fechas'
 import {
@@ -101,6 +102,46 @@ async function fetchLive(): Promise<State> {
   }
 }
 
+/**
+ * Derive the state-transition signal the cue engine diffs (plan step 13). Built
+ * fresh every render so the final-seconds warning can read the ticking clock,
+ * but the cue hook only fires off DISCRETE changes (fecha id / level / who is
+ * out), never per tick. `settled` is false while loading/error so the initial
+ * load onto an already-live fecha is never mistaken for an "opened" transition.
+ */
+function toSignal(state: State, now: number): LiveEventSignal {
+  if (state.phase !== 'ready') {
+    return { settled: state.phase === 'no-live', tournament: null, out: {} }
+  }
+  const t = state.tournament
+  const lvl = findLevel(state.levels, t.current_level)
+  const remaining = remainingSeconds(
+    {
+      isPaused: t.is_paused,
+      pausedRemainingSeconds: t.paused_remaining_seconds,
+      levelStartedAt: t.level_started_at,
+      levelDurationSeconds: lvl?.duration_seconds ?? 0,
+    },
+    now,
+  )
+  const out: Record<string, string> = {}
+  for (const e of state.entries) {
+    if (e.status === 'eliminated') out[e.id] = e.player?.name ?? 'Jugador'
+  }
+  return {
+    settled: true,
+    tournament: {
+      id: t.id,
+      name: t.name,
+      currentLevel: t.current_level,
+      smallBlind: lvl?.small_blind ?? 0,
+      bigBlind: lvl?.big_blind ?? 0,
+      remaining,
+    },
+    out,
+  }
+}
+
 export default function Live() {
   const { isAdmin } = useRole()
   const { player } = useAuth()
@@ -166,6 +207,32 @@ export default function Live() {
       void supabase.removeChannel(channel)
     }
   }, [tid, load])
+
+  // While NO fecha is live (idle), watch the tournament table so a fecha going
+  // live is caught and reloaded → the "opened" cue can fire for a player who is
+  // sitting on the En Vivo screen. Gated on `no-live` (not `loading`) so a fresh
+  // mount onto an already-live fecha never spins up this scan channel.
+  const idle = state.phase === 'no-live'
+  useEffect(() => {
+    if (!idle) return
+    const channel = supabase
+      .channel('live:scan')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tournament' }, () => {
+        void load()
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') void load()
+      })
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [idle, load])
+
+  // Sound cues + in-app toasts + optional local notifications, off state
+  // transitions (level advance, fecha opened, elimination). Non-admin observers
+  // get these through the realtime refetch above — they never act.
+  const { toast: eventToast, permission: notifyPermission, requestNotifications } =
+    useLiveEventCues(toSignal(state, now))
 
   if (state.phase === 'loading') {
     return <Framed overline="En juego" title="En vivo" note="Cargando torneo…" />
@@ -264,6 +331,25 @@ export default function Live() {
       {conn === 'reconnecting' && (
         <div className="live-reconnect" role="status" data-testid="reconnect">
           Reconectando… mostrando los últimos datos
+        </div>
+      )}
+
+      {eventToast && (
+        <div className="live-reconnect" role="status" data-testid="live-toast">
+          {eventToast.message}
+        </div>
+      )}
+
+      {notifyPermission === 'default' && (
+        <div className="btn-row" style={{ marginTop: 8 }}>
+          <button
+            type="button"
+            className="btn ghost sm"
+            data-testid="notify-cta"
+            onClick={() => void requestNotifications()}
+          >
+            🔔 Activar notificaciones
+          </button>
         </div>
       )}
 
