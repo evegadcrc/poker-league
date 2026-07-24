@@ -137,6 +137,9 @@ BlindStructure/BlindLevel, GalleryPhoto (Phase 2), LearningContent (Phase 2).
   - **Client-side compute** — Monte-Carlo simulation (or enumeration) in the browser; NO backend,
     no Supabase. Fits alongside the learning section.
   - Styled in the same Sports-Almanac + Neón system; Spanish copy.
+  - **Poker hand-rankings reference** on the calculator page (Royal Flush → High Card, best→worst),
+    rendered as **native themed UI** (card + suit glyphs, Spanish labels) — NOT a raster image, so it
+    stays crisp and theme-aware in all 3 themes. (User provided a PokerStars-style reference for layout.)
   - *Detailed UX + the calc engine get their own `/dh:grill --ui-first` → `/dh:design` pass when
     Phase 2 starts; this entry just captures scope + intent.*
 
