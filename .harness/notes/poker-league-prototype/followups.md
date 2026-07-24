@@ -31,3 +31,22 @@ for a later pass.
   existing pattern for consistency). Low priority; works today.
 - FYI: idempotency style inconsistent (bare `create` in 0001 vs `drop … if
   exists` in 0011) — fine for the reset-based model.
+
+## Resolved since (iter 1→3)
+- ✅ FE Profile avatar/name → `update_own_profile` RPC — DONE (caa1c92).
+
+## Deferred from review iter 2/3 (non-blocking)
+- create_player: no duplicate-email guard; RPC not yet wired into the Admin UI
+  (Admin console still lacks an "add player" affordance).
+- security integration test omits an anon-reject assertion for `fn_pot`
+  (`security.integration.test.ts:185`) — the other 3 read RPCs are covered.
+- **non-chop EARLY completion** strands still-in-play players at 0 pts. Normal
+  completion ends at one-remaining (fine); but if an admin completes with several
+  alive and no chop, they get no position. Add a guard (require one-remaining OR a
+  chop) or auto-rank the remaining, + UX.
+- auto-advance: ambiguous response-failure of the non-idempotent `next_level`
+  (RPC succeeds server-side but the client sees a network error) could still skip a
+  level on retry. Pre-existing; an idempotency key / request-id on `clock` closes it.
+- Add a deferred-FAILURE variant of the in-flight auto-advance test (current
+  in-flight test covers the success branch; failure-release path is covered only by
+  the synchronous-resolve retry test).
