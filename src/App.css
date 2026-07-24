@@ -1018,6 +1018,25 @@
   text-align: center;
 }
 
+/* ---- action-failure toast (admin console, slice 16) ---- */
+.action-toast {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 18px 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1.5px solid var(--oxblood);
+  background: var(--paper-2);
+  color: var(--ink);
+  font: 700 12px/1.4 'Archivo';
+}
+.action-toast .link-btn {
+  color: var(--oxblood);
+  white-space: nowrap;
+}
+
 .live-wrap {
   background: var(--ink);
   color: var(--paper);

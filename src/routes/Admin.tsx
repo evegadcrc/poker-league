@@ -136,6 +136,9 @@ type Ready = {
 }
 type State = { phase: 'loading' } | { phase: 'error' } | { phase: 'no-live' } | Ready
 
+/** Realtime connection health — drives the subtle reconnect banner. */
+type Conn = 'connecting' | 'live' | 'reconnecting'
+
 const TOURNAMENT_COLUMNS =
   'id, name, season_id, ante_enabled, timer_mode, current_level, level_started_at, is_paused, paused_remaining_seconds, blind_structure_id, prizes, final_table_size, starting_stack'
 
@@ -203,6 +206,10 @@ function ConsolePanel() {
   const [blindsOpen, setBlindsOpen] = useState(false)
   const [completeOpen, setCompleteOpen] = useState(false)
   const [whatsOpen, setWhatsOpen] = useState(false)
+  // Realtime health → subtle reconnect banner (mirrors the En Vivo screen).
+  const [conn, setConn] = useState<Conn>('connecting')
+  // Transient error surfaced after a failed action RPC (auto-dismisses).
+  const [toast, setToast] = useState<string | null>(null)
   // Fires next_level at most once per level when auto mode hits 0.
   const autoAdvancedLevel = useRef<number | null>(null)
 
@@ -220,6 +227,14 @@ function ConsolePanel() {
     return () => clearInterval(id)
   }, [])
 
+  // Auto-dismiss the action-error toast after a few seconds; the reconciled
+  // state (we refetch on every failure) is the source of truth meanwhile.
+  useEffect(() => {
+    if (!toast) return
+    const id = setTimeout(() => setToast(null), 5000)
+    return () => clearTimeout(id)
+  }, [toast])
+
   const tid = state.phase === 'ready' ? state.tournament.id : null
   useEffect(() => {
     if (!tid) return
@@ -235,24 +250,41 @@ function ConsolePanel() {
         { event: '*', schema: 'public', table: 'entry', filter: `tournament_id=eq.${tid}` },
         () => void load(),
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          setConn('live')
+          void load() // resync after a (re)connect so we never drift
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          setConn('reconnecting')
+        }
+      })
     return () => {
       void supabase.removeChannel(channel)
     }
   }, [tid, load])
 
+  // Every mutating RPC is idempotent / self-guarding server-side (0009_admin.sql):
+  // eliminate rejects a non-in-play entry, add_rebuy rejects a non-eliminated
+  // one, confirm_payment sets fixed values. So on failure we simply surface a
+  // toast AND refetch to reconcile with server truth — a retry can never
+  // double-apply, because the state transition blocks the second call.
   const doClock = useCallback(
     async (action: ClockAction, payload?: Json) => {
       if (!tid) return
       setBusy(true)
+      setToast(null)
       const { error } = await supabase.rpc('clock', {
         p_tournament_id: tid,
         p_action: action,
         ...(payload ? { p_payload: payload } : {}),
       })
       setBusy(false)
-      if (error) console.error('clock failed', error.message)
-      else void load()
+      if (error) {
+        setToast('No se pudo actualizar el reloj. Reintentá.')
+        void load() // reconcile to server truth so a retry is safe
+      } else {
+        void load()
+      }
     },
     [tid, load],
   )
@@ -306,16 +338,36 @@ function ConsolePanel() {
   const finishersWithPosition = entries.filter((e) => e.final_position != null).length
   const canUndo = entries.some((e) => e.status === 'eliminated' || e.status === 'winner')
 
+  // Runs a mutating action RPC. The RPCs are self-guarding (see doClock note),
+  // so on failure we toast + refetch to reconcile — a retry never double-applies.
   const runAction = async (fn: () => PromiseLike<{ error: { message: string } | null }>) => {
     setBusy(true)
+    setToast(null)
     const { error } = await fn()
     setBusy(false)
-    if (error) console.error(error.message)
-    else void load()
+    if (error) {
+      setToast('No se pudo aplicar el cambio. Reintentá.')
+      void load() // reconcile to server truth so a retry is safe
+    } else {
+      void load()
+    }
   }
 
   return (
     <>
+      {conn === 'reconnecting' && (
+        <div className="live-reconnect" role="status" data-testid="admin-reconnect">
+          Reconectando… mostrando los últimos datos
+        </div>
+      )}
+      {toast && (
+        <div className="action-toast" role="alert" data-testid="admin-toast">
+          <span>{toast}</span>
+          <button type="button" className="link-btn" onClick={() => setToast(null)}>
+            Cerrar
+          </button>
+        </div>
+      )}
       <div className={`live-wrap${tournament.is_paused ? ' paused' : ''}`} style={{ padding: 16 }}>
         <div className="lvl">
           Nivel {tournament.current_level} · reloj{tournament.is_paused ? ' · en pausa' : ''}

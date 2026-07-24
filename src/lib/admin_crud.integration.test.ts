@@ -180,6 +180,19 @@ describe.skipIf(!canRun)('admin CRUD + season rollover (slice 13, local integrat
 
   // ------------------------------------------------------------------------
   it('close_season archives the active season and opens the next year, carrying config + roster, zeroing points', async () => {
+    // close_season() picks the active season by `order by year desc limit 1` —
+    // a GLOBAL choice. Pin this fixture's year strictly above every currently
+    // active season (the seed's + any orphan from an interrupted prior run) so
+    // the RPC deterministically archives THIS one. Without this the test races.
+    const { data: maxRow } = await admin
+      .from('season')
+      .select('year')
+      .eq('status', 'active')
+      .order('year', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    yearSeq = Math.max(yearSeq, ((maxRow?.year as number | undefined) ?? 0) + 1)
+
     // A distinctive config to prove it carries forward.
     const old = await mkActiveSeason({ points_multiplier: 7, no_show_penalty: -13 })
     const p1 = await mkPlayer()

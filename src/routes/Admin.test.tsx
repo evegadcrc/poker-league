@@ -13,6 +13,9 @@ const h = vi.hoisted(() => ({
   list: {} as Record<string, { data: unknown; error: unknown }>,
   rpc: {} as Record<string, { data: unknown; error: unknown }>,
   rpcCalls: [] as Array<{ name: string; args: unknown }>,
+  // When set, the channel mock invokes subscribe's status callback with it
+  // (e.g. 'CHANNEL_ERROR') so the reconnect banner can be exercised.
+  channelStatus: undefined as string | undefined,
 }))
 
 vi.mock('@/lib/auth', () => ({
@@ -42,7 +45,10 @@ vi.mock('@/lib/supabase', () => ({
     channel: () => {
       const chan: Record<string, unknown> = {
         on: () => chan,
-        subscribe: () => chan,
+        subscribe: (cb?: (status: string) => void) => {
+          if (cb && h.channelStatus) cb(h.channelStatus)
+          return chan
+        },
       }
       return chan
     },
@@ -105,6 +111,7 @@ beforeEach(() => {
   h.list = {}
   h.rpc = {}
   h.rpcCalls = []
+  h.channelStatus = undefined
   setLive()
 })
 
@@ -195,6 +202,30 @@ describe('Admin console (slice 12)', () => {
     const call = h.rpcCalls.find((c) => c.name === 'complete_tournament')
     expect(call).toBeTruthy()
     expect((call!.args as Record<string, unknown>).p_chop_entry_ids).toBeUndefined()
+  })
+})
+
+describe('Admin console — error / reconnect states (slice 16)', () => {
+  it('surfaces a toast when an action RPC fails, and refetches to reconcile (safe retry)', async () => {
+    const user = userEvent.setup()
+    h.rpc.confirm_payment = { data: null, error: { message: 'boom' } }
+    renderAdmin()
+    await screen.findAllByTestId('admin-prow')
+
+    await user.click(screen.getAllByRole('button', { name: 'Confirmar pago' })[0]!)
+
+    // Toast shown …
+    expect(await screen.findByTestId('admin-toast')).toBeInTheDocument()
+    // … and the console reconciled by refetching (a second console load ran
+    // after the failed RPC), so a retry acts on server truth, never stale state.
+    const consoleLoads = h.rpcCalls.filter((c) => c.name === 'fn_pot').length
+    expect(consoleLoads).toBeGreaterThanOrEqual(2)
+  })
+
+  it('shows the reconnect banner when the realtime channel drops', async () => {
+    h.channelStatus = 'CHANNEL_ERROR'
+    renderAdmin()
+    expect(await screen.findByTestId('admin-reconnect')).toBeInTheDocument()
   })
 })
 
