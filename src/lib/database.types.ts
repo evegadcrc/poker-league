@@ -281,6 +281,7 @@ export type Database = {
           level_started_at: string | null
           name: string
           paused_remaining_seconds: number | null
+          payout_distribution: Json | null
           prize_pool_override: number | null
           prizes: Json | null
           rebuy_amount: number | null
@@ -307,6 +308,7 @@ export type Database = {
           level_started_at?: string | null
           name: string
           paused_remaining_seconds?: number | null
+          payout_distribution?: Json | null
           prize_pool_override?: number | null
           prizes?: Json | null
           rebuy_amount?: number | null
@@ -333,6 +335,7 @@ export type Database = {
           level_started_at?: string | null
           name?: string
           paused_remaining_seconds?: number | null
+          payout_distribution?: Json | null
           prize_pool_override?: number | null
           prizes?: Json | null
           rebuy_amount?: number | null
@@ -530,6 +533,7 @@ export type Database = {
           level_started_at: string | null
           name: string
           paused_remaining_seconds: number | null
+          payout_distribution: Json | null
           prize_pool_override: number | null
           prizes: Json | null
           rebuy_amount: number | null
@@ -590,6 +594,7 @@ export type Database = {
           level_started_at: string | null
           name: string
           paused_remaining_seconds: number | null
+          payout_distribution: Json | null
           prize_pool_override: number | null
           prizes: Json | null
           rebuy_amount: number | null
@@ -673,6 +678,7 @@ export type Database = {
           level_started_at: string | null
           name: string
           paused_remaining_seconds: number | null
+          payout_distribution: Json | null
           prize_pool_override: number | null
           prizes: Json | null
           rebuy_amount: number | null
@@ -795,6 +801,7 @@ export type Database = {
           level_started_at: string | null
           name: string
           paused_remaining_seconds: number | null
+          payout_distribution: Json | null
           prize_pool_override: number | null
           prizes: Json | null
           rebuy_amount: number | null
