@@ -58,3 +58,15 @@ DB-touching slice that resets the stack should expect this and restart those two
 - Slice-12 eliminate reads the stored `tournament.final_table_size` column.
 Backend migrations complete through 0005 (0001 schema/RLS/seed · 0002 auth · 0003 points · 0004
 prizes · 0005 open_tournament). Slices 8-16 are the React screens.
+
+## Slice 13 — integration tests are NOT isolated on the shared local stack (FLAKY)
+2026-07-24 · slice 13 · tags: tests, supabase, flaky, test-gate
+
+Re-running the full suite after slice 13 intermittently showed 1 failed then 0 failed (flaky).
+Cause: the gated integration tests hit the ONE shared local Supabase stack and some mutate global
+state without rollback (e.g. `close_season` archives the active season, `complete_tournament`
+writes points), so cross-test/cross-run order leaks. Not a code defect — the app code is green.
+**Action for the final /dh:test gate:** run `supabase db reset` (+ Kong/auth restart) for a clean
+seed BEFORE the gate; treat a single red that clears on re-run as flake, not a real failure. A
+proper fix (transaction-wrap or per-test fixture reset for the integration suite) is a good
+simplify/review-loop follow-up — note it, don't silently ignore.

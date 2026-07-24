@@ -2,9 +2,9 @@
 goal: Build "Poker League" PWA (React+Vite+TS+Tailwind+shadcn / Supabase) per poker-league-app-plan.md — Phase 1 first
 task: poker-league-prototype
 step: build
-progress: 84%
+progress: 88%
 blockers: none
-updated: 2026-07-24T02:40:00Z
+updated: 2026-07-24T03:20:00Z
 ---
 
 ## What we're doing
@@ -13,12 +13,11 @@ UI-first design for the Poker League Phase 1 prototype. Grilling complete; spec 
 oxblood, big grotesk, tabular figures), light + dark first-class, identity from scratch.
 
 ## Last action
-/dh:run autopilot. Slices 1-12 DONE + verified (…, 9819a70). Slice 12: mig 0009 admin RPCs (clock,
-confirm_payment, add_rebuy re-entry-only, total−1 eliminate/self_bust/undo, mark_no_show,
-complete_tournament + chop + recompute cadence) + Admin console UI + chop flow. 137 tests green.
-self_bust RPC ready for slice 15. Chop UI NEW → verify-ui candidate.
+/dh:run autopilot. Slices 1-13 DONE + verified (…, e2554bc). Slice 13: mig 0010 create_tournament/
+update_season_config/close_season + CreateFecha + LeagueSettings + Cerrar-liga confirm. 147 tests
+green. FLAKY integration tests noted (shared local stack, no isolation) → final test gate MUST
+`supabase db reset` first; treat clears-on-rerun as flake. Isolation fix = simplify/review follow-up.
 
 ## Next step
-/dh:run continues — slice 13/16: Admin CRUD + season rollover. Mig 0010: create_tournament,
-update_season_config, close_season (archive+open next year, carry roster, reset points; NO undo,
-confirm modal). FE: CreateFecha + LeagueSettings (fills Admin sub-nav stubs).
+/dh:run continues — slice 14/16: Profile + avatar upload. player_profile RPC (points history, form,
+bests) + Storage `avatars` bucket upload → player.avatar_url. Match prototype Perfil. Ground Storage.
