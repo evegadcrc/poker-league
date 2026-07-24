@@ -869,7 +869,7 @@ function AdminPlayerRow({
           {entry.rebuys_count > 0 && <span className="mini-badge">↺ {entry.rebuys_count}</span>}
           {entry.chips != null && entry.chips > 0 && (
             <span className="chips-badge">
-              {entry.chips.toLocaleString('es-CR')} fichas{entry.early_bird ? ' · +2.000' : ''}
+              {entry.chips.toLocaleString('es-CR')} fichas iniciales{entry.early_bird ? ' · +2.000' : ''}
             </span>
           )}
         </div>

@@ -113,6 +113,25 @@ describe('Admin · Nueva fecha (slice 13)', () => {
     expect(payload.blind_structure_id).toBe('bs-1')
   })
 
+  it('shows a ₡ adornment on the colón money inputs (buy-in / rebuy)', async () => {
+    const user = userEvent.setup()
+    renderAdmin()
+    await user.click(screen.getByRole('tab', { name: 'Nueva fecha' }))
+    await screen.findByTestId('create-fecha')
+
+    // The buy-in and rebuy inputs are wrapped in a .money-input adornment that
+    // renders the ₡ symbol (display only — the submitted value stays the bare
+    // number, verified by the create_tournament payload test above).
+    expect(screen.getByLabelText('Buy-in / Recompra (₡)').closest('.money-input')).toHaveAttribute(
+      'data-symbol',
+      '₡',
+    )
+    expect(screen.getByLabelText('Recompra').closest('.money-input')).toHaveAttribute(
+      'data-symbol',
+      '₡',
+    )
+  })
+
   it('captures manual venue coordinates into the payload', async () => {
     const user = userEvent.setup()
     renderAdmin()

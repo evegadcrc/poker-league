@@ -225,6 +225,9 @@ describe('Live — state-based timer + scoreboard', () => {
     const rows = screen.getAllByTestId('standing')
     const names = rows.map((r) => within(r).getByText(/Ana|Cid|Dee|Ben|Eve/).textContent)
     expect(names).toEqual(['Cid', 'Ana', 'Dee', 'Ben']) // Eve (confirmed) excluded
+    // Alive rows carry the "En juego" badge (was "Vivo"); eliminated rows don't.
+    expect(within(rows[0]!).getByText('En juego')).toBeInTheDocument() // Cid (alive)
+    expect(within(rows[2]!).queryByText('En juego')).not.toBeInTheDocument() // Dee (out)
   })
 })
 

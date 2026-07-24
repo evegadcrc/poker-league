@@ -143,6 +143,8 @@ describe('Admin console (slice 12)', () => {
     // paid / unpaid badges rendered.
     expect(screen.getAllByText('✓ Pagó').length).toBeGreaterThan(0)
     expect(screen.getByText('● Sin pagar')).toBeInTheDocument()
+    // chips badge is labeled "fichas iniciales" (buy-in chips, not a live stack).
+    expect(screen.getAllByText(/fichas iniciales/).length).toBeGreaterThan(0)
   })
 
   it('clock buttons call the clock RPC (pause)', async () => {

@@ -230,19 +230,23 @@ export default function CreateFecha() {
       <div className="field">
         <label htmlFor="cf-buyin">Buy-in / Recompra (₡)</label>
         <div className="two">
-          <input
-            id="cf-buyin"
-            inputMode="numeric"
-            value={buyIn}
-            onChange={(e) => setBuyIn(e.target.value)}
-          />
-          <input
-            id="cf-rebuy"
-            inputMode="numeric"
-            aria-label="Recompra"
-            value={rebuyAmount}
-            onChange={(e) => setRebuyAmount(e.target.value)}
-          />
+          <span className="money-input" data-symbol="₡">
+            <input
+              id="cf-buyin"
+              inputMode="numeric"
+              value={buyIn}
+              onChange={(e) => setBuyIn(e.target.value)}
+            />
+          </span>
+          <span className="money-input" data-symbol="₡">
+            <input
+              id="cf-rebuy"
+              inputMode="numeric"
+              aria-label="Recompra"
+              value={rebuyAmount}
+              onChange={(e) => setRebuyAmount(e.target.value)}
+            />
+          </span>
         </div>
       </div>
 

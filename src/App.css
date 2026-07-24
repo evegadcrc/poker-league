@@ -1366,6 +1366,26 @@
   margin-top: 5px;
 }
 
+/* ₡ prefix adornment for colón-denominated money inputs (display only —
+   the stored/submitted value is the bare number the user typed). */
+.money-input {
+  position: relative;
+  display: block;
+}
+.money-input::before {
+  content: attr(data-symbol);
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  font: 700 14px 'Archivo';
+  color: var(--ink-3);
+  pointer-events: none;
+}
+.money-input > input {
+  padding-left: 28px;
+}
+
 /* ante toggle (ported from the prototype .toggle-row / .switch) — CreateFecha */
 .toggle-row {
   display: flex;

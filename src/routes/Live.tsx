@@ -434,7 +434,7 @@ function StandingRow({ entry }: { entry: StandingEntry }) {
     <div className={`standing ${alive ? 'alive' : 'out'}`} data-testid="standing">
       <div className="pos">{alive ? '•' : ordinal(entry.final_position ?? 0)}</div>
       <div className="nm">{name}</div>
-      {alive && <span className="mini-badge">Vivo</span>}
+      {alive && <span className="mini-badge">En juego</span>}
     </div>
   )
 }
