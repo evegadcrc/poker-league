@@ -62,6 +62,7 @@ type Row = {
   wins: number
   podiums: number
   form: string[]
+  form_positions: number[]
 }
 
 const ACTIVE_SEASON = { id: 'season-1', name: 'Liga 2026', year: 2026 }
@@ -78,6 +79,7 @@ const FIXTURE: Row[] = [
     podiums: 5,
     // latest→oldest: champion, podium, final, out, out
     form: ['champion', 'podium', 'final', 'out', 'out'],
+    form_positions: [1, 3, 5, 8, 10],
   },
   {
     player_id: 'p-edw',
@@ -88,6 +90,7 @@ const FIXTURE: Row[] = [
     wins: 1,
     podiums: 3,
     form: ['podium', 'out', 'champion', 'final', 'podium'],
+    form_positions: [2, 9, 1, 4, 3],
   },
   {
     player_id: 'p-ran',
@@ -98,6 +101,7 @@ const FIXTURE: Row[] = [
     wins: 0,
     podiums: 0,
     form: ['out', 'final', 'out', 'out', 'out'],
+    form_positions: [7, 5, 8, 9, 11],
   },
 ]
 
@@ -143,6 +147,10 @@ describe('Leaderboard (Tabla)', () => {
     expect(pills[pills.length - 1]!.classList.contains('champ')).toBe(true)
     // Oldest game (RPC last = 'out') is the leftmost pill.
     expect(pills[0]!.classList.contains('out')).toBe(true)
+
+    // Finishing NUMBERS render inside the pills (mig 0018), same reversal as the
+    // tiers: form_positions [1,3,5,8,10] → left→right [10,8,5,3,1].
+    expect(Array.from(pills).map((el) => el.textContent)).toEqual(['10', '8', '5', '3', '1'])
   })
 
   it("highlights the current player's row and appends '· tú'", async () => {
@@ -165,9 +173,13 @@ describe('Leaderboard (Tabla)', () => {
     await screen.findByText('Mauricio A.')
 
     const mauricioRow = screen.getAllByTestId('lb-row')[0]!
-    expect(within(mauricioRow).getByText('8')).toBeInTheDocument() // PJ
-    expect(within(mauricioRow).getByText('3')).toBeInTheDocument() // Tít
-    expect(within(mauricioRow).getByText('420')).toBeInTheDocument() // Pts
+    // Scope to the stats column: form-pill finishing numbers (mig 0018) can now
+    // share a value with a stat (e.g. a position-8 pill vs PJ=8), so an unscoped
+    // getByText would match multiple nodes.
+    const stats = within(mauricioRow.querySelector('.lb-stats') as HTMLElement)
+    expect(stats.getByText('8')).toBeInTheDocument() // PJ
+    expect(stats.getByText('3')).toBeInTheDocument() // Tít
+    expect(stats.getByText('420')).toBeInTheDocument() // Pts
 
     // max(games_played) = 8 → "8 fechas"
     expect(screen.getByText('8 fechas')).toBeInTheDocument()
@@ -222,6 +234,7 @@ describe('Leaderboard (Tabla)', () => {
           wins: 0,
           podiums: 0,
           form: [],
+          form_positions: [],
         },
       ],
       error: null,

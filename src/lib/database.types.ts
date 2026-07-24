@@ -321,6 +321,7 @@ export type Database = {
           is_paused: boolean
           level_started_at: string | null
           name: string
+          odds_enabled: boolean
           paused_remaining_seconds: number | null
           payout_distribution: Json | null
           prize_pool_override: number | null
@@ -350,6 +351,7 @@ export type Database = {
           is_paused?: boolean
           level_started_at?: string | null
           name: string
+          odds_enabled?: boolean
           paused_remaining_seconds?: number | null
           payout_distribution?: Json | null
           prize_pool_override?: number | null
@@ -379,6 +381,7 @@ export type Database = {
           is_paused?: boolean
           level_started_at?: string | null
           name?: string
+          odds_enabled?: boolean
           paused_remaining_seconds?: number | null
           payout_distribution?: Json | null
           prize_pool_override?: number | null
@@ -579,6 +582,7 @@ export type Database = {
           is_paused: boolean
           level_started_at: string | null
           name: string
+          odds_enabled: boolean
           paused_remaining_seconds: number | null
           payout_distribution: Json | null
           prize_pool_override: number | null
@@ -642,6 +646,7 @@ export type Database = {
           is_paused: boolean
           level_started_at: string | null
           name: string
+          odds_enabled: boolean
           paused_remaining_seconds: number | null
           payout_distribution: Json | null
           prize_pool_override: number | null
@@ -728,6 +733,7 @@ export type Database = {
           is_paused: boolean
           level_started_at: string | null
           name: string
+          odds_enabled: boolean
           paused_remaining_seconds: number | null
           payout_distribution: Json | null
           prize_pool_override: number | null
@@ -828,6 +834,7 @@ export type Database = {
         Returns: {
           avatar_url: string
           form: string[]
+          form_positions: number[]
           games_played: number
           player_id: string
           player_name: string
@@ -883,6 +890,7 @@ export type Database = {
           is_paused: boolean
           level_started_at: string | null
           name: string
+          odds_enabled: boolean
           paused_remaining_seconds: number | null
           payout_distribution: Json | null
           prize_pool_override: number | null

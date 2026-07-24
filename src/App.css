@@ -157,13 +157,16 @@
   margin-top: 5px;
 }
 .pill {
-  width: 19px;
-  height: 19px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 3px;
   border-radius: 5px;
   display: grid;
   place-items: center;
-  font: 800 10px 'Archivo';
+  /* Centered tabular figures so 1- and 2-digit finishing numbers align. */
+  font: 800 11px/1 'Archivo';
   font-feature-settings: 'tnum' 1;
+  letter-spacing: -0.02em;
 }
 .pill.champ {
   background: var(--champ-bg);
@@ -1720,8 +1723,9 @@
   padding: 4px 18px 18px;
 }
 .big-form .pill {
-  width: 30px;
+  min-width: 30px;
   height: 30px;
+  padding: 0 5px;
   border-radius: 7px;
   font-size: 13px;
 }
