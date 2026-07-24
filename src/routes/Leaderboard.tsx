@@ -21,13 +21,18 @@ const SKELETON_ROWS = 6
  * played by the most-active member (every completed fecha the roster has seen).
  */
 async function fetchState(): Promise<State> {
-  const { data: season, error: seasonError } = await supabase
+  // Resilient active-season read: never throws on 0 OR >1 active rows. The DB
+  // enforces single-active (mig 0014), but a defensive ordered read keeps the
+  // Tabla from erroring if that invariant is ever violated — pick the newest.
+  const { data: seasons, error: seasonError } = await supabase
     .from('season')
     .select('id, name, year')
     .eq('status', 'active')
-    .maybeSingle()
+    .order('year', { ascending: false })
+    .limit(1)
 
   if (seasonError) return { status: 'error' }
+  const season = seasons?.[0]
   if (!season) return { status: 'no-season' }
 
   const { data, error } = await supabase.rpc('leaderboard', {

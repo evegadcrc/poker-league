@@ -23,12 +23,19 @@ describe.skipIf(!canRun)('admin CRUD + season rollover (slice 13, local integrat
   const RUN = crypto.randomUUID().slice(0, 8)
   const seasonIds: string[] = []
   const playerIds: string[] = []
+  // The season active at suite start (seed's). mig 0014 enforces single-active,
+  // so our fixtures must displace it; afterAll restores it for global cleanliness.
+  let originalActiveId: string | null = null
   // Strictly-increasing high year so each fixture season wins the year-desc pick.
   let yearSeq = 2099
   const nextYear = () => yearSeq++
 
+  // Create THE single active season. mig 0014 adds a partial unique index that
+  // permits at most one status='active' row, so we archive whatever is active
+  // first (the seed's, or a prior fixture) before inserting ours.
   async function mkActiveSeason(over: Partial<Database['public']['Tables']['season']['Insert']> = {}) {
     const year = nextYear()
+    await admin.from('season').update({ status: 'archived' }).eq('status', 'active')
     const { data, error } = await admin
       .from('season')
       .insert({ name: `CRUD ${RUN} ${year}`, year, status: 'active', ...over })
@@ -63,11 +70,26 @@ describe.skipIf(!canRun)('admin CRUD + season rollover (slice 13, local integrat
 
   beforeAll(async () => {
     await admin.from('player').delete().like('email', 'crud-%@test.local')
+    // Remember the season active at suite start so afterAll can restore it after
+    // our fixtures (and close_season) churn the single active slot.
+    const { data } = await admin
+      .from('season')
+      .select('id')
+      .eq('status', 'active')
+      .order('year', { ascending: false })
+      .limit(1)
+    originalActiveId = data?.[0]?.id ?? null
   }, 30_000)
 
   afterAll(async () => {
     for (const id of seasonIds) await admin.from('season').delete().eq('id', id)
     if (playerIds.length) await admin.from('player').delete().in('id', playerIds)
+    // Restore the suite-start active season so global state (single-active
+    // invariant) is left as we found it for any later-running test file.
+    if (originalActiveId) {
+      await admin.from('season').update({ status: 'archived' }).eq('status', 'active')
+      await admin.from('season').update({ status: 'active' }).eq('id', originalActiveId)
+    }
   })
 
   // ------------------------------------------------------------------------
@@ -180,20 +202,9 @@ describe.skipIf(!canRun)('admin CRUD + season rollover (slice 13, local integrat
 
   // ------------------------------------------------------------------------
   it('close_season archives the active season and opens the next year, carrying config + roster, zeroing points', async () => {
-    // close_season() picks the active season by `order by year desc limit 1` —
-    // a GLOBAL choice. Pin this fixture's year strictly above every currently
-    // active season (the seed's + any orphan from an interrupted prior run) so
-    // the RPC deterministically archives THIS one. Without this the test races.
-    const { data: maxRow } = await admin
-      .from('season')
-      .select('year')
-      .eq('status', 'active')
-      .order('year', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-    yearSeq = Math.max(yearSeq, ((maxRow?.year as number | undefined) ?? 0) + 1)
-
-    // A distinctive config to prove it carries forward.
+    // A distinctive config to prove it carries forward. mkActiveSeason archives
+    // any pre-existing active season (single-active invariant, mig 0014) so this
+    // one is THE active season close_season will roll over.
     const old = await mkActiveSeason({ points_multiplier: 7, no_show_penalty: -13 })
     const p1 = await mkPlayer()
     const p2 = await mkPlayer()
@@ -214,19 +225,61 @@ describe.skipIf(!canRun)('admin CRUD + season rollover (slice 13, local integrat
     expect(created.points_multiplier).toBe(7)
     expect(created.no_show_penalty).toBe(-13)
 
+    // (a) close_season leaves EXACTLY ONE active season, and it is the new one.
+    const { data: actives } = await admin.from('season').select('id').eq('status', 'active')
+    expect((actives ?? []).map((r) => r.id)).toEqual([created.id])
+
     // Roster is global → players still present after rollover.
     const { data: players } = await admin.from('player').select('id').in('id', [p1, p2])
     expect((players ?? []).map((r) => r.id).sort()).toEqual([p1, p2].sort())
 
-    // New season starts with ZERO entries / points.
+    // New season starts with ZERO entries.
     const { data: tourneys } = await admin
       .from('tournament')
       .select('id')
       .eq('season_id', created.id)
     expect(tourneys ?? []).toHaveLength(0)
 
+    // (d) A brand-new active season with no tournaments returns the FULL league
+    // roster at 0 pts (roster-at-0, mig 0014) — not an empty table. Every row
+    // must sit at 0 points / 0 games / empty form, and p1 + p2 must be present.
     const { data: lb, error: lbErr } = await admin.rpc('leaderboard', { p_season_id: created.id })
     expect(lbErr).toBeNull()
-    expect(lb ?? []).toHaveLength(0) // no entries → no points for anyone
+    const rows = (lb ?? []) as { player_id: string; total_points: number; games_played: number; wins: number; form: string[] }[]
+    expect(rows.length).toBeGreaterThan(0) // roster, not empty
+    for (const r of rows) {
+      expect(r.total_points).toBe(0)
+      expect(r.games_played).toBe(0)
+      expect(r.wins).toBe(0)
+      expect(r.form).toEqual([])
+    }
+    const ids = rows.map((r) => r.player_id)
+    expect(ids).toContain(p1)
+    expect(ids).toContain(p2)
+  })
+
+  // ------------------------------------------------------------------------
+  // (b) The partial unique index rejects a second active season.
+  it('rejects a second active season insert (single-active unique index)', async () => {
+    await mkActiveSeason() // THE active season now
+    const { error } = await admin
+      .from('season')
+      .insert({ name: `CRUD ${RUN} dup`, year: nextYear(), status: 'active' })
+      .select('id')
+      .single()
+    // 23505 = unique_violation raised by the season_single_active index.
+    expect(error).not.toBeNull()
+    expect(error?.code).toBe('23505')
+  })
+
+  // ------------------------------------------------------------------------
+  // (c) The repair path + index leave AT MOST one active season. The repair
+  // itself runs at migration-apply time (`supabase db reset` replays 0014 over
+  // the seed); duplicates can no longer be injected once the index exists, so
+  // the observable, enforced guarantee is this invariant.
+  it('never allows more than one active season (repair + index invariant)', async () => {
+    await mkActiveSeason()
+    const { data } = await admin.from('season').select('id').eq('status', 'active')
+    expect((data ?? []).length).toBeLessThanOrEqual(1)
   })
 })

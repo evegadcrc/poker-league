@@ -17,10 +17,13 @@ vi.mock('@/lib/auth', () => ({
 vi.mock('@/lib/supabase', () => ({
   supabase: {
     from: () => {
+      // Mirrors the resilient active-season read: .select().eq().order().limit()
+      // resolving to an array (never .maybeSingle(), which throws on >1 rows).
       const builder: Record<string, unknown> = {
         select: () => builder,
         eq: () => builder,
-        maybeSingle: () =>
+        order: () => builder,
+        limit: () =>
           h.pending ? new Promise(() => {}) : Promise.resolve(h.seasonResult),
       }
       return builder
@@ -88,7 +91,9 @@ function tierClasses(row: HTMLElement): string[] {
 
 beforeEach(() => {
   h.pending = false
-  h.seasonResult = { data: ACTIVE_SEASON, error: null }
+  // Active-season read returns an ARRAY now (ordered, limit 1); the component
+  // takes the first row. beforeEach gives the happy single-active case.
+  h.seasonResult = { data: [ACTIVE_SEASON], error: null }
   h.rpcResult = { data: FIXTURE, error: null }
   h.player = { id: 'p-edw' } // Edwin is the signed-in player.
 })
@@ -166,10 +171,24 @@ describe('Leaderboard (Tabla)', () => {
   })
 
   it('shows a no-season message when there is no active season', async () => {
-    h.seasonResult = { data: null, error: null }
+    h.seasonResult = { data: [], error: null }
     render(<Leaderboard />)
 
     expect(await screen.findByText(/no hay una temporada activa/i)).toBeInTheDocument()
+  })
+
+  it('does not throw and renders the roster when more than one active season exists', async () => {
+    // Defensive: even if the single-active DB invariant is violated (>1 active
+    // row), the ordered read takes the first and the Tabla still renders.
+    h.seasonResult = {
+      data: [ACTIVE_SEASON, { id: 'season-2', name: 'Liga 2027', year: 2027 }],
+      error: null,
+    }
+    render(<Leaderboard />)
+
+    await screen.findByText('Mauricio A.')
+    expect(screen.getAllByTestId('lb-row')).toHaveLength(3)
+    expect(screen.queryByText(/no hay una temporada activa/i)).not.toBeInTheDocument()
   })
 
   it('renders the roster at 0 pts for a brand-new season', async () => {
