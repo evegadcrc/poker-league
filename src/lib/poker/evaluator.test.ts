@@ -59,6 +59,42 @@ describe('evaluator — category detection (best 5 of 7)', () => {
   })
 })
 
+describe('evaluator — 5- and 6-card inputs (Calculadora flop/turn readout)', () => {
+  // The "Tu mejor mano" readout calls evaluate7 with 2 hole + 3 board (5 cards,
+  // flop) and 2 hole + 4 board (6 cards, turn). The counting evaluator has no
+  // 7-card assumption; pin the shorter shipped, user-visible inputs.
+  it('5 cards (flop): royal straight flush', () => {
+    expect(cat('AhKhQhJhTh')).toBe(HAND_CATEGORY.STRAIGHT_FLUSH)
+    expect(tb('AhKhQhJhTh')[0]).toBe(14)
+  })
+
+  it('5 cards (flop): two pair with kicker', () => {
+    expect(cat('AsAhKcKd9s')).toBe(HAND_CATEGORY.TWO_PAIR)
+    expect(tb('AsAhKcKd9s').slice(0, 3)).toEqual([14, 13, 9])
+  })
+
+  it('5 cards (flop): high card, all five kickers', () => {
+    expect(cat('AsKhQcJd9s')).toBe(HAND_CATEGORY.HIGH_CARD)
+    expect(tb('AsKhQcJd9s')).toEqual([14, 13, 12, 11, 9])
+  })
+
+  it('6 cards (turn): picks the best five — flush over the sixth card', () => {
+    expect(cat('AhKh9h5h2h7c')).toBe(HAND_CATEGORY.FLUSH)
+    expect(tb('AhKh9h5h2h7c')).toEqual([14, 13, 9, 5, 2])
+  })
+
+  it('6 cards (turn): full house from trips + pair', () => {
+    expect(cat('AsAhAdKhKc2c')).toBe(HAND_CATEGORY.FULL_HOUSE)
+    expect(tb('AsAhAdKhKc2c').slice(0, 2)).toEqual([14, 13])
+  })
+
+  it('6 cards (turn): one pair, best three kickers among the rest', () => {
+    // Pair of 9s + A K Q kickers (the low 2 is dropped).
+    expect(cat('9s9hAcKdQh2c')).toBe(HAND_CATEGORY.PAIR)
+    expect(tb('9s9hAcKdQh2c').slice(0, 4)).toEqual([9, 14, 13, 12])
+  })
+})
+
 describe('evaluator — comparison correctness', () => {
   it('ranks categories monotonically worst → best', () => {
     const ordered = [

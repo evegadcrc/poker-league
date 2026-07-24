@@ -176,6 +176,49 @@ describe('Live — cues fire off STATE TRANSITIONS (step 13)', () => {
     expect(cueCount('elimination')).toBe(1)
   })
 
+  it('the champion reaching 1st (playing → winner) does NOT fire elimination; the busted runner-up DOES', async () => {
+    renderLive()
+    await screen.findByTestId('timer')
+    expect(cueCount('elimination')).toBe(0)
+
+    // Heads-up ends in the SAME batch: Cid busts to 2nd (playing → eliminated)
+    // and Ana takes the title (playing → winner). Only the bust is a "quedó
+    // fuera" event — a champion reaching a final position must NOT be counted as
+    // an elimination (deriveLiveSignal keys `out` on status === 'eliminated').
+    setEntries([
+      { id: 'a', player_id: 'p-ana', status: 'winner', final_position: 1, chips: 42000, player: { name: 'Ana', avatar_url: null } },
+      { id: 'c', player_id: 'p-cid', status: 'eliminated', final_position: 2, chips: 0, player: { name: 'Cid', avatar_url: null } },
+      { id: 'd', player_id: 'p-dee', status: 'eliminated', final_position: 7, chips: 0, player: { name: 'Dee', avatar_url: null } },
+    ])
+    await fireAll()
+
+    await waitFor(() => expect(cueCount('elimination')).toBe(1))
+    const toast = await screen.findByTestId('live-toast')
+    expect(toast).toHaveTextContent('Cid quedó fuera')
+    // The champion is never announced as "quedó fuera".
+    expect(toast).not.toHaveTextContent('Ana')
+  })
+
+  it('co-champions chopping the title (both → winner) fire NO elimination', async () => {
+    renderLive()
+    await screen.findByTestId('timer')
+    expect(cueCount('elimination')).toBe(0)
+
+    // Ana + Cid chop the title: both reach status 'winner' (chopped final
+    // position). Dee was already out (seeded, not new). No NEW `eliminated`
+    // entry appears → no "quedó fuera" cue for the co-champions.
+    setEntries([
+      { id: 'a', player_id: 'p-ana', status: 'winner', final_position: 1, chips: 21000, player: { name: 'Ana', avatar_url: null } },
+      { id: 'c', player_id: 'p-cid', status: 'winner', final_position: 1, chips: 21000, player: { name: 'Cid', avatar_url: null } },
+      { id: 'd', player_id: 'p-dee', status: 'eliminated', final_position: 7, chips: 0, player: { name: 'Dee', avatar_url: null } },
+    ])
+    await fireAll()
+    await fireAll()
+
+    expect(cueCount('elimination')).toBe(0)
+    expect(screen.queryByTestId('live-toast')).not.toBeInTheDocument()
+  })
+
   it('permission DENIED: no local Notification is constructed and no throw; the toast still shows', async () => {
     const NotificationMock = vi.fn() as unknown as { permission: string; requestPermission: () => Promise<string> }
     ;(NotificationMock as unknown as { permission: string }).permission = 'denied'
