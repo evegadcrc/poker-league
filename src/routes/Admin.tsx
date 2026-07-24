@@ -23,6 +23,7 @@ import {
   chopPreview,
   isInPlay,
   playerActions,
+  tieSplitMoneyEach,
   type ClockAction,
   type ScoringConfig,
 } from '@/lib/admin'
@@ -214,6 +215,7 @@ function ConsolePanel() {
   const [noShowFor, setNoShowFor] = useState<ConsoleEntry | null>(null)
   const [blindsOpen, setBlindsOpen] = useState(false)
   const [prizesOpen, setPrizesOpen] = useState(false)
+  const [multiBustOpen, setMultiBustOpen] = useState(false)
   const [completeOpen, setCompleteOpen] = useState(false)
   const [whatsOpen, setWhatsOpen] = useState(false)
   // Realtime health → subtle reconnect banner (mirrors the En Vivo screen).
@@ -528,6 +530,17 @@ function ConsolePanel() {
         ))}
       </div>
 
+      <div className="btn-row">
+        <button
+          type="button"
+          className="btn ghost full"
+          disabled={busy || entries.filter((e) => isInPlay(e.status) && e.status !== 'winner').length < 2}
+          onClick={() => setMultiBustOpen(true)}
+        >
+          ✖✖  Eliminar varios (misma mano)
+        </button>
+      </div>
+
       {isAdmin && (
         <div className="btn-row">
           <button
@@ -645,6 +658,21 @@ function ConsolePanel() {
         onSave={(dist) => {
           setPrizesOpen(false)
           void saveDistribution(dist)
+        }}
+      />
+
+      {/* Simultaneous multi-bust (ordered / dead-even tie) */}
+      <MultiBustSheet
+        open={multiBustOpen}
+        onClose={() => setMultiBustOpen(false)}
+        entries={entries}
+        prizes={prizes}
+        busy={busy}
+        onBust={(ids, tied) => {
+          setMultiBustOpen(false)
+          void runAction(() =>
+            supabase.rpc('eliminate_multi', { p_entry_ids: ids, p_tied: tied }),
+          )
         }}
       />
 
@@ -962,6 +990,133 @@ function EditPrizesSheet({
           onClick={() => onSave(rowsToDist(rows))}
         >
           Guardar premios
+        </button>
+      </div>
+    </Sheet>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Simultaneous multi-bust (Phase-2 step 6). Two modes for "2+ out on one hand":
+//   • Eliminaron en orden — ordered total−1: the shortest starting stack takes
+//     the WORST position. No live stacks in the app, so the admin sets the order
+//     (players are shown shortest-chips-first; that order is passed through).
+//   • Empataron (reparten) — a dead-even all-in: the tied players SPLIT the
+//     positions they occupy (equal points + equal money). NOT co-champions.
+// ---------------------------------------------------------------------------
+function MultiBustSheet({
+  open,
+  onClose,
+  entries,
+  prizes,
+  busy,
+  onBust,
+}: {
+  open: boolean
+  onClose: () => void
+  entries: ConsoleEntry[]
+  prizes: Prize[]
+  busy: boolean
+  onBust: (ids: string[], tied: boolean) => void
+}) {
+  const [sel, setSel] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    if (open) setSel(new Set())
+  }, [open])
+
+  // In-play players, shortest chips FIRST (→ worst position in ordered mode).
+  const inPlay = useMemo(
+    () =>
+      entries
+        .filter((e) => isInPlay(e.status) && e.status !== 'winner')
+        .slice()
+        .sort((a, b) => (a.chips ?? 0) - (b.chips ?? 0)),
+    [entries],
+  )
+
+  const toggle = (id: string) =>
+    setSel((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  // Selected ids in the displayed (shortest-first) order.
+  const ids = inPlay.filter((e) => sel.has(e.id)).map((e) => e.id)
+  const k = ids.length
+
+  // Tie money preview: the tied group takes the bottom K positions of the
+  // current in-play count → split the summed prize amounts for those positions.
+  const tiePositions = Array.from({ length: k }, (_, i) => inPlay.length - i)
+  const tieMoneyEach = k >= 2 ? tieSplitMoneyEach(prizes, tiePositions) : 0
+
+  return (
+    <Sheet open={open} onClose={onClose} title="Eliminar varios (misma mano)">
+      <p>
+        Marcá a los jugadores que salieron en la misma mano. <b>En orden</b>: el de menos fichas
+        termina más abajo. <b>Empataron</b>: reparten posición, puntos y dinero en partes iguales.
+      </p>
+
+      <div className="plist" data-testid="multibust-list" style={{ borderTop: '1.5px solid var(--ink)' }}>
+        {inPlay.length === 0 ? (
+          <div className="fd-note">No quedan jugadores en juego.</div>
+        ) : (
+          inPlay.map((e) => {
+            const name = e.player?.name ?? 'Jugador'
+            return (
+              <label key={e.id} className="prow" style={{ cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={sel.has(e.id)}
+                  onChange={() => toggle(e.id)}
+                  aria-label={`Eliminar ${name}`}
+                />
+                <Avatar name={name} url={e.player?.avatar_url} size={36} />
+                <div className="pinfo">
+                  <b>{name}</b>
+                  <div className="sub">
+                    {e.chips != null ? `${e.chips.toLocaleString('es-CR')} fichas` : 'En juego'}
+                  </div>
+                </div>
+              </label>
+            )
+          })
+        )}
+      </div>
+
+      {k >= 2 && (
+        <div className="premios" data-testid="tie-preview" style={{ marginLeft: 0, marginRight: 0 }}>
+          <div className="ph">
+            <span className="t">Empate de {k}</span>
+            <span className="s">si reparten en partes iguales</span>
+          </div>
+          <div className="prow-prize">
+            <span className="nm">Dinero c/u</span>
+            <span className="amt">{colonesFull(tieMoneyEach)}</span>
+          </div>
+        </div>
+      )}
+
+      <div className="btn-row" style={{ gap: 10 }}>
+        <button
+          type="button"
+          className="btn ghost"
+          style={{ flex: 1 }}
+          disabled={busy || k < 2}
+          onClick={() => onBust(ids, false)}
+        >
+          En orden ({k})
+        </button>
+        <button
+          type="button"
+          className="btn blood"
+          style={{ flex: 1 }}
+          disabled={busy || k < 2}
+          onClick={() => onBust(ids, true)}
+        >
+          Empataron ({k})
         </button>
       </div>
     </Sheet>

@@ -4,6 +4,7 @@ import {
   isInPlay,
   playerActions,
   pointValueForPosition,
+  tieSplitMoneyEach,
   type ScoringConfig,
 } from '@/lib/admin'
 import type { Prize } from '@/lib/live'
@@ -56,6 +57,33 @@ describe('chopPreview', () => {
   it('is safe with fewer prize slices than choppers', () => {
     const p = chopPreview(2, [{ position: 1, pct: 1, amount: 50_000 }], 0, CFG)
     expect(p.moneyEach).toBe(25_000)
+  })
+})
+
+describe('tieSplitMoneyEach (dead-even multi-bust money split)', () => {
+  const prizes: Prize[] = [
+    { position: 1, pct: 0.6, amount: 85_000 },
+    { position: 2, pct: 0.28, amount: 40_000 },
+    { position: 3, pct: 0.12, amount: 15_000 },
+  ]
+
+  it('splits the summed prize amounts of the tied positions equally', () => {
+    // tie at 2nd/3rd → (40k + 15k)/2 = 27.5k → 27500 (mirrors chop rounding)
+    expect(tieSplitMoneyEach(prizes, [2, 3])).toBe(27_500)
+  })
+
+  it('a mid-field tie at unpaid positions splits ₡0', () => {
+    // positions 7 & 8 have no prize slice → 0
+    expect(tieSplitMoneyEach(prizes, [7, 8])).toBe(0)
+  })
+
+  it('rounds a 3-way split like chopPreview', () => {
+    // (85k + 40k + 15k)/3 = 46666.67 → 46667
+    expect(tieSplitMoneyEach(prizes, [1, 2, 3])).toBe(46_667)
+  })
+
+  it('is 0 with no positions', () => {
+    expect(tieSplitMoneyEach(prizes, [])).toBe(0)
   })
 })
 

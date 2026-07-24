@@ -271,6 +271,7 @@ export type Database = {
           ante_enabled: boolean
           blind_structure_id: string | null
           buy_in: number
+          counts_for_league: boolean
           created_at: string
           created_by: string | null
           current_level: number
@@ -298,6 +299,7 @@ export type Database = {
           ante_enabled?: boolean
           blind_structure_id?: string | null
           buy_in?: number
+          counts_for_league?: boolean
           created_at?: string
           created_by?: string | null
           current_level?: number
@@ -325,6 +327,7 @@ export type Database = {
           ante_enabled?: boolean
           blind_structure_id?: string | null
           buy_in?: number
+          counts_for_league?: boolean
           created_at?: string
           created_by?: string | null
           current_level?: number
@@ -523,6 +526,7 @@ export type Database = {
           ante_enabled: boolean
           blind_structure_id: string | null
           buy_in: number
+          counts_for_league: boolean
           created_at: string
           created_by: string | null
           current_level: number
@@ -584,6 +588,7 @@ export type Database = {
           ante_enabled: boolean
           blind_structure_id: string | null
           buy_in: number
+          counts_for_league: boolean
           created_at: string
           created_by: string | null
           current_level: number
@@ -668,6 +673,7 @@ export type Database = {
           ante_enabled: boolean
           blind_structure_id: string | null
           buy_in: number
+          counts_for_league: boolean
           created_at: string
           created_by: string | null
           current_level: number
@@ -700,6 +706,36 @@ export type Database = {
       }
       eliminate: {
         Args: { p_entry_id: string }
+        Returns: {
+          cancelled_at: string | null
+          check_in_geo_ok: boolean | null
+          checked_in_at: string | null
+          chips: number | null
+          chop_group: number | null
+          chopped: boolean
+          created_at: string
+          early_bird: boolean
+          eliminated_at: string | null
+          final_position: number | null
+          id: string
+          made_final_table: boolean
+          paid: boolean
+          player_id: string
+          points_earned: number | null
+          rebuys_count: number
+          rsvp_at: string | null
+          status: Database["public"]["Enums"]["entry_status"]
+          tournament_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "entry"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      eliminate_multi: {
+        Args: { p_entry_ids: string[]; p_tied?: boolean }
         Returns: {
           cancelled_at: string | null
           check_in_geo_ok: boolean | null
@@ -791,6 +827,7 @@ export type Database = {
           ante_enabled: boolean
           blind_structure_id: string | null
           buy_in: number
+          counts_for_league: boolean
           created_at: string
           created_by: string | null
           current_level: number

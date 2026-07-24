@@ -8,7 +8,7 @@ import PrizeDistributionEditor, {
   rowsToDist,
   type PctRow,
 } from '@/components/PrizeDistributionEditor'
-import type { Json } from '@/lib/database.types'
+import type { Database, Json } from '@/lib/database.types'
 
 type Structure = { id: string; name: string }
 
@@ -46,6 +46,10 @@ export default function CreateFecha() {
   const [rebuyUntil, setRebuyUntil] = useState<number | null>(6)
   const [structureId, setStructureId] = useState('')
   const [anteEnabled, setAnteEnabled] = useState(false)
+  // Standalone-fecha toggle (Phase-2 step 7). ON by default: the fecha counts
+  // toward the season standings. OFF → it runs fully (clock / eliminations /
+  // prizes) but adds 0 to every player's season total.
+  const [countsForLeague, setCountsForLeague] = useState(true)
 
   const [locating, setLocating] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -131,14 +135,19 @@ export default function CreateFecha() {
     }
     const rows = (data ?? []) as { id: string }[]
     const id = rows[0]?.id
-    // Persist the fecha's payout split. create_tournament seeds a turnout-scaled
-    // default; the admin's edited distribution is authoritative, so overwrite it.
-    // Non-blocking: a create succeeds regardless — the split can be fixed live.
-    if (id && isValidDist(distRows)) {
-      await supabase
-        .from('tournament')
-        .update({ payout_distribution: rowsToDist(distRows) as unknown as Json })
-        .eq('id', id)
+    // Persist the fecha's payout split + the standalone flag. create_tournament
+    // seeds a turnout-scaled default distribution; the admin's edited version is
+    // authoritative, so overwrite it. counts_for_league is always written (the
+    // column defaults true; a standalone fecha needs the explicit false).
+    // Non-blocking: a create succeeds regardless — both can be fixed live.
+    if (id) {
+      const update: Database['public']['Tables']['tournament']['Update'] = {
+        counts_for_league: countsForLeague,
+      }
+      if (isValidDist(distRows)) {
+        update.payout_distribution = rowsToDist(distRows) as unknown as Json
+      }
+      await supabase.from('tournament').update(update).eq('id', id)
     }
     navigate(id ? `/fechas/${id}` : '/fechas')
   }, [
@@ -155,6 +164,7 @@ export default function CreateFecha() {
     anteEnabled,
     structureId,
     distRows,
+    countsForLeague,
     navigate,
   ])
 
@@ -300,6 +310,21 @@ export default function CreateFecha() {
           aria-label="Usar ante"
           className={`switch${anteEnabled ? ' on' : ''}`}
           onClick={() => setAnteEnabled((v) => !v)}
+        />
+      </div>
+
+      <div className="toggle-row">
+        <div>
+          <div className="tl">Cuenta para la liga</div>
+          <div className="ts">Si lo apagás, la fecha se juega igual pero no suma a la tabla</div>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={countsForLeague}
+          aria-label="Cuenta para la liga"
+          className={`switch${countsForLeague ? ' on' : ''}`}
+          onClick={() => setCountsForLeague((v) => !v)}
         />
       </div>
 

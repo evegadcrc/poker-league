@@ -76,6 +76,22 @@ export function chopPreview(
   return { k, moneyEach, pointsEach, n }
 }
 
+/**
+ * Money each player of a DEAD-EVEN tie group receives: the summed prize amounts
+ * for the finishing positions the tie occupies, split equally (mirrors
+ * chopPreview's money rounding — round(Σ amounts / K)). Money is not persisted
+ * per entry — it is display-derived from tournament.prizes[position].amount —
+ * so the tied players (who share a chop_group) all render this same amount.
+ * Positions with no prize slice contribute 0 (a mid-field tie splits ₡0).
+ */
+export function tieSplitMoneyEach(prizes: readonly Prize[], positions: readonly number[]): number {
+  const k = positions.length
+  if (k === 0) return 0
+  const set = new Set(positions)
+  const money = prizes.filter((p) => set.has(p.position)).reduce((sum, p) => sum + (p.amount ?? 0), 0)
+  return Math.round(money / k)
+}
+
 // ---------------------------------------------------------------------------
 // Per-player action buttons in the console list.
 // ---------------------------------------------------------------------------
