@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useRole } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
+import { useLoadable } from '@/lib/useLoadable'
 import {
   aliveCount,
   attendanceCounts,
@@ -136,20 +136,7 @@ async function fetchState(): Promise<State> {
 export default function Fechas() {
   const { isAdmin } = useRole()
   const navigate = useNavigate()
-  const [state, setState] = useState<State>({ status: 'loading' })
-  const [attempt, setAttempt] = useState(0)
-  const reload = useCallback(() => setAttempt((n) => n + 1), [])
-
-  useEffect(() => {
-    let active = true
-    setState({ status: 'loading' })
-    void fetchState().then((next) => {
-      if (active) setState(next)
-    })
-    return () => {
-      active = false
-    }
-  }, [attempt])
+  const { state, reload } = useLoadable<State>({ status: 'loading' }, fetchState)
 
   const open = (card: FechaCard) => {
     // Live fechas jump straight into the En Vivo screen; scheduled / completed

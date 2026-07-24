@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth, useRole } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
+import { useLoadable } from '@/lib/useLoadable'
 import Avatar from '@/components/Avatar'
 import Sheet from '@/components/Sheet'
 import { classifyCheckInError, requestPosition, type Coords } from '@/lib/checkin'
@@ -118,8 +119,11 @@ export default function FechaDetail() {
   const { player } = useAuth()
   const { isAdmin } = useRole()
   const navigate = useNavigate()
-  const [state, setState] = useState<State>({ phase: 'loading' })
-  const [attempt, setAttempt] = useState(0)
+  const { state, setState, reload } = useLoadable<State>(
+    { phase: 'loading' },
+    () => fetchDetail(id),
+    [id],
+  )
   const [busy, setBusy] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
   const [checkIn, setCheckIn] = useState<CheckIn>({ kind: 'idle' })
@@ -127,19 +131,6 @@ export default function FechaDetail() {
   const [celebrate, setCelebrate] = useState<{ earlyBird: boolean; chips: number | null } | null>(
     null,
   )
-
-  const reload = useCallback(() => setAttempt((n) => n + 1), [])
-
-  useEffect(() => {
-    let active = true
-    setState({ phase: 'loading' })
-    void fetchDetail(id).then((next) => {
-      if (active) setState(next)
-    })
-    return () => {
-      active = false
-    }
-  }, [id, attempt])
 
   // Optimistically patch the signed-in player's entry, then refetch to reconcile.
   const patchMine = useCallback(

@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
+import { useLoadable } from '@/lib/useLoadable'
 import Legend from '@/components/Legend'
 import PlayerRow, { type LeaderboardRow } from '@/components/PlayerRow'
 
@@ -42,21 +42,7 @@ async function fetchState(): Promise<State> {
 
 export default function Leaderboard() {
   const { player } = useAuth()
-  const [state, setState] = useState<State>({ status: 'loading' })
-  // Bumped to re-trigger the load effect on "Reintentar".
-  const [attempt, setAttempt] = useState(0)
-  const reload = useCallback(() => setAttempt((n) => n + 1), [])
-
-  useEffect(() => {
-    let active = true
-    setState({ status: 'loading' })
-    void fetchState().then((next) => {
-      if (active) setState(next)
-    })
-    return () => {
-      active = false
-    }
-  }, [attempt])
+  const { state, reload } = useLoadable<State>({ status: 'loading' }, fetchState)
 
   const fechas = state.status === 'ready' ? state.fechas : 0
 

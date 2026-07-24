@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
+import { useLoadable } from '@/lib/useLoadable'
 import Avatar from '@/components/Avatar'
 import FormPills from '@/components/FormPills'
 
@@ -63,25 +64,15 @@ async function fetchProfile(playerId: string): Promise<State> {
  */
 export default function Profile() {
   const { player, updatePlayer, signOut } = useAuth()
-  const [state, setState] = useState<State>({ status: 'loading' })
-  const [attempt, setAttempt] = useState(0)
+  const { state, reload } = useLoadable<State>(
+    { status: 'loading' },
+    () => fetchProfile(player!.id),
+    [player],
+    player != null,
+  )
   const [upload, setUpload] = useState<Upload>({ status: 'idle' })
   const [avatarOverride, setAvatarOverride] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-
-  const reload = useCallback(() => setAttempt((n) => n + 1), [])
-
-  useEffect(() => {
-    if (!player) return
-    let active = true
-    setState({ status: 'loading' })
-    void fetchProfile(player.id).then((next) => {
-      if (active) setState(next)
-    })
-    return () => {
-      active = false
-    }
-  }, [player, attempt])
 
   const openPicker = useCallback(() => inputRef.current?.click(), [])
 
