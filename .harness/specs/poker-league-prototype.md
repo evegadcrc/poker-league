@@ -124,9 +124,58 @@ scheduled_at, buy_in, rebuy_amount, starting_stack, blind structure, clock state
 timer mode), Entry (per-player status, paid, rebuys, check-in time+geo, final_position, points),
 BlindStructure/BlindLevel, GalleryPhoto (Phase 2), LearningContent (Phase 2).
 
+## Phase 2 features (deferred — NOT in the current Phase 1 build)
+
+- Memorable-hands gallery; tournament-history full-bleed cover cards; learning section.
+- **Odds / hand calculator** (added 2026-07-23). A menu where a player inputs the cards in play and
+  gets the odds of their hand (win / tie equity). Requirements:
+  - **Friendly card entry is the point:** a visual card picker (52-card grid or rank×suit selector
+    with the four suit glyphs ♠♥♦♣ colored), clear slots for **Tu mano** (2 hole cards), **Mesa**
+    (flop 3 / turn / river), and **# de rivales** (or specific opponent hands). Tap to fill a slot,
+    tap again to clear; used/duplicate cards disabled; live "cartas restantes" count.
+  - **Output:** win % / tie % (equity), and outs / hand-improvement odds where meaningful.
+  - **Client-side compute** — Monte-Carlo simulation (or enumeration) in the browser; NO backend,
+    no Supabase. Fits alongside the learning section.
+  - Styled in the same Sports-Almanac + Neón system; Spanish copy.
+  - **Poker hand-rankings reference** on the calculator page (Royal Flush → High Card, best→worst),
+    rendered as **native themed UI** (card + suit glyphs, Spanish labels) — NOT a raster image, so it
+    stays crisp and theme-aware in all 3 themes. (User provided a PokerStars-style reference for layout.)
+  - *Detailed UX + the calc engine get their own `/dh:grill --ui-first` → `/dh:design` pass when
+    Phase 2 starts; this entry just captures scope + intent.*
+
+- **Sound & notifications** (added 2026-07-23). Audio cues + alerts on key moments:
+  - **Timer sounds:** a warning in the final seconds of a blind level and a chime on level change.
+  - **Action sounds/alerts:** tournament **start**, tournament **opened** (check-in available), and a
+    player **going out** (elimination — "X quedó fuera").
+  - **Notifications:** in-app toasts always; optional local/push notifications via the PWA so alerts
+    reach players whose screen is off (esp. "opened" and level changes).
+  - **User-controllable:** mute + volume toggle; sounds pre-loaded; respect device silent mode.
+  - **Triggers off state changes**, consistent with the state-based timer (§8) — fire on level
+    advance / open / elimination events, never per tick.
+  - *Gets its own design/build pass when Phase 2 starts; this entry captures scope + intent.*
+
+- **Standalone fecha** (added 2026-07-24). Create-Fecha gets a **"cuenta para la liga"** toggle,
+  **ON by default** (part of the league). When OFF, the fecha runs fully (clock/eliminations/prizes)
+  but its points do NOT add to the season leaderboard — a one-off game. Implies an
+  `tournament.counts_for_league bool default true` and the points/leaderboard aggregation excluding
+  standalone fechas.
+
+- **Phase 1.1 refinements (deferred here 2026-07-24).** Batch moved to Phase 2 by product owner; the
+  full plan is `.harness/plan/poker-league-refinements.md` (status: deferred-to-phase-2). Items:
+  - Fix `close_season` (atomic single-active + resilient Liga read) + **seasons list UI** (active card
+    on top + archived; tap → that season's Tabla). *(close_season is a KNOWN bug shipping in Phase 1.)*
+  - Leaderboard shows roster-at-0 for a fecha-less new season (not blank).
+  - **Per-fecha prize distribution** (variable # of paid places scaled to turnout, admin-editable in
+    Create-Fecha AND the live admin view; replaces the per-league template).
+  - **Simultaneous multi-bust** positions: bigger stack finishes higher (admin marks shortest-first);
+    dead-even all-ins split those positions (via chop).
+  - Copy/currency: live per-player badge `Vivo`→`En juego`; ₡ in Create-Fecha money inputs; admin
+    `fichas`→`fichas iniciales` (clarify it's buy-in, not a live stack).
+
 ## Out of scope (Phase 1 prototype)
 
-- Memorable-hands gallery, tournament-history full-bleed cover cards, learning section (Phase 2).
+- Everything in "Phase 2 features" above (gallery, history covers, learning, odds calculator, sound
+  & notifications, standalone fecha, and the Phase 1.1 refinements batch).
 - PWA offline, push notifications, i18n toggle/English (Phase 3).
 - Real Supabase wiring beyond what the prototype needs — the prototype uses mock/seed data;
   live backend is built in /dh:plan → /dh:build.

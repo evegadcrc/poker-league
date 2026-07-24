@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="es" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Poker Friends</title>
+    <meta name="description" content="Liga de póker — tabla, fechas, check-in y torneo en vivo." />
+    <!-- PWA: theme + iOS install affordances (manifest link + SW are injected by vite-plugin-pwa) -->
+    <meta name="theme-color" content="#7b1e22" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Poker Friends" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,700;12..96,800&family=Archivo:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      // Set the theme before first paint to avoid a flash of the wrong theme.
+      // Mirrors the ThemeProvider contract in src/lib/theme.tsx (same storage key).
+      (function () {
+        try {
+          var t = localStorage.getItem('pf-theme');
+          if (t !== 'light' && t !== 'dark' && t !== 'neon') {
+            t =
+              window.matchMedia &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light';
+          }
+          document.documentElement.setAttribute('data-theme', t);
+        } catch (e) {
+          /* no-op */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
