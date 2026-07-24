@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useRole } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import Avatar from '@/components/Avatar'
 import Sheet from '@/components/Sheet'
@@ -6,6 +7,12 @@ import CreateFecha from '@/routes/admin/CreateFecha'
 import LeagueSettings from '@/routes/admin/LeagueSettings'
 import type { Json } from '@/lib/database.types'
 import { colonesCompact, colonesFull, type EntryStatus } from '@/lib/fechas'
+import {
+  fechaSummaryText,
+  seasonSummaryText,
+  writeClipboard,
+  type SeasonStandingRow,
+} from '@/lib/summary'
 import {
   chopPreview,
   isInPlay,
@@ -187,6 +194,7 @@ async function fetchConsole(): Promise<State> {
 }
 
 function ConsolePanel() {
+  const { isAdmin } = useRole()
   const [state, setState] = useState<State>({ phase: 'loading' })
   const [now, setNow] = useState(() => Date.now())
   const [busy, setBusy] = useState(false)
@@ -194,6 +202,7 @@ function ConsolePanel() {
   const [noShowFor, setNoShowFor] = useState<ConsoleEntry | null>(null)
   const [blindsOpen, setBlindsOpen] = useState(false)
   const [completeOpen, setCompleteOpen] = useState(false)
+  const [whatsOpen, setWhatsOpen] = useState(false)
   // Fires next_level at most once per level when auto mode hits 0.
   const autoAdvancedLevel = useRef<number | null>(null)
 
@@ -403,6 +412,18 @@ function ConsolePanel() {
         ))}
       </div>
 
+      {isAdmin && (
+        <div className="btn-row">
+          <button
+            type="button"
+            className="btn ghost full"
+            onClick={() => setWhatsOpen(true)}
+          >
+            📲  Resumen
+          </button>
+        </div>
+      )}
+
       <div className="btn-row" style={{ gap: 10 }}>
         <button
           type="button"
@@ -518,7 +539,137 @@ function ConsolePanel() {
           )
         }}
       />
+
+      {/* WhatsApp summary (copy-paste, stage 1) */}
+      <WhatsSheet
+        open={whatsOpen}
+        onClose={() => setWhatsOpen(false)}
+        fechaName={tournament.name}
+        seasonId={tournament.season_id}
+        entries={entries}
+        pot={pot}
+      />
     </>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// WhatsApp summary sheet (slice 15). Two copy-paste shapes — the fecha result
+// (built from the console's entries/pot) and the season standings (fetched from
+// the `leaderboard` RPC on open). Copy uses navigator.clipboard with a legacy
+// fallback (see writeClipboard). Stage-1: copy-paste only, no native send.
+// ---------------------------------------------------------------------------
+type WhatsScope = 'fecha' | 'temporada'
+
+function WhatsSheet({
+  open,
+  onClose,
+  fechaName,
+  seasonId,
+  entries,
+  pot,
+}: {
+  open: boolean
+  onClose: () => void
+  fechaName: string
+  seasonId: string
+  entries: ConsoleEntry[]
+  pot: number
+}) {
+  const [scope, setScope] = useState<WhatsScope>('fecha')
+  const [seasonName, setSeasonName] = useState('Liga')
+  const [standings, setStandings] = useState<SeasonStandingRow[] | null>(null)
+  const [copied, setCopied] = useState<'ok' | 'fail' | null>(null)
+
+  // Reset transient UI + load the season standings each time the sheet opens.
+  useEffect(() => {
+    if (!open) return
+    setScope('fecha')
+    setCopied(null)
+    let active = true
+    void (async () => {
+      const [sRes, lbRes] = await Promise.all([
+        supabase.from('season').select('name').eq('id', seasonId).maybeSingle(),
+        supabase.rpc('leaderboard', { p_season_id: seasonId }),
+      ])
+      if (!active) return
+      setSeasonName((sRes.data as { name?: string } | null)?.name ?? 'Liga')
+      setStandings((lbRes.data as SeasonStandingRow[] | null) ?? [])
+    })()
+    return () => {
+      active = false
+    }
+  }, [open, seasonId])
+
+  const text =
+    scope === 'fecha'
+      ? fechaSummaryText({
+          fechaName,
+          pot,
+          entries: entries.map((e) => ({
+            name: e.player?.name ?? 'Jugador',
+            status: e.status,
+            final_position: e.final_position,
+            rebuys_count: e.rebuys_count,
+          })),
+        })
+      : seasonSummaryText({ seasonName, rows: standings ?? [] })
+
+  const doCopy = async () => {
+    const ok = await writeClipboard(text)
+    setCopied(ok ? 'ok' : 'fail')
+  }
+
+  return (
+    <Sheet open={open} onClose={onClose} title="Resumen para WhatsApp">
+      <p>Copiá y pegá en el grupo (etapa 1). El envío directo llega después.</p>
+
+      <div className="subnav" role="tablist" aria-label="Tipo de resumen" style={{ marginBottom: 10 }}>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={scope === 'fecha'}
+          className={scope === 'fecha' ? 'on' : ''}
+          onClick={() => {
+            setScope('fecha')
+            setCopied(null)
+          }}
+        >
+          Fecha
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={scope === 'temporada'}
+          className={scope === 'temporada' ? 'on' : ''}
+          onClick={() => {
+            setScope('temporada')
+            setCopied(null)
+          }}
+        >
+          Temporada
+        </button>
+      </div>
+
+      <div className="field">
+        <label htmlFor="wa-text">Mensaje</label>
+        <textarea id="wa-text" rows={9} readOnly value={text} data-testid="wa-text" />
+      </div>
+
+      {copied && (
+        <div className="fd-note" role="status" data-testid="wa-status">
+          {copied === 'ok'
+            ? '📋 Resumen copiado'
+            : 'No se pudo copiar — seleccioná el texto y copialo manualmente.'}
+        </div>
+      )}
+
+      <div className="btn-row">
+        <button type="button" className="btn blood full" onClick={() => void doCopy()}>
+          📋 Copiar resumen
+        </button>
+      </div>
+    </Sheet>
   )
 }
 

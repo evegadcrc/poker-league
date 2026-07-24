@@ -1,4 +1,5 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -7,9 +8,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 // and can fire captured postgres_changes handlers to simulate a live payload.
 const h = vi.hoisted(() => ({
   isAdmin: false,
+  player: null as { id: string; name: string; avatar_url: string | null } | null,
   single: {} as Record<string, { data: unknown; error: unknown }>,
   list: {} as Record<string, { data: unknown; error: unknown }>,
   rpcResult: { data: 0 as unknown, error: null as unknown },
+  rpcCalls: [] as Array<{ name: string; args: unknown }>,
   handlers: [] as Array<(payload: unknown) => void>,
   subscribeStatus: 'SUBSCRIBED' as string,
   removed: 0,
@@ -18,7 +21,7 @@ const h = vi.hoisted(() => ({
 
 vi.mock('@/lib/auth', () => ({
   useRole: () => ({ isAdmin: h.isAdmin }),
-  useAuth: () => ({ player: null }),
+  useAuth: () => ({ player: h.player }),
 }))
 
 vi.mock('@/lib/supabase', () => ({
@@ -35,7 +38,10 @@ vi.mock('@/lib/supabase', () => ({
       }
       return b
     },
-    rpc: () => Promise.resolve(h.rpcResult),
+    rpc: (name: string, args: unknown) => {
+      h.rpcCalls.push({ name, args })
+      return Promise.resolve(h.rpcResult)
+    },
     channel: () => {
       const chan: Record<string, unknown> = {
         on: (_type: string, _filter: unknown, cb: (payload: unknown) => void) => {
@@ -104,11 +110,11 @@ function setLevels() {
 function setEntries() {
   h.list.entry = {
     data: [
-      { id: 'a', status: 'playing', final_position: null, chips: 12000, player: { name: 'Ana', avatar_url: null } },
-      { id: 'c', status: 'playing', final_position: null, chips: 30000, player: { name: 'Cid', avatar_url: null } },
-      { id: 'd', status: 'eliminated', final_position: 7, chips: 0, player: { name: 'Dee', avatar_url: null } },
-      { id: 'b', status: 'eliminated', final_position: 8, chips: 0, player: { name: 'Ben', avatar_url: null } },
-      { id: 'e', status: 'confirmed', final_position: null, chips: null, player: { name: 'Eve', avatar_url: null } },
+      { id: 'a', player_id: 'p-ana', status: 'playing', final_position: null, chips: 12000, player: { name: 'Ana', avatar_url: null } },
+      { id: 'c', player_id: 'p-cid', status: 'playing', final_position: null, chips: 30000, player: { name: 'Cid', avatar_url: null } },
+      { id: 'd', player_id: 'p-dee', status: 'eliminated', final_position: 7, chips: 0, player: { name: 'Dee', avatar_url: null } },
+      { id: 'b', player_id: 'p-ben', status: 'eliminated', final_position: 8, chips: 0, player: { name: 'Ben', avatar_url: null } },
+      { id: 'e', player_id: 'p-eve', status: 'confirmed', final_position: null, chips: null, player: { name: 'Eve', avatar_url: null } },
     ],
     error: null,
   }
@@ -118,9 +124,11 @@ const renderLive = () => render(<Live />, { wrapper: MemoryRouter })
 
 beforeEach(() => {
   h.isAdmin = false
+  h.player = null
   h.single = {}
   h.list = {}
   h.rpcResult = { data: 140000, error: null }
+  h.rpcCalls = []
   h.handlers = []
   h.subscribeStatus = 'SUBSCRIBED'
   h.removed = 0
@@ -230,5 +238,54 @@ describe('Live — empty / admin', () => {
     h.isAdmin = true
     renderLive()
     expect(await screen.findByRole('link', { name: /consola de admin/i })).toBeInTheDocument()
+  })
+})
+
+describe('Live — self-report bust', () => {
+  it('shows "Estoy fuera — reportar" for a playing current player', async () => {
+    h.player = { id: 'p-ana', name: 'Ana', avatar_url: null } // Ana is playing
+    renderLive()
+    expect(await screen.findByRole('button', { name: /Estoy fuera — reportar/ })).toBeInTheDocument()
+  })
+
+  it('hides the button for a player who is already out', async () => {
+    h.player = { id: 'p-dee', name: 'Dee', avatar_url: null } // Dee is eliminated
+    renderLive()
+    await screen.findByTestId('vivo-actions')
+    expect(screen.queryByRole('button', { name: /Estoy fuera/ })).not.toBeInTheDocument()
+  })
+
+  it('hides the button for a player who is not in this fecha', async () => {
+    h.player = { id: 'p-nobody', name: 'Nadie', avatar_url: null }
+    renderLive()
+    await screen.findByTestId('vivo-actions')
+    expect(screen.queryByRole('button', { name: /Estoy fuera/ })).not.toBeInTheDocument()
+  })
+
+  it('does not show the button to admins (they get the console link instead)', async () => {
+    h.isAdmin = true
+    h.player = { id: 'p-ana', name: 'Ana', avatar_url: null }
+    renderLive()
+    await screen.findByRole('link', { name: /consola de admin/i })
+    expect(screen.queryByRole('button', { name: /Estoy fuera/ })).not.toBeInTheDocument()
+  })
+
+  it('confirming the sheet calls self_bust with the tournament id and shows the report note', async () => {
+    const user = userEvent.setup()
+    h.player = { id: 'p-ana', name: 'Ana', avatar_url: null }
+    renderLive()
+
+    await user.click(await screen.findByRole('button', { name: /Estoy fuera — reportar/ }))
+    // Confirm sheet is open; no RPC yet.
+    const dialog = screen.getByRole('dialog', { name: /Reportar que quedaste fuera/ })
+    expect(h.rpcCalls.find((c) => c.name === 'self_bust')).toBeFalsy()
+
+    await user.click(within(dialog).getByRole('button', { name: /Sí, quedé fuera/ }))
+
+    const call = h.rpcCalls.find((c) => c.name === 'self_bust')
+    expect(call).toBeTruthy()
+    expect(call!.args).toMatchObject({ p_tournament_id: 't-live' })
+    // Optimistic placement: 2 alive incl. Ana → 2º; friendly note replaces the button.
+    expect(await screen.findByTestId('bust-reported')).toHaveTextContent('2º lugar')
   })
 })

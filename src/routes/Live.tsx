@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { useRole } from '@/lib/auth'
+import { useAuth, useRole } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
-import { aliveCount, colonesCompact, playedCount } from '@/lib/fechas'
+import Sheet from '@/components/Sheet'
+import { aliveCount, colonesCompact, playedCount, type EntryStatus } from '@/lib/fechas'
 import {
   chipsInPlay,
   compactChips,
@@ -33,7 +34,7 @@ type LiveTournament = {
   prizes: unknown
 }
 
-type EntryRow = StandingEntry
+type EntryRow = StandingEntry & { player_id: string }
 
 type Ready = {
   phase: 'ready'
@@ -79,7 +80,7 @@ async function fetchLive(): Promise<State> {
       : Promise.resolve({ data: [] as BlindLevel[], error: null }),
     supabase
       .from('entry')
-      .select('id, status, final_position, chips, player:player_id(name, avatar_url)')
+      .select('id, player_id, status, final_position, chips, player:player_id(name, avatar_url)')
       .eq('tournament_id', tournament.id),
     supabase.rpc('fn_pot', { p_tournament_id: tournament.id }),
   ])
@@ -99,9 +100,14 @@ async function fetchLive(): Promise<State> {
 
 export default function Live() {
   const { isAdmin } = useRole()
+  const { player } = useAuth()
   const [state, setState] = useState<State>({ phase: 'loading' })
   const [now, setNow] = useState(() => Date.now())
   const [conn, setConn] = useState<Conn>('connecting')
+  const [confirmBust, setConfirmBust] = useState(false)
+  const [busting, setBusting] = useState(false)
+  // Non-null once the player has self-reported → shows the friendly "reportado" note.
+  const [reportedPosition, setReportedPosition] = useState<number | null>(null)
 
   // Refetch. Never blank a working screen: if a refetch errors while we already
   // hold ready data (e.g. mid-reconnect), keep the last-known values.
@@ -180,6 +186,34 @@ export default function Live() {
   }
 
   const { tournament, levels, entries, prizes, pot } = state
+  const myEntry = player ? (entries.find((e) => e.player_id === player.id) ?? null) : null
+  // A player can self-report only while they are still in play (checked_in / playing).
+  const canSelfBust = myEntry != null && isAlive(myEntry.status)
+
+  // Self-report bust: optimistically drop the player to their finishing spot
+  // (total−1: current alive count, including themselves), call self_bust, then
+  // reload so realtime/DB truth reconciles. The admin can reorder/undo later.
+  const doSelfBust = async () => {
+    if (!tid || !myEntry) return
+    setBusting(true)
+    const optimisticPos = entries.filter((e) => isAlive(e.status)).length
+    setState((prev) => {
+      if (prev.phase !== 'ready') return prev
+      const next = prev.entries.map((e) =>
+        e.id === myEntry.id
+          ? { ...e, status: 'eliminated' as EntryStatus, final_position: optimisticPos }
+          : e,
+      )
+      return { ...prev, entries: next }
+    })
+    setReportedPosition(optimisticPos)
+    const { error } = await supabase.rpc('self_bust', { p_tournament_id: tid })
+    setBusting(false)
+    setConfirmBust(false)
+    if (error) console.error('self_bust failed', error.message)
+    void load() // reconcile optimistic placement with server truth
+  }
+
   const level = findLevel(levels, tournament.current_level)
   const upcoming = nextLevel(levels, tournament.current_level)
   const remaining = remainingSeconds(
@@ -262,13 +296,53 @@ export default function Live() {
         )}
       </div>
 
-      {isAdmin && (
-        <div className="btn-row">
+      <div className="btn-row" data-testid="vivo-actions">
+        {isAdmin ? (
           <Link className="btn primary full" to="/admin">
             Abrir consola de admin
           </Link>
+        ) : reportedPosition != null ? (
+          <div className="fd-note" role="status" data-testid="bust-reported">
+            Reportado: {ordinal(reportedPosition)} lugar · el admin puede ajustar.
+          </div>
+        ) : canSelfBust ? (
+          <button
+            type="button"
+            className="btn blood full"
+            disabled={busting}
+            onClick={() => setConfirmBust(true)}
+          >
+            Estoy fuera — reportar
+          </button>
+        ) : null}
+      </div>
+
+      {/* Self-report bust confirm */}
+      <Sheet open={confirmBust} onClose={() => setConfirmBust(false)} title="Reportar que quedaste fuera">
+        <p>
+          ¿Confirmás que ya quedaste fuera? Se te asigna tu posición final y bajás a tu lugar en la
+          tabla. El admin puede reordenar o deshacerlo si hace falta.
+        </p>
+        <div className="btn-row">
+          <button
+            type="button"
+            className="btn ghost"
+            style={{ flex: 1 }}
+            onClick={() => setConfirmBust(false)}
+          >
+            Todavía sigo
+          </button>
+          <button
+            type="button"
+            className="btn blood"
+            style={{ flex: 1 }}
+            disabled={busting}
+            onClick={() => void doSelfBust()}
+          >
+            Sí, quedé fuera
+          </button>
         </div>
-      )}
+      </Sheet>
     </>
   )
 }

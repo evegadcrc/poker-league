@@ -13,6 +13,11 @@ const h = vi.hoisted(() => ({
   rpcCalls: [] as Array<{ name: string; args: unknown }>,
 }))
 
+vi.mock('@/lib/auth', () => ({
+  useRole: () => ({ isAdmin: true }),
+  useAuth: () => ({ player: null }),
+}))
+
 vi.mock('@/lib/supabase', () => ({
   supabase: {
     from: (table: string) => {

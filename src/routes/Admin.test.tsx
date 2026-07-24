@@ -2,14 +2,22 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { colonesFull } from '@/lib/fechas'
 
 // Hoisted mutable state so the vi.mock factory can close over it. Tests set the
 // live tournament / levels / entries / season, and inspect the captured RPC
 // calls to assert the console wired the right RPCs.
 const h = vi.hoisted(() => ({
+  isAdmin: true,
   single: {} as Record<string, { data: unknown; error: unknown }>,
   list: {} as Record<string, { data: unknown; error: unknown }>,
+  rpc: {} as Record<string, { data: unknown; error: unknown }>,
   rpcCalls: [] as Array<{ name: string; args: unknown }>,
+}))
+
+vi.mock('@/lib/auth', () => ({
+  useRole: () => ({ isAdmin: h.isAdmin }),
+  useAuth: () => ({ player: null }),
 }))
 
 vi.mock('@/lib/supabase', () => ({
@@ -27,6 +35,7 @@ vi.mock('@/lib/supabase', () => ({
     },
     rpc: (name: string, args: unknown) => {
       h.rpcCalls.push({ name, args })
+      if (h.rpc[name]) return Promise.resolve(h.rpc[name])
       if (name === 'fn_pot') return Promise.resolve({ data: 140_000, error: null })
       return Promise.resolve({ data: [], error: null })
     },
@@ -72,7 +81,7 @@ function setLive() {
     error: null,
   }
   h.single.season = {
-    data: { points_multiplier: 10, bonus_final_table: 5, bonus_top3: 8, bonus_attendance: 2 },
+    data: { name: 'Liga 2026', points_multiplier: 10, bonus_final_table: 5, bonus_top3: 8, bonus_attendance: 2 },
     error: null,
   }
   h.list.blind_level = { data: LEVELS, error: null }
@@ -91,8 +100,10 @@ function setLive() {
 const renderAdmin = () => render(<Admin />, { wrapper: MemoryRouter })
 
 beforeEach(() => {
+  h.isAdmin = true
   h.single = {}
   h.list = {}
+  h.rpc = {}
   h.rpcCalls = []
   setLive()
 })
@@ -184,5 +195,76 @@ describe('Admin console (slice 12)', () => {
     const call = h.rpcCalls.find((c) => c.name === 'complete_tournament')
     expect(call).toBeTruthy()
     expect((call!.args as Record<string, unknown>).p_chop_entry_ids).toBeUndefined()
+  })
+})
+
+describe('Admin — WhatsApp summary (slice 15)', () => {
+  it('does not show the Resumen action to a non-admin', async () => {
+    h.isAdmin = false
+    renderAdmin()
+    await screen.findAllByTestId('admin-prow')
+    expect(screen.queryByRole('button', { name: /Resumen/ })).not.toBeInTheDocument()
+  })
+
+  it('opens the sheet with the fecha-result summary formatted for the group', async () => {
+    const user = userEvent.setup()
+    renderAdmin()
+    await screen.findAllByTestId('admin-prow')
+
+    await user.click(screen.getByRole('button', { name: /Resumen/ }))
+    const dialog = await screen.findByRole('dialog', { name: 'Resumen para WhatsApp' })
+    const text = (await within(dialog).findByTestId('wa-text')) as HTMLTextAreaElement
+
+    // Header + podium (Dee 3rd is the only placed finisher) + pot + counts.
+    expect(text.value).toContain('🃏 POKER FRIENDS · Fecha 8')
+    expect(text.value).toContain('🥉 3º: Dee')
+    expect(text.value).toContain(`💰 Pozo: ${colonesFull(140_000)}`)
+    // 4 players took a seat (2 playing + 2 eliminated); Cid had 1 rebuy.
+    expect(text.value).toContain('👥 4 jugadores · 1 recompra')
+  })
+
+  it('switches to the season standings summary from the leaderboard RPC', async () => {
+    h.rpc.leaderboard = {
+      data: [
+        { player_name: 'Mauricio A.', total_points: 320 },
+        { player_name: 'Andrés R.', total_points: 295 },
+        { player_name: 'Edwin V.', total_points: 270 },
+      ],
+      error: null,
+    }
+    const user = userEvent.setup()
+    renderAdmin()
+    await screen.findAllByTestId('admin-prow')
+
+    await user.click(screen.getByRole('button', { name: /Resumen/ }))
+    const dialog = await screen.findByRole('dialog', { name: 'Resumen para WhatsApp' })
+    await user.click(within(dialog).getByRole('tab', { name: 'Temporada' }))
+
+    const text = (await within(dialog).findByTestId('wa-text')) as HTMLTextAreaElement
+    await waitFor(() =>
+      expect(text.value).toContain('🃏 POKER FRIENDS · Liga 2026 — Tabla general'),
+    )
+    expect(text.value).toContain('🥇 1º Mauricio A. — 320 pts')
+    expect(text.value).toContain('🥉 3º Edwin V. — 270 pts')
+  })
+
+  it('Copiar resumen invokes the clipboard with the summary text', async () => {
+    const user = userEvent.setup()
+    // Install our mock AFTER setup() so it wins over userEvent's own clipboard stub.
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    })
+    renderAdmin()
+    await screen.findAllByTestId('admin-prow')
+
+    await user.click(screen.getByRole('button', { name: /Resumen/ }))
+    const dialog = await screen.findByRole('dialog', { name: 'Resumen para WhatsApp' })
+    await user.click(within(dialog).getByRole('button', { name: /Copiar resumen/ }))
+
+    expect(writeText).toHaveBeenCalledTimes(1)
+    expect(writeText.mock.calls[0]![0]).toContain('🃏 POKER FRIENDS · Fecha 8')
+    expect(await within(dialog).findByTestId('wa-status')).toHaveTextContent('Resumen copiado')
   })
 })
