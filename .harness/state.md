@@ -19,6 +19,7 @@ auto-materialize from template, 3c3044c); chop-points-scale-up confirmed INTENDE
 Suite 201/1skip green from clean db reset. 13 migrations. UI APPROVED for ship.
 
 ## Next step
-HUMAN GATE: /dh:ship (push feat/poker-friends-phase1 + open PR). Then: go-live (hosted Supabase +
-SMTP + FE deploy + real players) OR Phase-2 grill (odds calculator, sound/notifications). Non-blocking
-followups in followups.md (create_player UI+dup-guard, non-chop early-completion stranding, etc.).
+SHIPPING Phase 1 now (user directive) via /dh:ship → personal GitHub **evegadcrc** (gh active acct
+switched from edvegacrc→evegadcrc). Refinements batch + standalone-fecha option DEFERRED to Phase 2
+(plan poker-league-refinements.md = deferred-to-phase-2; items in spec Phase-2 section). KNOWN bug
+shipping: close_season broken (Phase-2 fix). After ship: compact, then start Phase 2.

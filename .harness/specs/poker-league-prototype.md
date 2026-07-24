@@ -154,10 +154,28 @@ BlindStructure/BlindLevel, GalleryPhoto (Phase 2), LearningContent (Phase 2).
     advance / open / elimination events, never per tick.
   - *Gets its own design/build pass when Phase 2 starts; this entry captures scope + intent.*
 
+- **Standalone fecha** (added 2026-07-24). Create-Fecha gets a **"cuenta para la liga"** toggle,
+  **ON by default** (part of the league). When OFF, the fecha runs fully (clock/eliminations/prizes)
+  but its points do NOT add to the season leaderboard — a one-off game. Implies an
+  `tournament.counts_for_league bool default true` and the points/leaderboard aggregation excluding
+  standalone fechas.
+
+- **Phase 1.1 refinements (deferred here 2026-07-24).** Batch moved to Phase 2 by product owner; the
+  full plan is `.harness/plan/poker-league-refinements.md` (status: deferred-to-phase-2). Items:
+  - Fix `close_season` (atomic single-active + resilient Liga read) + **seasons list UI** (active card
+    on top + archived; tap → that season's Tabla). *(close_season is a KNOWN bug shipping in Phase 1.)*
+  - Leaderboard shows roster-at-0 for a fecha-less new season (not blank).
+  - **Per-fecha prize distribution** (variable # of paid places scaled to turnout, admin-editable in
+    Create-Fecha AND the live admin view; replaces the per-league template).
+  - **Simultaneous multi-bust** positions: bigger stack finishes higher (admin marks shortest-first);
+    dead-even all-ins split those positions (via chop).
+  - Copy/currency: live per-player badge `Vivo`→`En juego`; ₡ in Create-Fecha money inputs; admin
+    `fichas`→`fichas iniciales` (clarify it's buy-in, not a live stack).
+
 ## Out of scope (Phase 1 prototype)
 
 - Everything in "Phase 2 features" above (gallery, history covers, learning, odds calculator, sound
-  & notifications).
+  & notifications, standalone fecha, and the Phase 1.1 refinements batch).
 - PWA offline, push notifications, i18n toggle/English (Phase 3).
 - Real Supabase wiring beyond what the prototype needs — the prototype uses mock/seed data;
   live backend is built in /dh:plan → /dh:build.
