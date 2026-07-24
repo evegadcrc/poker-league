@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import Avatar from '@/components/Avatar'
 import Sheet from '@/components/Sheet'
+import CreateFecha from '@/routes/admin/CreateFecha'
+import LeagueSettings from '@/routes/admin/LeagueSettings'
 import type { Json } from '@/lib/database.types'
 import { colonesCompact, colonesFull, type EntryStatus } from '@/lib/fechas'
 import {
@@ -77,29 +78,12 @@ export default function Admin() {
         {tab === 'consola' && <ConsolePanel />}
       </div>
       <div className={`apanel${tab === 'crear' ? ' on' : ''}`}>
-        {tab === 'crear' && <StubPanel which="crear" />}
+        {tab === 'crear' && <CreateFecha />}
       </div>
       <div className={`apanel${tab === 'liga' ? ' on' : ''}`}>
-        {tab === 'liga' && <StubPanel which="liga" />}
+        {tab === 'liga' && <LeagueSettings />}
       </div>
     </>
-  )
-}
-
-function StubPanel({ which }: { which: 'crear' | 'liga' }) {
-  const copy =
-    which === 'crear'
-      ? 'Crear y editar fechas (sede, buy-in, blinds, ante) llega en la próxima entrega.'
-      : 'Ajustes de liga y cierre de temporada llegan en la próxima entrega.'
-  return (
-    <div className="fd-note">
-      {copy}
-      <div className="btn-row" style={{ padding: '12px 0 0' }}>
-        <Link className="btn ghost sm" to="/">
-          Volver a la Tabla
-        </Link>
-      </div>
-    </div>
   )
 }
 

@@ -1346,3 +1346,52 @@
   color: var(--ink-3);
   margin-top: 5px;
 }
+
+/* ante toggle (ported from the prototype .toggle-row / .switch) — CreateFecha */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  margin-top: 6px;
+}
+.toggle-row .tl {
+  font: 700 13px 'Archivo';
+}
+.toggle-row .ts {
+  font: 600 11px 'Archivo';
+  color: var(--ink-2);
+  margin-top: 2px;
+}
+.switch {
+  width: 48px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1.5px solid var(--ink);
+  background: var(--paper-3);
+  position: relative;
+  cursor: pointer;
+  flex: none;
+  padding: 0;
+}
+.switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--ink);
+  transition: transform 0.2s ease;
+}
+.switch.on {
+  background: var(--oxblood);
+  border-color: var(--oxblood);
+}
+.switch.on::after {
+  transform: translateX(20px);
+  background: var(--on-oxblood);
+}

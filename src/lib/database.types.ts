@@ -549,6 +549,31 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      close_season: {
+        Args: never
+        Returns: {
+          bonus_attendance: number
+          bonus_final_table: number
+          bonus_top3: number
+          cancel_bands: Json
+          created_at: string
+          early_bird_bonus_chips: number
+          final_table_size_override: number | null
+          id: string
+          name: string
+          no_show_penalty: number
+          payout_template: Json
+          points_multiplier: number
+          status: Database["public"]["Enums"]["season_status"]
+          year: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "season"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       complete_tournament: {
         Args: { p_chop_entry_ids?: string[]; p_tournament_id: string }
         Returns: {
@@ -610,6 +635,41 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "entry"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      create_tournament: {
+        Args: { p_payload: Json }
+        Returns: {
+          ante_enabled: boolean
+          blind_structure_id: string | null
+          buy_in: number
+          created_at: string
+          created_by: string | null
+          current_level: number
+          final_table_size: number | null
+          geofence_radius_m: number
+          id: string
+          is_paused: boolean
+          level_started_at: string | null
+          name: string
+          paused_remaining_seconds: number | null
+          prize_pool_override: number | null
+          prizes: Json | null
+          rebuy_amount: number | null
+          rebuy_until_level: number | null
+          scheduled_at: string
+          season_id: string
+          starting_stack: number | null
+          status: Database["public"]["Enums"]["tournament_status"]
+          timer_mode: Database["public"]["Enums"]["timer_mode"]
+          venue_lat: number | null
+          venue_lng: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "tournament"
           isOneToOne: false
           isSetofReturn: true
         }
@@ -831,6 +891,31 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "entry"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      update_season_config: {
+        Args: { p_payload: Json }
+        Returns: {
+          bonus_attendance: number
+          bonus_final_table: number
+          bonus_top3: number
+          cancel_bands: Json
+          created_at: string
+          early_bird_bonus_chips: number
+          final_table_size_override: number | null
+          id: string
+          name: string
+          no_show_penalty: number
+          payout_template: Json
+          points_multiplier: number
+          status: Database["public"]["Enums"]["season_status"]
+          year: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "season"
           isOneToOne: false
           isSetofReturn: true
         }
