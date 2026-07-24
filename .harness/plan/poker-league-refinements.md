@@ -1,7 +1,7 @@
 ---
 task: poker-league-refinements
 created: 2026-07-24
-status: deferred-to-phase-2   # per product owner 2026-07-24 — NOT built now; Phase 1 ships first
+status: superseded   # folded into .harness/plan/poker-league-phase2.md (Track A) on 2026-07-24
 builds_on: poker-league-prototype (Phase 1, shipped-ready on feat/poker-friends-phase1)
 ---
 
