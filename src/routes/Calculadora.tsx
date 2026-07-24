@@ -16,7 +16,7 @@ import HandRankings from '@/components/HandRankings'
 /** Fixed seed → identical inputs give identical numbers (no flicker on re-render). */
 const EQUITY_SEED = 0xc0ffee
 const DEBOUNCE_MS = 250
-const MAX_RIVALS = 8
+const MAX_RIVALS = 10
 
 /** Ranks high → low for the picker (14=A … 2). */
 const PICKER_RANKS = [14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2] as const

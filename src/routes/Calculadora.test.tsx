@@ -97,6 +97,27 @@ describe('Calculadora', () => {
     expect(await screen.findByTestId('calc-root')).toBeInTheDocument()
   })
 
+  it('lets the rivals stepper climb to 10 and clamps there', async () => {
+    const u = userEvent.setup()
+    render(<Calculadora />)
+
+    const mas = screen.getByRole('button', { name: 'Más rivales' })
+    const menos = screen.getByRole('button', { name: 'Menos rivales' })
+
+    // Default is 1 → "Menos" disabled at the floor.
+    expect(screen.getByTestId('rivals-n')).toHaveTextContent('1')
+    expect(menos).toBeDisabled()
+
+    // Click up to the ceiling (11 clicks would overshoot; 9 lands on 10).
+    for (let i = 0; i < 9; i++) await u.click(mas)
+    expect(screen.getByTestId('rivals-n')).toHaveTextContent('10')
+
+    // At the ceiling "Más" is disabled and a further click can't exceed 10.
+    expect(mas).toBeDisabled()
+    await u.click(mas)
+    expect(screen.getByTestId('rivals-n')).toHaveTextContent('10')
+  })
+
   it('shows the hand-rankings reference behind a "Ranking de manos" toggle', async () => {
     const u = userEvent.setup()
     render(<Calculadora />)
