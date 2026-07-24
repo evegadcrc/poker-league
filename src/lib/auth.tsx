@@ -33,6 +33,12 @@ type AuthContextValue = {
   bindError: BindError
   signInWithOtp: (email: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
+  /**
+   * Patch the bound player in context so a change made on one screen (e.g. the
+   * new avatar uploaded on Perfil) is reflected app-wide immediately, without a
+   * round-trip / reload. No-op when there is no bound player.
+   */
+  updatePlayer: (patch: Partial<PlayerRow>) => void
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
@@ -121,6 +127,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut()
   }, [])
 
+  const updatePlayer = useCallback((patch: Partial<PlayerRow>) => {
+    setPlayer((prev) => (prev ? { ...prev, ...patch } : prev))
+  }, [])
+
   const value = useMemo<AuthContextValue>(
     () => ({
       session,
@@ -130,8 +140,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       bindError,
       signInWithOtp,
       signOut,
+      updatePlayer,
     }),
-    [session, player, loading, bindError, signInWithOtp, signOut],
+    [session, player, loading, bindError, signInWithOtp, signOut, updatePlayer],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

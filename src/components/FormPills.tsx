@@ -19,22 +19,27 @@ const TIER_LABEL: Record<string, string> = {
 }
 
 type FormPillsProps = {
-  /** Last-5 tiers from the RPC, MOST-RECENT-FIRST (index 0 = latest game). */
+  /** Tiers from the RPC, MOST-RECENT-FIRST (index 0 = latest game). */
   form: string[]
+  /**
+   * `inline` (default) = the compact leaderboard row strip (`.form`).
+   * `full` = the profile "Racha completa" strip with larger pills (`.big-form`).
+   */
+  variant?: 'inline' | 'full'
 }
 
 /**
- * Renders up to 5 form pills. CRITICAL: the RPC returns tiers most-recent-first,
+ * Renders the form pills. CRITICAL: the RPC returns tiers most-recent-first,
  * but the prototype renders newest-on-the-RIGHT — so we reverse the array here
  * (see .harness/notes lessons, slice 5). A player with no completed games shows
  * no pills.
  */
-export default function FormPills({ form }: FormPillsProps) {
+export default function FormPills({ form, variant = 'inline' }: FormPillsProps) {
   if (form.length === 0) return null
   // Copy before reversing — never mutate the RPC array in place.
   const newestOnRight = [...form].reverse()
   return (
-    <div className="form" aria-label="Racha reciente">
+    <div className={variant === 'full' ? 'big-form' : 'form'} aria-label="Racha reciente">
       {newestOnRight.map((tier, i) => {
         const klass = TIER_CLASS[tier] ?? 'out'
         const label = TIER_LABEL[tier] ?? 'Fuera'

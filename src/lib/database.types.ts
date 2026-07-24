@@ -796,6 +796,20 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      player_profile: {
+        Args: { p_player_id: string; p_season_id?: string }
+        Returns: {
+          player_id: string
+          player_name: string
+          avatar_url: string | null
+          total_points: number
+          games_played: number
+          wins: number
+          podiums: number
+          points_history: Json
+          form: string[]
+        }[]
+      }
       recompute_final_table_size: {
         Args: { p_tournament_id: string }
         Returns: number

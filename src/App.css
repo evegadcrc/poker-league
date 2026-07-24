@@ -1395,3 +1395,126 @@
   transform: translateX(20px);
   background: var(--on-oxblood);
 }
+
+/* ---- profile (Perfil) — ported from the prototype's #screen-perfil ---- */
+.btn-row {
+  display: flex;
+  gap: 10px;
+  padding: 14px 18px;
+}
+.prof-hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px;
+}
+.prof-hero .avatar {
+  width: 54px;
+  height: 54px;
+  font-size: 20px;
+}
+/* the file-input wrapper anchors the camera badge to the avatar */
+.avatar-edit {
+  position: relative;
+  display: inline-grid;
+  border: 0;
+  padding: 0;
+  background: none;
+  cursor: pointer;
+  line-height: 0;
+}
+.avatar-edit:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+.avatar .cam {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--oxblood);
+  color: var(--on-oxblood);
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  border: 2px solid var(--paper);
+}
+.prof-hero h2 {
+  font-family: 'Bricolage Grotesque';
+  font-weight: 800;
+  font-size: 24px;
+  letter-spacing: -0.02em;
+  text-transform: var(--disp-transform);
+}
+.prof-hero .sub {
+  font: 600 12px 'Archivo';
+  color: var(--ink-2);
+  margin-top: 3px;
+}
+.prof-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-top: 1.5px solid var(--ink);
+  border-bottom: 1.5px solid var(--ink);
+}
+.prof-stats .c {
+  padding: 14px 8px;
+  text-align: center;
+  border-right: 1px solid var(--rule);
+}
+.prof-stats .c:last-child {
+  border-right: 0;
+}
+.prof-stats .c .v {
+  font-family: 'Bricolage Grotesque';
+  font-weight: 800;
+  font-size: 24px;
+  font-feature-settings: 'tnum' 1;
+}
+.prof-stats .c .v.blood {
+  color: var(--oxblood);
+}
+.prof-stats .c .k {
+  font: 700 8.5px 'Archivo';
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-top: 4px;
+}
+.spark {
+  padding: 16px 18px;
+}
+.spark svg {
+  width: 100%;
+  height: 88px;
+  display: block;
+}
+.spark.empty,
+.prof-message {
+  padding: 22px 18px;
+  text-align: center;
+}
+.prof-message p {
+  font: 600 13px/1.5 'Archivo';
+  color: var(--ink-2);
+}
+.big-form {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 4px 18px 18px;
+}
+.big-form .pill {
+  width: 30px;
+  height: 30px;
+  border-radius: 7px;
+  font-size: 13px;
+}
+/* profile loading skeleton block */
+.prof-sk {
+  height: 88px;
+  margin: 16px 18px;
+  border-radius: 12px;
+}
