@@ -639,6 +639,24 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      create_player: {
+        Args: { p_email: string; p_name: string }
+        Returns: {
+          auth_user_id: string | null
+          avatar_url: string | null
+          created_at: string
+          email: string
+          id: string
+          is_admin: boolean
+          name: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "player"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       create_tournament: {
         Args: { p_payload: Json }
         Returns: {
@@ -799,15 +817,15 @@ export type Database = {
       player_profile: {
         Args: { p_player_id: string; p_season_id?: string }
         Returns: {
+          avatar_url: string
+          form: string[]
+          games_played: number
           player_id: string
           player_name: string
-          avatar_url: string | null
-          total_points: number
-          games_played: number
-          wins: number
           podiums: number
           points_history: Json
-          form: string[]
+          total_points: number
+          wins: number
         }[]
       }
       recompute_final_table_size: {
@@ -905,6 +923,24 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "entry"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      update_own_profile: {
+        Args: { p_avatar_url?: string; p_name?: string }
+        Returns: {
+          auth_user_id: string | null
+          avatar_url: string | null
+          created_at: string
+          email: string
+          id: string
+          is_admin: boolean
+          name: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "player"
           isOneToOne: false
           isSetofReturn: true
         }

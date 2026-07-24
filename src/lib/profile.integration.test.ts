@@ -210,12 +210,10 @@ describe.skipIf(!canRun)('player_profile + avatar upload (slice 14, local integr
     const res = await fetch(publicUrl)
     expect(res.ok).toBe(true)
 
-    // Persist on the player row (RLS: player may update their own row).
+    // Persist on the player row via the update_own_profile RPC (direct player
+    // table writes were removed in 0012 — the RPC is the only self-write path).
     const stored = `${publicUrl}?t=${Date.now()}`
-    const { error: updErr } = await member
-      .from('player')
-      .update({ avatar_url: stored })
-      .eq('id', memberPlayerId)
+    const { error: updErr } = await member.rpc('update_own_profile', { p_avatar_url: stored })
     expect(updErr).toBeNull()
 
     const { data: p, error: readErr } = await admin

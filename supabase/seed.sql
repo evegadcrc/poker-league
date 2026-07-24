@@ -121,8 +121,8 @@ insert into entry (
   ('d3000000-0000-4000-8000-000000000002', 'b1000000-0000-4000-8000-000000000004', 'playing',    now() - interval '2 days', now() - interval '70 minutes', true,  false, 18000, true, 0, null, false, null),
   ('d3000000-0000-4000-8000-000000000002', 'b1000000-0000-4000-8000-000000000005', 'playing',    now() - interval '2 days', now() - interval '65 minutes', true,  false, 22000, true, 1, null, false, null),
   ('d3000000-0000-4000-8000-000000000002', 'b1000000-0000-4000-8000-000000000006', 'playing',    now() - interval '2 days', now() - interval '60 minutes', true,  false, 15000, true, 0, null, false, null),
-  ('d3000000-0000-4000-8000-000000000002', 'b1000000-0000-4000-8000-000000000007', 'eliminated', now() - interval '2 days', now() - interval '85 minutes', true,  false, 0,     true, 1, 8,    false, now() - interval '20 minutes'),
-  ('d3000000-0000-4000-8000-000000000002', 'b1000000-0000-4000-8000-000000000008', 'eliminated', now() - interval '2 days', now() - interval '55 minutes', true,  false, 0,     true, 0, 7,    false, now() - interval '5 minutes'),
+  ('d3000000-0000-4000-8000-000000000002', 'b1000000-0000-4000-8000-000000000007', 'eliminated', now() - interval '2 days', now() - interval '85 minutes', true,  false, 0,     true, 1, 9,    false, now() - interval '20 minutes'),
+  ('d3000000-0000-4000-8000-000000000002', 'b1000000-0000-4000-8000-000000000008', 'eliminated', now() - interval '2 days', now() - interval '55 minutes', true,  false, 0,     true, 0, 8,    false, now() - interval '5 minutes'),
   ('d3000000-0000-4000-8000-000000000002', 'b1000000-0000-4000-8000-000000000009', 'checked_in', now() - interval '2 days', now() - interval '40 minutes', true,  false, 10000, false, 0, null, false, null),
   ('d3000000-0000-4000-8000-000000000002', 'b1000000-0000-4000-8000-00000000000a', 'confirmed',  now() - interval '2 days', null, null, false, null, false, 0, null, false, null),
   ('d3000000-0000-4000-8000-000000000002', 'b1000000-0000-4000-8000-00000000000b', 'declined',   now() - interval '2 days', null, null, false, null, false, 0, null, false, null);

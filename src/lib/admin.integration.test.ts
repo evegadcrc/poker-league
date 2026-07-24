@@ -351,6 +351,39 @@ describe.skipIf(!canRun)('admin console RPCs (slice 12, local integration)', () 
   })
 
   // ------------------------------------------------------------------------
+  // chop of K while >K are still in play → the remainder is NOT stranded
+  // (review iter 1 fix): they finish at positions K+1.. (chip leader first),
+  // status eliminated, with real points — never final_position NULL / 0 pts.
+  it('complete_tournament chop of 2 with 3 others in play → remainder ranked K+1.. (not stranded)', async () => {
+    const t = await mkTournament({ finalTableSize: 5 })
+    const chopA = await mkEntry(t, await mkPlayer(), { chips: 40_000 })
+    const chopB = await mkEntry(t, await mkPlayer(), { chips: 35_000 })
+    const r1 = await mkEntry(t, await mkPlayer(), { chips: 30_000 })
+    const r2 = await mkEntry(t, await mkPlayer(), { chips: 20_000 })
+    const r3 = await mkEntry(t, await mkPlayer(), { chips: 10_000 })
+
+    const { error } = await admin.rpc('complete_tournament', {
+      p_tournament_id: t,
+      p_chop_entry_ids: [chopA, chopB],
+    })
+    expect(error).toBeNull()
+    expect((await readTournament(t)).status).toBe('completed')
+
+    // Choppers share the top as co-champions (positions 1..K).
+    expect((await readEntry(chopA)).chopped).toBe(true)
+    expect((await readEntry(chopB)).chopped).toBe(true)
+
+    // The 3 still-in-play non-choppers rank below, chip leader first (K+1..).
+    const [e1, e2, e3] = [await readEntry(r1), await readEntry(r2), await readEntry(r3)]
+    expect([e1.final_position, e2.final_position, e3.final_position]).toEqual([3, 4, 5])
+    for (const e of [e1, e2, e3]) {
+      expect(e.status).toBe('eliminated')
+      expect(e.final_position).not.toBeNull()
+      expect(e.points_earned).not.toBe(0) // proves they were scored, not stranded at 0
+    }
+  })
+
+  // ------------------------------------------------------------------------
   // clock — pause / resume / ±1 min / next / prev / edit_blinds.
   it('clock pause captures remaining and freezes; resume unfreezes', async () => {
     // level started 100s ago on a 900s level → ~800s remaining.
