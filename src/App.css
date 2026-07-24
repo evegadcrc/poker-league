@@ -739,6 +739,91 @@
   margin-top: 2px;
 }
 
+/* ---- History cover cards (completed fechas) — full-bleed cover + scrim ---- */
+.cover-media {
+  position: relative;
+  min-height: 148px;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  display: flex;
+  align-items: flex-end;
+}
+/* No cover_url → a themed gradient (adapts across all 3 themes via tokens);
+   never a broken image. */
+.cover-media.fallback {
+  background-image: linear-gradient(
+    135deg,
+    var(--oxblood) 0%,
+    color-mix(in srgb, var(--oxblood) 40%, var(--ink)) 62%,
+    var(--ink) 100%
+  );
+}
+[data-theme='neon'] .cover-media.fallback {
+  background-image: linear-gradient(135deg, var(--oxblood) 0%, var(--oxblood-2) 100%);
+}
+/* Scrim so overlaid title/badge stay legible on any photo. */
+.cover-scrim {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.05) 0%, rgba(0, 0, 0, 0.62) 100%);
+}
+.cover-head {
+  position: relative;
+  z-index: 1;
+  padding: 14px 15px;
+  color: #f5f1e6;
+}
+.cover-head .tc-title {
+  color: #f5f1e6;
+  margin-top: 6px;
+}
+.cover-head .tc-sub {
+  color: rgba(245, 241, 230, 0.82);
+}
+.cover-head .badge.done {
+  background: rgba(0, 0, 0, 0.35);
+  color: #f5f1e6;
+  border-color: rgba(245, 241, 230, 0.6);
+}
+
+/* ---- Admin: fecha cover preview (FechaDetail CoverControl) ---- */
+.cover-admin {
+  padding-top: 4px;
+}
+.cover-preview {
+  margin: 6px 18px 2px;
+  height: 132px;
+  border-radius: 13px;
+  border: 1.5px solid var(--ink);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* ---- Per-fecha photo gallery grid (lazy-loaded) ---- */
+.gallery {
+  padding-bottom: 6px;
+}
+.gal-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  padding: 6px 18px 2px;
+}
+.gal-photo {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1.5px solid var(--ink);
+  background: var(--paper-3);
+  display: block;
+}
+[data-theme='neon'] .gal-photo {
+  border-color: rgba(255, 46, 136, 0.35);
+}
+
 /* ---- Fecha detail — back link + geo hint ---- */
 .back {
   display: flex;

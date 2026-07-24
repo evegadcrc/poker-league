@@ -104,6 +104,45 @@ export type Database = {
           },
         ]
       }
+      gallery_photo: {
+        Row: {
+          created_at: string
+          id: string
+          storage_path: string
+          tournament_id: string
+          uploader_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          storage_path: string
+          tournament_id: string
+          uploader_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          storage_path?: string
+          tournament_id?: string
+          uploader_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gallery_photo_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournament"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gallery_photo_uploader_id_fkey"
+            columns: ["uploader_id"]
+            isOneToOne: false
+            referencedRelation: "player"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       entry: {
         Row: {
           cancelled_at: string | null
@@ -272,6 +311,7 @@ export type Database = {
           blind_structure_id: string | null
           buy_in: number
           counts_for_league: boolean
+          cover_url: string | null
           created_at: string
           created_by: string | null
           current_level: number
@@ -300,6 +340,7 @@ export type Database = {
           blind_structure_id?: string | null
           buy_in?: number
           counts_for_league?: boolean
+          cover_url?: string | null
           created_at?: string
           created_by?: string | null
           current_level?: number
@@ -328,6 +369,7 @@ export type Database = {
           blind_structure_id?: string | null
           buy_in?: number
           counts_for_league?: boolean
+          cover_url?: string | null
           created_at?: string
           created_by?: string | null
           current_level?: number
@@ -527,6 +569,7 @@ export type Database = {
           blind_structure_id: string | null
           buy_in: number
           counts_for_league: boolean
+          cover_url: string | null
           created_at: string
           created_by: string | null
           current_level: number
@@ -589,6 +632,7 @@ export type Database = {
           blind_structure_id: string | null
           buy_in: number
           counts_for_league: boolean
+          cover_url: string | null
           created_at: string
           created_by: string | null
           current_level: number
@@ -674,6 +718,7 @@ export type Database = {
           blind_structure_id: string | null
           buy_in: number
           counts_for_league: boolean
+          cover_url: string | null
           created_at: string
           created_by: string | null
           current_level: number
@@ -828,6 +873,7 @@ export type Database = {
           blind_structure_id: string | null
           buy_in: number
           counts_for_league: boolean
+          cover_url: string | null
           created_at: string
           created_by: string | null
           current_level: number

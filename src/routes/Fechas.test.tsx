@@ -192,6 +192,60 @@ describe('Fechas list', () => {
     expect(card.getByText('₡100K')).toBeInTheDocument()
   })
 
+  it('renders a completed fecha as a full-bleed cover card using cover_url', async () => {
+    h.list = {
+      tournament: {
+        data: [
+          {
+            id: 't-cover',
+            name: 'Fecha Portada',
+            scheduled_at: new Date(Date.now() - 3 * 86_400_000).toISOString(),
+            status: 'completed',
+            buy_in: 20000,
+            rebuy_amount: null,
+            prize_pool_override: null,
+            cover_url: 'https://cdn.test/gallery/cover.jpg',
+          },
+        ],
+        error: null,
+      },
+      entry: { data: [], error: null },
+    }
+    renderFechas()
+    await screen.findByText('Fecha Portada')
+    const media = screen.getByTestId('cover-media')
+    expect(media).toHaveAttribute('data-cover', 'image')
+    expect(media.getAttribute('style') ?? '').toContain('https://cdn.test/gallery/cover.jpg')
+  })
+
+  it('falls back to a themed gradient when a completed fecha has no cover_url', async () => {
+    h.list = {
+      tournament: {
+        data: [
+          {
+            id: 't-nocover',
+            name: 'Fecha Sin Portada',
+            scheduled_at: new Date(Date.now() - 3 * 86_400_000).toISOString(),
+            status: 'completed',
+            buy_in: 20000,
+            rebuy_amount: null,
+            prize_pool_override: null,
+            cover_url: null,
+          },
+        ],
+        error: null,
+      },
+      entry: { data: [], error: null },
+    }
+    renderFechas()
+    await screen.findByText('Fecha Sin Portada')
+    const media = screen.getByTestId('cover-media')
+    expect(media).toHaveAttribute('data-cover', 'fallback')
+    expect(media.className).toContain('fallback')
+    // No inline background-image → the CSS gradient (.cover-media.fallback) applies.
+    expect(media.getAttribute('style')).toBeNull()
+  })
+
   it('shows the admin "+ Nueva fecha" affordance only for admins', async () => {
     const { unmount } = renderFechas()
     await screen.findByText('Fecha 8')

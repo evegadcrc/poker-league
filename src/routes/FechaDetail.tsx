@@ -1,9 +1,10 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth, useRole } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { useLoadable } from '@/lib/useLoadable'
 import Avatar from '@/components/Avatar'
+import Galeria, { galleryUrl } from '@/components/Galeria'
 import Sheet from '@/components/Sheet'
 import { classifyCheckInError, requestPosition, type Coords } from '@/lib/checkin'
 import {
@@ -27,6 +28,7 @@ type TournamentRow = {
   scheduled_at: string
   status: TournamentStatus
   geofence_radius_m: number
+  cover_url: string | null
 }
 
 type EntryRow = {
@@ -82,7 +84,7 @@ const OVERLINE: Record<TournamentStatus, string> = {
 async function fetchDetail(id: string): Promise<State> {
   const { data: t, error: tErr } = await supabase
     .from('tournament')
-    .select('id, season_id, name, scheduled_at, status, geofence_radius_m')
+    .select('id, season_id, name, scheduled_at, status, geofence_radius_m, cover_url')
     .eq('id', id)
     .maybeSingle()
 
@@ -343,6 +345,17 @@ export default function FechaDetail() {
         ))}
       </div>
 
+      {isAdmin && (
+        <CoverControl
+          tournamentId={tournament.id}
+          uploaderId={player?.id ?? null}
+          coverUrl={tournament.cover_url}
+          onUpdated={() => reload({ silent: true })}
+        />
+      )}
+
+      <Galeria tournamentId={tournament.id} />
+
       <CancelSheet
         open={cancelOpen}
         onClose={() => setCancelOpen(false)}
@@ -541,6 +554,100 @@ function CheckInCelebration({
         </button>
       </div>
     </Sheet>
+  )
+}
+
+// Admin-only: set / change this fecha's history cover. Uploads to the public
+// `gallery` bucket (under the admin's own player-id folder so the storage RLS
+// matches) then writes tournament.cover_url via the existing "admin update
+// tournament" policy (0001). The history list (Fechas) renders it full-bleed.
+function CoverControl({
+  tournamentId,
+  uploaderId,
+  coverUrl,
+  onUpdated,
+}: {
+  tournamentId: string
+  uploaderId: string | null
+  coverUrl: string | null
+  onUpdated: () => void
+}) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const onFile = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0]
+      e.target.value = ''
+      if (!file || !uploaderId) return
+      setBusy(true)
+      setError(null)
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+      const path = `${uploaderId}/covers/${tournamentId}-${crypto.randomUUID()}.${ext}`
+      const { error: upErr } = await supabase.storage
+        .from('gallery')
+        .upload(path, file, { contentType: file.type || undefined })
+      if (upErr) {
+        setBusy(false)
+        setError('No se pudo subir la portada. Probá de nuevo.')
+        return
+      }
+      const publicUrl = galleryUrl(path)
+      const { error: updErr } = await supabase
+        .from('tournament')
+        .update({ cover_url: publicUrl })
+        .eq('id', tournamentId)
+      setBusy(false)
+      if (updErr) {
+        setError('La portada se subió, pero no se pudo guardar.')
+        return
+      }
+      onUpdated()
+    },
+    [tournamentId, uploaderId, onUpdated],
+  )
+
+  return (
+    <section className="cover-admin" data-testid="cover-admin">
+      <div className="section-head" style={{ paddingBottom: 2 }}>
+        <div>
+          <span className="overline">Portada</span>
+        </div>
+        <button
+          type="button"
+          className="btn ghost sm"
+          disabled={busy}
+          onClick={() => inputRef.current?.click()}
+          data-testid="cover-upload"
+        >
+          🖼️ {busy ? 'Subiendo…' : coverUrl ? 'Cambiar portada' : 'Subir portada'}
+        </button>
+      </div>
+      {coverUrl && (
+        <div
+          className="cover-preview"
+          style={{ backgroundImage: `url(${coverUrl})` }}
+          data-testid="cover-preview"
+          role="img"
+          aria-label="Portada de la fecha"
+        />
+      )}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        aria-label="Subir portada"
+        onChange={onFile}
+        disabled={busy}
+        style={{ position: 'absolute', width: 1, height: 1, opacity: 0, overflow: 'hidden' }}
+      />
+      {error && (
+        <div className="fd-note" role="alert">
+          <p>{error}</p>
+        </div>
+      )}
+    </section>
   )
 }
 
