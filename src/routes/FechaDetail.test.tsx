@@ -65,9 +65,24 @@ function setTournament(status = 'scheduled', scheduledAt = NINE_HOURS) {
       scheduled_at: scheduledAt,
       status,
       geofence_radius_m: 100,
+      buy_in: 20000,
+      rebuy_amount: 20000,
+      starting_stack: 10000,
     },
     error: null,
   }
+}
+
+// Season config used by the "cómo se juega" info card — mirrors the seed values
+// (mult 10, mesa final 5, top3 8, asistencia 2, no-show −15, early bird 2000).
+const SEASON_CONFIG = {
+  cancel_bands: DEFAULT_BANDS,
+  points_multiplier: 10,
+  bonus_final_table: 5,
+  bonus_top3: 8,
+  bonus_attendance: 2,
+  no_show_penalty: -15,
+  early_bird_bonus_chips: 2000,
 }
 
 function setEntries(myStatus: string) {
@@ -119,12 +134,34 @@ beforeEach(() => {
   h.player = { id: 'p-me', name: 'Edwin V.', avatar_url: null }
   h.rpcCalls = []
   h.rpcResult = { data: null, error: null }
-  h.single = { season: { data: { cancel_bands: DEFAULT_BANDS }, error: null } }
+  h.single = { season: { data: SEASON_CONFIG, error: null } }
   setTournament('scheduled')
   setEntries('confirmed')
 })
 
 describe('FechaDetail', () => {
+  it('info card shows the §5 formula, a worked example, and bonus/entry numbers', async () => {
+    const user = userEvent.setup()
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    // Collapsible → expand it, then assert against the info section only.
+    await user.click(screen.getByRole('button', { name: /Cómo se juega/i }))
+    const info = screen.getByTestId('fd-info-section')
+
+    // Formula in words + worked example total (10 players, 3rd = 70+8+5+2 = 85).
+    expect(info.textContent).toMatch(/\(N − P\) × multiplicador/)
+    expect(info.textContent).toContain('85 pts')
+    // Bonus values (mesa final 5, top3 8, asistencia 2) + no-show penalty (−15).
+    expect(info.textContent).toContain('+5')
+    expect(info.textContent).toContain('+8')
+    expect(info.textContent).toContain('−15')
+    // Entry + chips: buy-in ₡20.000, stack 10.000 fichas, early bird 2.000 fichas.
+    expect(info.textContent).toContain('₡20.000')
+    expect(info.textContent).toContain('10.000 fichas')
+    expect(info.textContent).toContain('2.000 fichas')
+  })
+
   it('renders the header, attendance chips grouped by status with counts', async () => {
     renderDetail()
     await screen.findByRole('heading', { name: 'Fecha 9' })

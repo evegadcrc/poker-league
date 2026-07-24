@@ -18,11 +18,15 @@ import {
   formatWhen,
   hoursUntil,
   parseBands,
+  parseLeagueConfig,
   pickBand,
+  pointsExample,
   statusPill,
   statusRank,
+  toDatetimeLocal,
   type Band,
   type EntryStatus,
+  type LeagueConfig,
   type TournamentStatus,
 } from '@/lib/fechas'
 
@@ -36,6 +40,9 @@ type TournamentRow = {
   cover_url: string | null
   counts_for_league: boolean
   prizes: unknown
+  buy_in: number
+  rebuy_amount: number | null
+  starting_stack: number | null
 }
 
 type EntryRow = {
@@ -77,6 +84,8 @@ type Ready = {
   tournament: TournamentRow
   entries: EntryRow[]
   bands: Band[]
+  /** Season scoring config for the "cómo se juega" info card. */
+  config: LeagueConfig
   /** Final materialized prizes (set_prizes → tournament.prizes); [] pre-final. */
   prizes: Prize[]
 }
@@ -96,7 +105,7 @@ async function fetchDetail(id: string): Promise<State> {
   const { data: t, error: tErr } = await supabase
     .from('tournament')
     .select(
-      'id, season_id, name, scheduled_at, status, geofence_radius_m, cover_url, counts_for_league, prizes',
+      'id, season_id, name, scheduled_at, status, geofence_radius_m, cover_url, counts_for_league, prizes, buy_in, rebuy_amount, starting_stack',
     )
     .eq('id', id)
     .maybeSingle()
@@ -112,7 +121,13 @@ async function fetchDetail(id: string): Promise<State> {
         'id, player_id, status, rsvp_at, cancelled_at, checked_in_at, early_bird, chips, points_earned, final_position, chopped, chop_group, rebuys_count, player:player_id(name, avatar_url)',
       )
       .eq('tournament_id', id),
-    supabase.from('season').select('cancel_bands').eq('id', tournament.season_id).maybeSingle(),
+    supabase
+      .from('season')
+      .select(
+        'cancel_bands, points_multiplier, bonus_final_table, bonus_top3, bonus_attendance, no_show_penalty, early_bird_bonus_chips',
+      )
+      .eq('id', tournament.season_id)
+      .maybeSingle(),
   ])
 
   if (eErr || sErr) return { phase: 'error' }
@@ -121,11 +136,14 @@ async function fetchDetail(id: string): Promise<State> {
     .slice()
     .sort((a, b) => statusRank(a.status) - statusRank(b.status))
 
+  const seasonRow = (season ?? null) as { cancel_bands?: unknown } | null
+
   return {
     phase: 'ready',
     tournament,
     entries: rows,
-    bands: parseBands((season as { cancel_bands: unknown } | null)?.cancel_bands),
+    bands: parseBands(seasonRow?.cancel_bands),
+    config: parseLeagueConfig(seasonRow),
     prizes: parsePrizes(tournament.prizes),
   }
 }
@@ -253,6 +271,20 @@ export default function FechaDetail() {
     [reload],
   )
 
+  // Admin edited the scheduled start (0017 admin-only tournament UPDATE): patch
+  // the displayed date/time immediately, then reconcile against server truth.
+  const patchSchedule = useCallback(
+    (iso: string) => {
+      setState((prev) =>
+        prev.phase === 'ready'
+          ? { ...prev, tournament: { ...prev.tournament, scheduled_at: iso } }
+          : prev,
+      )
+      reload({ silent: true })
+    },
+    [setState, reload],
+  )
+
   if (state.phase === 'loading') {
     return (
       <>
@@ -283,7 +315,7 @@ export default function FechaDetail() {
     )
   }
 
-  const { tournament, entries, bands, prizes } = state
+  const { tournament, entries, bands, config, prizes } = state
   const counts = attendanceCounts(entries)
   const myEntry = player ? entries.find((e) => e.player_id === player.id) ?? null : null
   const scheduled = tournament.status === 'scheduled'
@@ -309,6 +341,13 @@ export default function FechaDetail() {
       <div className="tc-sub" style={{ padding: '0 18px 4px' }}>
         {formatWhen(tournament.scheduled_at)}
       </div>
+      {scheduled && isAdmin && (
+        <ScheduleEditor
+          tournamentId={tournament.id}
+          scheduledAt={tournament.scheduled_at}
+          onSaved={patchSchedule}
+        />
+      )}
       {tournament.counts_for_league === false && (
         <div className="fd-standalone" data-testid="fd-standalone">
           Amistoso · no suma a la liga
@@ -376,6 +415,8 @@ export default function FechaDetail() {
         <PrizeList prizes={finalPrizes} formatAmount={(n) => `₡${formatMiles(n)}`} />
       )}
 
+      <FechaInfo tournament={tournament} config={config} />
+
       {isAdmin && (
         <CoverControl
           tournamentId={tournament.id}
@@ -406,6 +447,184 @@ export default function FechaDetail() {
       </button>
     )
   }
+}
+
+// Admin-only inline editor for a SCHEDULED fecha's start date/time. Writes
+// tournament.scheduled_at via the admin-only UPDATE policy (mig 0017) — the same
+// direct-.update() path CoverControl uses. datetime-local values are local time;
+// new Date(value).toISOString() converts back to the stored timestamptz.
+function ScheduleEditor({
+  tournamentId,
+  scheduledAt,
+  onSaved,
+}: {
+  tournamentId: string
+  scheduledAt: string
+  onSaved: (iso: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(() => toDatetimeLocal(scheduledAt))
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const open = useCallback(() => {
+    setValue(toDatetimeLocal(scheduledAt))
+    setError(null)
+    setEditing(true)
+  }, [scheduledAt])
+
+  const save = useCallback(async () => {
+    const d = new Date(value)
+    if (Number.isNaN(d.getTime())) {
+      setError('Fecha inválida.')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    const iso = d.toISOString()
+    const { error: err } = await supabase
+      .from('tournament')
+      .update({ scheduled_at: iso })
+      .eq('id', tournamentId)
+    setBusy(false)
+    if (err) {
+      setError('No se pudo guardar la fecha y hora.')
+      return
+    }
+    setEditing(false)
+    onSaved(iso)
+  }, [value, tournamentId, onSaved])
+
+  if (!editing) {
+    return (
+      <div className="fd-sched-edit">
+        <button
+          type="button"
+          className="btn ghost sm"
+          data-testid="sched-edit-open"
+          onClick={open}
+        >
+          ✎ Editar fecha y hora
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="fd-sched-edit" data-testid="sched-editor">
+      <input
+        type="datetime-local"
+        className="fd-sched-input"
+        aria-label="Fecha y hora de la fecha"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+      />
+      <div className="btn-row">
+        <button
+          type="button"
+          className="btn ghost"
+          style={{ flex: 1 }}
+          disabled={busy}
+          onClick={() => setEditing(false)}
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          className="btn primary"
+          style={{ flex: 1 }}
+          disabled={busy}
+          onClick={() => void save()}
+        >
+          {busy ? 'Guardando…' : 'Guardar'}
+        </button>
+      </div>
+      {error && (
+        <div className="fd-note" role="alert">
+          <p>{error}</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Collapsible "Cómo se juega" card — visible in every status. Explains the §5
+// points formula with a worked example built from THIS league's configured
+// values, lists the fecha's bonuses / no-show penalty, and its entry + chips.
+function FechaInfo({ tournament, config }: { tournament: TournamentRow; config: LeagueConfig }) {
+  const [open, setOpen] = useState(false)
+  const ex = pointsExample(config)
+  const winnerBase = (ex.n - 1) * config.multiplier
+  const penalty = Math.abs(config.noShowPenalty)
+  const rebuy =
+    tournament.rebuy_amount != null ? `₡${formatMiles(tournament.rebuy_amount)}` : 'No aplica'
+
+  return (
+    <section className="fd-info" data-testid="fd-info-section">
+      <button
+        type="button"
+        className="calc-rankings-toggle"
+        aria-expanded={open}
+        aria-controls="fd-info-body"
+        data-testid="fd-info-toggle"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span>Cómo se juega</span>
+        <span className="chev" aria-hidden="true">
+          ⌄
+        </span>
+      </button>
+      {open && (
+        <div className="calc-rankings-body" id="fd-info-body">
+          <div className="fd-info-block">
+            <h4>Cómo se calculan los puntos</h4>
+            <p>
+              Puntos = (N − P) × multiplicador + bonos − castigos. <b>N</b> = jugadores que
+              entraron, <b>P</b> = tu lugar (1 = campeón). Multiplicador actual:{' '}
+              <b>{config.multiplier}</b>.
+            </p>
+            <p className="fd-info-example">
+              Ejemplo con <b>{ex.n} jugadores</b>: el 1º gana ({ex.n}−1)×{config.multiplier} ={' '}
+              <b>{winnerBase} pts</b> de base. Quien queda <b>{ex.p}º</b> gana ({ex.n}−{ex.p})×
+              {config.multiplier} = {ex.base} + {ex.bonusTop3} (Top 3) + {ex.bonusFinalTable} (Mesa
+              Final) + {ex.bonusAttendance} (Asistencia) = <b>{ex.total} pts</b>.
+            </p>
+          </div>
+
+          <div className="fd-info-block">
+            <h4>Bonos de esta fecha</h4>
+            <InfoRow label="Bonus Mesa Final" value={`+${config.bonusFinalTable}`} />
+            <InfoRow label="Bonus Top 3" value={`+${config.bonusTop3}`} />
+            <InfoRow label="Bonus Asistencia" value={`+${config.bonusAttendance}`} />
+            <InfoRow label="Castigo no-show" value={`−${penalty}`} />
+          </div>
+
+          <div className="fd-info-block">
+            <h4>Entrada y fichas</h4>
+            <InfoRow label="Buy-in" value={`₡${formatMiles(tournament.buy_in ?? 0)}`} />
+            <InfoRow label="Recompra" value={rebuy} />
+            <InfoRow
+              label="Stack inicial"
+              value={`${formatMiles(tournament.starting_stack ?? 0)} fichas`}
+            />
+            <InfoRow
+              label="Llegada temprana"
+              value={`+${formatMiles(config.earlyBirdChips)} fichas`}
+            />
+          </div>
+        </div>
+      )}
+    </section>
+  )
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="fd-info-row">
+      <span>{label}</span>
+      <b>{value}</b>
+    </div>
+  )
 }
 
 function RsvpActions({

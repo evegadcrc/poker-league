@@ -200,3 +200,84 @@ export function bandLabel(band: Band, bands: readonly Band[]): string {
   if (upper == null) return `+${band.hours_before} h antes`
   return `${upper}–${band.hours_before} h`
 }
+
+// ---------------------------------------------------------------------------
+// League scoring config (season row) — read-only, for the "cómo se juega" info
+// card on the fecha detail. Mirrors the §5 columns in 0003_points.sql.
+// ---------------------------------------------------------------------------
+export type LeagueConfig = {
+  /** §5 points multiplier applied to (N − P). */
+  multiplier: number
+  bonusFinalTable: number
+  bonusTop3: number
+  bonusAttendance: number
+  /** Stored already-signed negative (e.g. −15). */
+  noShowPenalty: number
+  /** Llegada-temprana stack bonus, in chips. */
+  earlyBirdChips: number
+}
+
+const DEFAULT_CONFIG: LeagueConfig = {
+  multiplier: 10,
+  bonusFinalTable: 0,
+  bonusTop3: 0,
+  bonusAttendance: 0,
+  noShowPenalty: 0,
+  earlyBirdChips: 0,
+}
+
+/** Coerce a season row (or partial) into a typed LeagueConfig with safe defaults. */
+export function parseLeagueConfig(raw: unknown): LeagueConfig {
+  const r = (raw ?? {}) as Record<string, unknown>
+  const num = (v: unknown, fallback: number) =>
+    Number.isFinite(Number(v)) ? Number(v) : fallback
+  return {
+    multiplier: num(r.points_multiplier, DEFAULT_CONFIG.multiplier),
+    bonusFinalTable: num(r.bonus_final_table, DEFAULT_CONFIG.bonusFinalTable),
+    bonusTop3: num(r.bonus_top3, DEFAULT_CONFIG.bonusTop3),
+    bonusAttendance: num(r.bonus_attendance, DEFAULT_CONFIG.bonusAttendance),
+    noShowPenalty: num(r.no_show_penalty, DEFAULT_CONFIG.noShowPenalty),
+    earlyBirdChips: num(r.early_bird_bonus_chips, DEFAULT_CONFIG.earlyBirdChips),
+  }
+}
+
+export type PointsExample = {
+  n: number
+  p: number
+  base: number
+  bonusTop3: number
+  bonusFinalTable: number
+  bonusAttendance: number
+  total: number
+}
+
+/**
+ * Worked §5 example for the info card: an N-player field, finishing place P,
+ * assuming the player made the final table and paid so every bonus applies.
+ * base = (N − P) × multiplier; total adds the eligible bonuses.
+ */
+export function pointsExample(cfg: LeagueConfig, n = 10, p = 3): PointsExample {
+  const base = (n - p) * cfg.multiplier
+  const bonusTop3 = p <= 3 ? cfg.bonusTop3 : 0
+  return {
+    n,
+    p,
+    base,
+    bonusTop3,
+    bonusFinalTable: cfg.bonusFinalTable,
+    bonusAttendance: cfg.bonusAttendance,
+    total: base + bonusTop3 + cfg.bonusFinalTable + cfg.bonusAttendance,
+  }
+}
+
+/**
+ * ISO timestamp → a `<input type="datetime-local">` value in LOCAL time
+ * ("YYYY-MM-DDTHH:mm"); "" for an unparseable input. The inverse is just
+ * `new Date(value).toISOString()` (datetime-local strings parse as local time).
+ */
+export function toDatetimeLocal(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}

@@ -2205,3 +2205,67 @@
 .learn-rankings {
   padding: 0 18px 8px;
 }
+
+/* ---- Fecha detail: "cómo se juega" info card + schedule editor ---- */
+.fd-info {
+  margin: 10px 18px 4px;
+}
+.fd-info-block {
+  padding: 12px 2px;
+  border-top: 1px solid var(--rule);
+}
+.fd-info-block:first-child {
+  border-top: 0;
+}
+.fd-info-block h4 {
+  margin: 0 0 6px;
+  font: 800 11px 'Archivo';
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.fd-info-block p {
+  margin: 0 0 6px;
+  font: 600 13px/1.55 'Archivo';
+  color: var(--ink-2);
+}
+.fd-info-block p:last-child {
+  margin-bottom: 0;
+}
+.fd-info-block p b {
+  color: var(--ink);
+}
+.fd-info-example {
+  color: var(--ink-3) !important;
+  font-feature-settings: 'tnum' 1;
+}
+.fd-info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  font: 600 13px 'Archivo';
+  color: var(--ink-2);
+}
+.fd-info-row b {
+  color: var(--ink);
+  font-weight: 800;
+  font-feature-settings: 'tnum' 1;
+}
+
+.fd-sched-edit {
+  padding: 4px 18px 6px;
+}
+.fd-sched-input {
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--rule-strong);
+  border-radius: 10px;
+  background: var(--paper);
+  color: var(--ink);
+  font: 700 14px 'Archivo';
+}
+[data-theme='neon'] .fd-sched-input {
+  background: var(--paper-2);
+}

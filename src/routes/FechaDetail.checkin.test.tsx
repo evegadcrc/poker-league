@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 
@@ -18,6 +18,7 @@ const h = vi.hoisted(() => ({
   single: {} as Record<string, { data: unknown; error: unknown }>,
   list: {} as Record<string, { data: unknown; error: unknown }>,
   rpcCalls: [] as Array<[string, unknown]>,
+  updateCalls: [] as Array<[string, unknown]>,
   rpcResult: { data: null as unknown, error: null as unknown },
 }))
 
@@ -34,6 +35,10 @@ vi.mock('@/lib/supabase', () => ({
         eq: () => b,
         in: () => b,
         order: () => b,
+        update: (payload: unknown) => {
+          h.updateCalls.push([table, payload])
+          return b
+        },
         maybeSingle: () => Promise.resolve(h.single[table] ?? { data: null, error: null }),
         single: () => Promise.resolve(h.single[table] ?? { data: null, error: null }),
         then: (resolve: (v: unknown) => void) =>
@@ -102,6 +107,7 @@ beforeEach(() => {
   h.player = { id: 'p-me', name: 'Edwin V.', avatar_url: null }
   h.isAdmin = false
   h.rpcCalls = []
+  h.updateCalls = []
   h.rpcResult = { data: null, error: null }
   h.single = { season: { data: { cancel_bands: [] }, error: null } }
   setTournament('live')
@@ -176,5 +182,32 @@ describe('FechaDetail — geofenced check-in', () => {
     await user.click(within(maria).getByRole('button', { name: 'Registrar' }))
 
     expect(h.rpcCalls).toContainEqual(['admin_check_in', { p_entry_id: 'e2' }])
+  })
+
+  it('scheduled fecha: admin edits the date/time → updates tournament.scheduled_at', async () => {
+    h.isAdmin = true
+    setTournament('scheduled')
+    const user = userEvent.setup()
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    // Open the inline editor, set a new local date/time, save.
+    await user.click(screen.getByTestId('sched-edit-open'))
+    const input = screen.getByLabelText('Fecha y hora de la fecha')
+    fireEvent.change(input, { target: { value: '2030-01-15T20:30' } })
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+
+    const expected = new Date('2030-01-15T20:30').toISOString()
+    expect(h.updateCalls).toContainEqual(['tournament', { scheduled_at: expected }])
+  })
+
+  it('scheduled fecha: a NON-admin never sees the date/time editor', async () => {
+    h.isAdmin = false
+    setTournament('scheduled')
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    expect(screen.queryByTestId('sched-edit-open')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Editar fecha y hora/i })).not.toBeInTheDocument()
   })
 })
