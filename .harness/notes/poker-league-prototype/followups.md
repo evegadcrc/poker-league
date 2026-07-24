@@ -50,3 +50,7 @@ for a later pass.
 - Add a deferred-FAILURE variant of the in-flight auto-advance test (current
   in-flight test covers the success branch; failure-release path is covered only by
   the synchronous-resolve retry test).
+
+## Resolved (verify-UI tier 4, 2026-07-24)
+- ✅ Chop/Premios ₡0 — prizes now auto-materialize from template (mig 0013, 3c3044c).
+- ✅ Chop points scaling up with size — confirmed INTENDED (decisions.md); not a bug.
