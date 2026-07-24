@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { deriveLiveSignal, useLiveEventCues } from '@/lib/notify'
 import Sheet from '@/components/Sheet'
 import { aliveCount, colonesCompact, playedCount, type EntryStatus } from '@/lib/fechas'
+import { formatMiles } from '@/lib/format'
 import {
   chipsInPlay,
   compactChips,
@@ -86,7 +87,7 @@ async function fetchLive(): Promise<State> {
       : Promise.resolve({ data: [] as BlindLevel[], error: null }),
     supabase
       .from('entry')
-      .select('id, player_id, status, final_position, chips, player:player_id(name, avatar_url)')
+      .select('id, player_id, status, final_position, chips, paid, player:player_id(name, avatar_url)')
       .eq('tournament_id', tournament.id),
     supabase.rpc('fn_pot', { p_tournament_id: tournament.id }),
   ])
@@ -348,8 +349,6 @@ export default function Live() {
         <Stat value={compactChips(chips)} label="Fichas en juego" />
       </div>
 
-      <Premios prizes={displayPrizes} proposed={proposed} />
-
       <div className="section-head" style={{ paddingBottom: 6 }}>
         <div>
           <span className="overline">Posiciones en vivo</span>
@@ -395,6 +394,8 @@ export default function Live() {
         ) : null}
       </div>
 
+      <Premios prizes={displayPrizes} proposed={proposed} />
+
       {/* Self-report bust confirm */}
       <Sheet open={confirmBust} onClose={() => setConfirmBust(false)} title="Reportar que quedaste fuera">
         <p>
@@ -429,13 +430,13 @@ function nextLabel(level: BlindLevel | null): string {
   if (!level) return 'Último nivel'
   const when = formatClock(level.duration_seconds)
   if (level.is_break) return `Siguiente · Nivel ${level.level_number} — Descanso · ${when}`
-  return `Siguiente · Nivel ${level.level_number} — ${level.small_blind} / ${level.big_blind} · ${when}`
+  return `Siguiente · Nivel ${level.level_number} — ${formatMiles(level.small_blind)} / ${formatMiles(level.big_blind)} · ${when}`
 }
 
 function Blind({ label, value }: { label: string; value: number }) {
   return (
     <div className="b">
-      <div className="v">{value}</div>
+      <div className="v">{formatMiles(value)}</div>
       <div className="k">{label}</div>
     </div>
   )
@@ -482,6 +483,11 @@ function StandingRow({ entry }: { entry: StandingEntry }) {
     <div className={`standing ${alive ? 'alive' : 'out'}`} data-testid="standing">
       <div className="pos">{alive ? '•' : ordinal(entry.final_position ?? 0)}</div>
       <div className="nm">{name}</div>
+      {!entry.paid && (
+        <span className="mini-badge pending" data-testid="pendiente-pago">
+          Pendiente Pago
+        </span>
+      )}
       {alive && <span className="mini-badge">En juego</span>}
     </div>
   )

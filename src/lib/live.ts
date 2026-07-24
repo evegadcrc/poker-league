@@ -150,6 +150,8 @@ export type StandingEntry = {
   status: EntryStatus
   final_position: number | null
   chips: number | null
+  /** Buy-in payment confirmed by the admin (confirm_payment). False → pending. */
+  paid: boolean
   player: { name: string; avatar_url: string | null } | null
 }
 

@@ -116,11 +116,11 @@ function setLevels() {
 function setEntries() {
   h.list.entry = {
     data: [
-      { id: 'a', player_id: 'p-ana', status: 'playing', final_position: null, chips: 12000, player: { name: 'Ana', avatar_url: null } },
-      { id: 'c', player_id: 'p-cid', status: 'playing', final_position: null, chips: 30000, player: { name: 'Cid', avatar_url: null } },
-      { id: 'd', player_id: 'p-dee', status: 'eliminated', final_position: 7, chips: 0, player: { name: 'Dee', avatar_url: null } },
-      { id: 'b', player_id: 'p-ben', status: 'eliminated', final_position: 8, chips: 0, player: { name: 'Ben', avatar_url: null } },
-      { id: 'e', player_id: 'p-eve', status: 'confirmed', final_position: null, chips: null, player: { name: 'Eve', avatar_url: null } },
+      { id: 'a', player_id: 'p-ana', status: 'playing', final_position: null, chips: 12000, paid: false, player: { name: 'Ana', avatar_url: null } },
+      { id: 'c', player_id: 'p-cid', status: 'playing', final_position: null, chips: 30000, paid: true, player: { name: 'Cid', avatar_url: null } },
+      { id: 'd', player_id: 'p-dee', status: 'eliminated', final_position: 7, chips: 0, paid: true, player: { name: 'Dee', avatar_url: null } },
+      { id: 'b', player_id: 'p-ben', status: 'eliminated', final_position: 8, chips: 0, paid: true, player: { name: 'Ben', avatar_url: null } },
+      { id: 'e', player_id: 'p-eve', status: 'confirmed', final_position: null, chips: null, paid: false, player: { name: 'Eve', avatar_url: null } },
     ],
     error: null,
   }
@@ -228,6 +228,43 @@ describe('Live — state-based timer + scoreboard', () => {
     // Alive rows carry the "En juego" badge (was "Vivo"); eliminated rows don't.
     expect(within(rows[0]!).getByText('En juego')).toBeInTheDocument() // Cid (alive)
     expect(within(rows[2]!).queryByText('En juego')).not.toBeInTheDocument() // Dee (out)
+  })
+
+  it('renders blind amounts with the "." thousands separator', async () => {
+    // A single 4-digit level so SB/BB cross the thousands boundary.
+    h.list.blind_level = {
+      data: [
+        { level_number: 3, small_blind: 1000, big_blind: 2000, ante: 0, duration_seconds: 900, is_break: false },
+      ],
+      error: null,
+    }
+    setTournament({ current_level: 3, is_paused: true, paused_remaining_seconds: 100 })
+    renderLive()
+    const blinds = await screen.findByTestId('blinds')
+    expect(within(blinds).getByText('1.000')).toBeInTheDocument()
+    expect(within(blinds).getByText('2.000')).toBeInTheDocument()
+  })
+
+  it('flags an unconfirmed-payment player with "Pendiente Pago" and omits it once paid', async () => {
+    renderLive()
+    await screen.findByTestId('timer')
+    const rows = screen.getAllByTestId('standing') // [Cid(paid), Ana(unpaid), Dee, Ben]
+    // Ana has not been paid-confirmed → tag present.
+    expect(within(rows[1]!).getByTestId('pendiente-pago')).toHaveTextContent('Pendiente Pago')
+    // Cid is paid-confirmed → no tag.
+    expect(within(rows[0]!).queryByTestId('pendiente-pago')).not.toBeInTheDocument()
+  })
+
+  it('renders Premios at the bottom, below the standings', async () => {
+    renderLive()
+    const premios = await screen.findByTestId('premios')
+    const standings = screen.getByTestId('standings')
+    // Premios follows the standings block in document order.
+    expect(
+      standings.compareDocumentPosition(premios) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    // …and it still shows its content.
+    expect(within(premios).getByText('1º')).toBeInTheDocument()
   })
 })
 
