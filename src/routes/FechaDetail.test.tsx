@@ -233,6 +233,48 @@ describe('FechaDetail', () => {
     expect(within(byName('Sofía')).getByTestId('fd-result').textContent).toContain('3º')
   })
 
+  it('completed fecha: medal icons for 2º (silver) / 3º (bronze), none for 4º+', async () => {
+    setTournament('completed')
+    const base = {
+      rsvp_at: null,
+      cancelled_at: null,
+      checked_in_at: null,
+      early_bird: false,
+      rebuys_count: 0,
+      chopped: false,
+    }
+    h.list.entry = {
+      data: [
+        { id: 'w', player_id: 'pw', status: 'winner', points_earned: 45, final_position: 1, ...base, player: { name: 'Uno P.', avatar_url: null } },
+        { id: 'e2', player_id: 'p2', status: 'eliminated', points_earned: 34, final_position: 2, ...base, player: { name: 'Dos P.', avatar_url: null } },
+        { id: 'e3', player_id: 'p3', status: 'eliminated', points_earned: 20, final_position: 3, ...base, player: { name: 'Tres P.', avatar_url: null } },
+        { id: 'e4', player_id: 'p4', status: 'eliminated', points_earned: 10, final_position: 4, ...base, player: { name: 'Cuatro P.', avatar_url: null } },
+      ],
+      error: null,
+    }
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    const rows = screen.getAllByTestId('prow')
+    const byName = (n: string) => rows.find((r) => within(r).queryByText(new RegExp(n)))!
+
+    // 1º keeps the champion crown (no runner-up medal marker).
+    expect(within(byName('Uno')).getByTestId('fd-result').querySelector('.crown')).not.toBeNull()
+    expect(within(byName('Uno')).queryByTestId('fd-medal')).toBeNull()
+
+    // 2º → silver medal + silver-tinted place; 3º → bronze medal + bronze tint.
+    const second = within(byName('Dos')).getByTestId('fd-result')
+    expect(within(second).getByTestId('fd-medal').textContent).toBe('🥈')
+    expect(second.querySelector('.place.silver')).not.toBeNull()
+
+    const third = within(byName('Tres')).getByTestId('fd-result')
+    expect(within(third).getByTestId('fd-medal').textContent).toBe('🥉')
+    expect(third.querySelector('.place.bronze')).not.toBeNull()
+
+    // 4º+ show no medal (just the ordinal).
+    expect(within(byName('Cuatro')).queryByTestId('fd-medal')).toBeNull()
+  })
+
   it('completed fecha: a no-show shows "No Show" + the penalty points', async () => {
     setTournament('completed')
     setCompletedEntries()
@@ -277,5 +319,94 @@ describe('FechaDetail', () => {
       expect(res.textContent).toContain('+40 pts')
       expect(res.querySelector('.place.champ')).not.toBeNull()
     }
+  })
+
+  // A completed fecha with a tournament header that also carries the materialized
+  // `prizes` (set_prizes output). `extra` merges onto the tournament mock so tests
+  // can add prizes / counts_for_league without repeating the whole row.
+  function setCompletedTournament(extra: Record<string, unknown>) {
+    h.single.tournament = {
+      data: {
+        id: 't-1',
+        season_id: 's1',
+        name: 'Fecha 9',
+        scheduled_at: NINE_HOURS,
+        status: 'completed',
+        geofence_radius_m: 100,
+        counts_for_league: true,
+        ...extra,
+      },
+      error: null,
+    }
+  }
+
+  it('completed fecha: Premios list renders below the results with final ₡ amounts', async () => {
+    setCompletedTournament({
+      prizes: [
+        { position: 1, pct: 0.5, amount: 100000, overridden: false },
+        { position: 2, pct: 0.3, amount: 60000, overridden: false },
+        { position: 3, pct: 0.2, amount: 40000, overridden: false },
+      ],
+    })
+    setCompletedEntries()
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    const premios = screen.getByTestId('premios')
+    // Full ₡ + "." thousands separators (not the compact "₡100K" live style).
+    expect(premios.textContent).toContain('₡100.000')
+    expect(premios.textContent).toContain('₡60.000')
+    expect(premios.textContent).toContain('₡40.000')
+
+    // Sits AFTER the player list in the DOM (bottom of the results block).
+    const firstRow = screen.getAllByTestId('prow')[0]
+    expect(firstRow.compareDocumentPosition(premios) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('completed fecha: a chopped top-place shows the split amount, not the template', async () => {
+    setCompletedTournament({
+      prizes: [
+        { position: 1, pct: 0.5, amount: 80000, overridden: false },
+        { position: 2, pct: 0.3, amount: 50000, overridden: false },
+        { position: 3, pct: 0.2, amount: 30000, overridden: false },
+      ],
+    })
+    const base = { rsvp_at: null, cancelled_at: null, checked_in_at: null, early_bird: false, rebuys_count: 0 }
+    h.list.entry = {
+      data: [
+        { id: 'ca', player_id: 'pca', status: 'winner', points_earned: 40, final_position: 1, chopped: true, chop_group: 1, ...base, player: { name: 'Ana M.', avatar_url: null } },
+        { id: 'cb', player_id: 'pcb', status: 'winner', points_earned: 40, final_position: 2, chopped: true, chop_group: 1, ...base, player: { name: 'Beto S.', avatar_url: null } },
+        { id: 'e3', player_id: 'p3', status: 'eliminated', points_earned: 20, final_position: 3, chopped: false, chop_group: null, ...base, player: { name: 'Sofía M.', avatar_url: null } },
+      ],
+      error: null,
+    }
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    const premios = screen.getByTestId('premios')
+    // 1º + 2º chopped → each shows (80.000 + 50.000) / 2 = ₡65.000, NOT the template.
+    expect(premios.textContent).toContain('₡65.000')
+    expect(premios.textContent).not.toContain('₡80.000')
+    expect(premios.textContent).not.toContain('₡50.000')
+    // 3º is un-chopped → keeps its template amount.
+    expect(premios.textContent).toContain('₡30.000')
+  })
+
+  it('standalone completed fecha (no suma a la liga) still shows the Premios section', async () => {
+    setCompletedTournament({
+      counts_for_league: false,
+      prizes: [
+        { position: 1, pct: 0.6, amount: 90000, overridden: false },
+        { position: 2, pct: 0.4, amount: 60000, overridden: false },
+      ],
+    })
+    setCompletedEntries()
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    expect(screen.getByTestId('fd-standalone')).toBeInTheDocument()
+    const premios = screen.getByTestId('premios')
+    expect(premios.textContent).toContain('₡90.000')
+    expect(premios.textContent).toContain('₡60.000')
   })
 })

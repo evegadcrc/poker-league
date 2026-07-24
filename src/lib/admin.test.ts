@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  chopAdjustedPrizes,
   chopPreview,
   isInPlay,
   playerActions,
@@ -84,6 +85,47 @@ describe('tieSplitMoneyEach (dead-even multi-bust money split)', () => {
 
   it('is 0 with no positions', () => {
     expect(tieSplitMoneyEach(prizes, [])).toBe(0)
+  })
+})
+
+describe('chopAdjustedPrizes (completed-fecha payout per place)', () => {
+  const prizes: Prize[] = [
+    { position: 1, pct: 0.5, amount: 80_000 },
+    { position: 2, pct: 0.3, amount: 50_000 },
+    { position: 3, pct: 0.2, amount: 30_000 },
+  ]
+
+  it('no chop → returns the template amounts unchanged (fresh copy)', () => {
+    const out = chopAdjustedPrizes(prizes, [
+      { final_position: 1, chopped: false, chop_group: null },
+      { final_position: 2, chopped: false, chop_group: null },
+    ])
+    expect(out.map((p) => p.amount)).toEqual([80_000, 50_000, 30_000])
+    expect(out[0]).not.toBe(prizes[0]) // does not mutate/alias the input
+  })
+
+  it('a two-way top chop pools 1º+2º and pays each the equal split', () => {
+    const out = chopAdjustedPrizes(prizes, [
+      { final_position: 1, chopped: true, chop_group: 1 },
+      { final_position: 2, chopped: true, chop_group: 1 },
+      { final_position: 3, chopped: false, chop_group: null },
+    ])
+    // (80k + 50k)/2 = 65k for the two chopped places; 3º stays 30k.
+    expect(out.find((p) => p.position === 1)!.amount).toBe(65_000)
+    expect(out.find((p) => p.position === 2)!.amount).toBe(65_000)
+    expect(out.find((p) => p.position === 3)!.amount).toBe(30_000)
+  })
+
+  it('splits independent chop_groups separately', () => {
+    const out = chopAdjustedPrizes(prizes, [
+      { final_position: 1, chopped: false, chop_group: null },
+      { final_position: 2, chopped: true, chop_group: 7 },
+      { final_position: 3, chopped: true, chop_group: 7 },
+    ])
+    // group 7 pools 2º+3º → (50k + 30k)/2 = 40k each; 1º untouched.
+    expect(out.find((p) => p.position === 1)!.amount).toBe(80_000)
+    expect(out.find((p) => p.position === 2)!.amount).toBe(40_000)
+    expect(out.find((p) => p.position === 3)!.amount).toBe(40_000)
   })
 })
 

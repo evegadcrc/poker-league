@@ -4,6 +4,7 @@ import { useAuth, useRole } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { deriveLiveSignal, useLiveEventCues } from '@/lib/notify'
 import Sheet from '@/components/Sheet'
+import PrizeList from '@/components/PrizeList'
 import { aliveCount, colonesCompact, playedCount, type EntryStatus } from '@/lib/fechas'
 import { formatMiles } from '@/lib/format'
 import {
@@ -17,7 +18,6 @@ import {
   ordinal,
   parseDistribution,
   parsePrizes,
-  pctLabel,
   proposedPrizes,
   remainingSeconds,
   showAnte,
@@ -394,7 +394,7 @@ export default function Live() {
         ) : null}
       </div>
 
-      <Premios prizes={displayPrizes} proposed={proposed} />
+      <PrizeList prizes={displayPrizes} proposed={proposed} />
 
       {/* Self-report bust confirm */}
       <Sheet open={confirmBust} onClose={() => setConfirmBust(false)} title="Reportar que quedaste fuera">
@@ -447,31 +447,6 @@ function Stat({ value, label }: { value: string; label: string }) {
     <div className="c">
       <div className="v">{value}</div>
       <div className="k">{label}</div>
-    </div>
-  )
-}
-
-function Premios({ prizes, proposed = false }: { prizes: Prize[]; proposed?: boolean }) {
-  return (
-    <div className="premios" data-testid="premios">
-      <div className="ph">
-        <span className="t">Premios</span>
-        <span className="s">{proposed ? 'reparto propuesto' : 'según el pozo'}</span>
-      </div>
-      {prizes.length === 0 ? (
-        <div className="prow-prize">
-          <span className="nm">Los premios se definen según el pozo final.</span>
-        </div>
-      ) : (
-        prizes.map((p) => (
-          <div className="prow-prize" key={p.position}>
-            <span className="pl">{ordinal(p.position)}</span>
-            <span className="nm" />
-            <span className="pct">{pctLabel(p.pct)}</span>
-            <span className="amt">{colonesCompact(p.amount)}</span>
-          </div>
-        ))
-      )}
     </div>
   )
 }

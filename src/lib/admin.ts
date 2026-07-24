@@ -92,6 +92,42 @@ export function tieSplitMoneyEach(prizes: readonly Prize[], positions: readonly 
   return Math.round(money / k)
 }
 
+/** A finisher, as far as the chop-adjusted payout needs to know it. */
+type ChopFinisher = { final_position: number | null; chopped: boolean; chop_group: number | null }
+
+/**
+ * Per-place prize amounts for a COMPLETED fecha, adjusted for any chop(s).
+ * `tournament.prizes` stays per-position (set_prizes); a chop instead POOLS the
+ * positions a chop_group occupies and pays each chopper the equal split
+ * (`tieSplitMoneyEach` = round(Σ amounts / K)). This rewrites every chopped
+ * position's amount to its group's split-each and leaves un-chopped places at the
+ * template amount — so the Premios list shows the ACTUAL payout, not the pre-chop
+ * template. Returns a fresh array; the input prizes are never mutated.
+ */
+export function chopAdjustedPrizes(
+  prizes: readonly Prize[],
+  finishers: readonly ChopFinisher[],
+): Prize[] {
+  // chop_group → the finishing positions that group occupies.
+  const groups = new Map<number, number[]>()
+  for (const f of finishers) {
+    if (!f.chopped || f.final_position == null || f.chop_group == null) continue
+    const positions = groups.get(f.chop_group) ?? []
+    positions.push(f.final_position)
+    groups.set(f.chop_group, positions)
+  }
+  if (groups.size === 0) return prizes.map((p) => ({ ...p }))
+
+  const splitByPosition = new Map<number, number>()
+  for (const positions of groups.values()) {
+    const each = tieSplitMoneyEach(prizes, positions)
+    for (const pos of positions) splitByPosition.set(pos, each)
+  }
+  return prizes.map((p) =>
+    splitByPosition.has(p.position) ? { ...p, amount: splitByPosition.get(p.position)! } : { ...p },
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Per-player action buttons in the console list.
 // ---------------------------------------------------------------------------

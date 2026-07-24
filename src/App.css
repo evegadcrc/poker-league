@@ -1003,7 +1003,16 @@
 .fd-result .place.champ {
   color: var(--champ-bg);
 }
-.fd-result .place .crown {
+/* Podium tint for the runner-up / third — silver + bronze, readable on all
+   three themes. The medal glyph carries its own color; this tints the ordinal. */
+.fd-result .place.silver {
+  color: #8b8f96;
+}
+.fd-result .place.bronze {
+  color: #a56a34;
+}
+.fd-result .place .crown,
+.fd-result .place .medal {
   font-size: 12px;
 }
 .fd-result .pts {

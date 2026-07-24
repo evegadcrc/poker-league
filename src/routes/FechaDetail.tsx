@@ -6,8 +6,12 @@ import { cn } from '@/lib/utils'
 import { useLoadable } from '@/lib/useLoadable'
 import Avatar from '@/components/Avatar'
 import Galeria, { galleryUrl } from '@/components/Galeria'
+import PrizeList from '@/components/PrizeList'
 import Sheet from '@/components/Sheet'
+import { chopAdjustedPrizes } from '@/lib/admin'
 import { classifyCheckInError, requestPosition, type Coords } from '@/lib/checkin'
+import { formatMiles } from '@/lib/format'
+import { parsePrizes, type Prize } from '@/lib/live'
 import {
   attendanceCounts,
   bandLabel,
@@ -31,6 +35,7 @@ type TournamentRow = {
   geofence_radius_m: number
   cover_url: string | null
   counts_for_league: boolean
+  prizes: unknown
 }
 
 type EntryRow = {
@@ -45,6 +50,7 @@ type EntryRow = {
   points_earned: number | null
   final_position: number | null
   chopped: boolean
+  chop_group: number | null
   rebuys_count: number
   player: { name: string; avatar_url: string | null } | null
 }
@@ -71,6 +77,8 @@ type Ready = {
   tournament: TournamentRow
   entries: EntryRow[]
   bands: Band[]
+  /** Final materialized prizes (set_prizes → tournament.prizes); [] pre-final. */
+  prizes: Prize[]
 }
 type State =
   | { phase: 'loading' }
@@ -88,7 +96,7 @@ async function fetchDetail(id: string): Promise<State> {
   const { data: t, error: tErr } = await supabase
     .from('tournament')
     .select(
-      'id, season_id, name, scheduled_at, status, geofence_radius_m, cover_url, counts_for_league',
+      'id, season_id, name, scheduled_at, status, geofence_radius_m, cover_url, counts_for_league, prizes',
     )
     .eq('id', id)
     .maybeSingle()
@@ -101,7 +109,7 @@ async function fetchDetail(id: string): Promise<State> {
     supabase
       .from('entry')
       .select(
-        'id, player_id, status, rsvp_at, cancelled_at, checked_in_at, early_bird, chips, points_earned, final_position, chopped, rebuys_count, player:player_id(name, avatar_url)',
+        'id, player_id, status, rsvp_at, cancelled_at, checked_in_at, early_bird, chips, points_earned, final_position, chopped, chop_group, rebuys_count, player:player_id(name, avatar_url)',
       )
       .eq('tournament_id', id),
     supabase.from('season').select('cancel_bands').eq('id', tournament.season_id).maybeSingle(),
@@ -118,6 +126,7 @@ async function fetchDetail(id: string): Promise<State> {
     tournament,
     entries: rows,
     bands: parseBands((season as { cancel_bands: unknown } | null)?.cancel_bands),
+    prizes: parsePrizes(tournament.prizes),
   }
 }
 
@@ -164,6 +173,7 @@ export default function FechaDetail() {
             points_earned: null,
             final_position: null,
             chopped: false,
+            chop_group: null,
             rebuys_count: 0,
             player: { name: player.name, avatar_url: player.avatar_url },
           })
@@ -273,7 +283,7 @@ export default function FechaDetail() {
     )
   }
 
-  const { tournament, entries, bands } = state
+  const { tournament, entries, bands, prizes } = state
   const counts = attendanceCounts(entries)
   const myEntry = player ? entries.find((e) => e.player_id === player.id) ?? null : null
   const scheduled = tournament.status === 'scheduled'
@@ -282,6 +292,10 @@ export default function FechaDetail() {
   const canCheckIn = live && myEntry?.status === 'confirmed'
   const alreadyCheckedIn = live && myEntry != null && CHECKED_IN_STATUSES.has(myEntry.status)
   const locating = checkIn.kind === 'locating' || checkIn.kind === 'submitting'
+  // Completed fecha: the ACTUAL payout per place — the materialized
+  // tournament.prizes, chop-adjusted (a chopped top splits its pooled slots
+  // equally). Standalone fechas are still played for money → show it too.
+  const finalPrizes = completed ? chopAdjustedPrizes(prizes, entries) : []
 
   return (
     <>
@@ -357,6 +371,10 @@ export default function FechaDetail() {
           />
         ))}
       </div>
+
+      {finalPrizes.length > 0 && (
+        <PrizeList prizes={finalPrizes} formatAmount={(n) => `₡${formatMiles(n)}`} />
+      )}
 
       {isAdmin && (
         <CoverControl
@@ -522,6 +540,14 @@ function signedPoints(pts: number): string {
   return '0 pts'
 }
 
+// Podium markers for the non-champion places: silver 2nd, bronze 3rd. The
+// champion (1º / chopped co-champion) keeps the crown idiom below; places 4+
+// show no marker. `cls` tints the place ordinal per medal via App.css tokens.
+const PODIUM_MEDAL: Record<number, { glyph: string; cls: string }> = {
+  2: { glyph: '🥈', cls: 'silver' },
+  3: { glyph: '🥉', cls: 'bronze' },
+}
+
 function FechaResult({ result }: { result: FechaResultData }) {
   if (result.kind === 'noshow') {
     return (
@@ -531,14 +557,19 @@ function FechaResult({ result }: { result: FechaResultData }) {
       </div>
     )
   }
+  const medal = result.isChamp ? null : PODIUM_MEDAL[result.place]
   return (
     <div className="fd-result" data-testid="fd-result">
-      <span className={cn('place', result.isChamp && 'champ')}>
-        {result.isChamp && (
+      <span className={cn('place', result.isChamp && 'champ', medal?.cls)}>
+        {result.isChamp ? (
           <span className="crown" aria-hidden="true">
             👑
           </span>
-        )}
+        ) : medal ? (
+          <span className="medal" data-testid="fd-medal" data-place={result.place} aria-hidden="true">
+            {medal.glyph}
+          </span>
+        ) : null}
         {result.place}º
       </span>
       <span className={cn('pts', result.points < 0 ? 'neg' : 'pos')}>
