@@ -22,3 +22,8 @@ hardening pass or a later slice.
   bucket to private and serve via `createSignedUrl`. Deferred here to keep parity with the avatars precedent (imgproxy is down locally).
 - **`0016:60-62` gallery_photo INSERT `storage_path`/`tournament_id` not app-validated.** `with check`
   pins only `uploader_id = self`; a member could point a row at another object or an arbitrary fecha. Public bucket + single-league → low leak. Add `with check split_part(storage_path,'/',1) = uploader_id::text` when hardening.
+- **Gallery upload needs a mobile pass (iter-2).** The `gallery` bucket allowlist omits `image/heic`+
+  `image/heif` — iPhones shoot HEIC by default, so those uploads fail; and browsers often can't render
+  HEIC in the grid anyway. Also no client-side downscale, so large phone photos hit the 10 MiB cap.
+  Proper fix = convert HEIC→JPEG + downscale in the browser before upload (then the allowlist can stay
+  JPEG/PNG/WebP). Affects most of the league (mobile-first). Do as a dedicated gallery-upload slice.

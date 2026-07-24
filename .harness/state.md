@@ -1,25 +1,33 @@
 ---
 goal: Build "Poker Friends" PWA (React+Vite+TS+Tailwind / Supabase) — Phase 2 (refinements + odds calc, sound, gallery/learning)
 task: poker-league-phase2
-step: build
-progress: 25%
+step: review
+progress: 85%
 blockers: none
 updated: 2026-07-24T08:00:00Z
 ---
 
 ## What we're doing
-PHASE 2 planning. Phase 1 shipped (PR #1 open). Consolidated Track A (Phase-1.1 refinements +
-close_season bug fix) + Track B (odds/hand calculator, sound & notifications, gallery/history/
-learning) into ONE plan: .harness/plan/poker-league-phase2.md (supersedes poker-league-refinements).
-Per owner directive Track B skipped grill/design — UX/engine calls made in-plan, flagged as risks.
+PHASE 2 fully BUILT + test-green, NOT yet reviewed. Plan approved. PR #1 MERGED → main; Phase 2 on
+branch feat/poker-friends-phase2. Track A (steps 1-8) + Track B (steps 9-15) built via 12 delegated
+slices, both test-gate green. Ran in --steps mode so simplify + review-loop were deferred by design.
 
 ## Last action
-Authored .harness/plan/poker-league-phase2.md (status: draft) — 15 slices, migrations 0014-0016,
-Track A (1-8) then Track B (9-15). Marked poker-league-refinements superseded. state.md → step:plan.
-Servers stopped (:8777, :5173); local Supabase left up for Phase 2.
+SIMPLIFY + REVIEW-LOOP done (both skipped by --steps mode earlier; ran explicitly). Simplify: 1
+extraction (191b670 deriveLiveSignal). Review-loop PER-TRACK (full diff 7451 lines >> 1000 gate):
+- Track A APPROVED (2 iters; panel five-axis+security+data-migration). Found+fixed 1 CRITICAL RLS
+  privilege-escalation (tournament writes were not admin-only → a non-admin could self-create a fecha,
+  become its tournament-admin, inject season points → mig 0017 restricts writes to auth_is_admin;
+  escalation verified closed via psql) + 1 required (multi-bust ≥1 survivor) + 1 optional (backfill
+  non-array guard). Commits 329d02d, bc0afca.
+- Track B APPROVED (2 iters; panel five-axis+security). No Critical. Fixed 2 required (elimination-cue
+  winner-exclusion test; gallery bucket MIME/size cap) + 1 optional (evaluator 5/6-card tests) + nit
+  (quote cover url). Commits e0ad526, d012827.
+Test gate GREEN 317 passed / 1 skipped from clean db reset. 18 commits on branch. Record:
+.harness/notes/poker-league-phase2/review-loop.md; residuals in followups.md.
 
 ## Next step
-/dh:review-plan on poker-league-phase2 (spawn fresh-context reviewer). Then user runs /dh:run.
-Two run-time decisions flagged in the plan: (1) merge PR #1 → main before Phase 2 branches off it;
-(2) diff size exceeds review-loop's ~1000-line gate → run /dh:run --steps in chunks (Track A, then
-Track B) and review per-track / stacked PRs.
+VERIFY-UI then SHIP. Track B is net-new UX (design was skipped) → /dh:verify-ui the new screens
+(Calculadora `%`, Aprende `?`, sound settings in Perfil, gallery/cover in FechaDetail, Seasons) in all
+3 themes before ship. Then ship as STACKED PRs: Track A (PR #2) then Track B (PR #3) off main. Local
+Supabase up; dev server :5173. Followups: gallery mobile-upload pass (HEIC+downscale), private bucket.
