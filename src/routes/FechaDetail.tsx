@@ -627,7 +627,7 @@ function CoverControl({
       {coverUrl && (
         <div
           className="cover-preview"
-          style={{ backgroundImage: `url(${coverUrl})` }}
+          style={{ backgroundImage: `url("${coverUrl}")` }}
           data-testid="cover-preview"
           role="img"
           aria-label="Portada de la fecha"

@@ -233,7 +233,7 @@ function TournamentCard({ card, onOpen }: { card: FechaCard; onOpen: () => void 
       >
         <div
           className={`cover-media${card.cover ? '' : ' fallback'}`}
-          style={card.cover ? { backgroundImage: `url(${card.cover})` } : undefined}
+          style={card.cover ? { backgroundImage: `url("${card.cover}")` } : undefined}
           data-testid="cover-media"
           data-cover={card.cover ? 'image' : 'fallback'}
         >

@@ -73,9 +73,20 @@ create policy "gallery_photo owner or admin delete" on public.gallery_photo
 --     delete/update policies match on the first path segment exactly like the
 --     avatars bucket does.
 -- ---------------------------------------------------------------------------
-insert into storage.buckets (id, name, public)
-values ('gallery', 'gallery', true)
-on conflict (id) do update set public = excluded.public;
+-- Capped to image types + a sane per-object size so a member can't push
+-- arbitrary content-typed or unbounded bytes into this public bucket (the FE
+-- `accept="image/*"` is not a server-side gate). file_size_limit is bytes
+-- (storage.buckets column is bigint): 10 MiB = 10 * 1024 * 1024.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'gallery', 'gallery', true,
+  10485760,
+  array['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+)
+on conflict (id) do update set
+  public             = excluded.public,
+  file_size_limit    = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
 
 drop policy if exists "gallery public read"          on storage.objects;
 drop policy if exists "gallery member insert"         on storage.objects;
