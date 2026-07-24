@@ -2,9 +2,9 @@
 goal: Build "Poker League" PWA (React+Vite+TS+Tailwind+shadcn / Supabase) per poker-league-app-plan.md — Phase 1 first
 task: poker-league-prototype
 step: build
-progress: 80%
+progress: 84%
 blockers: none
-updated: 2026-07-24T02:00:00Z
+updated: 2026-07-24T02:40:00Z
 ---
 
 ## What we're doing
@@ -13,12 +13,12 @@ UI-first design for the Poker League Phase 1 prototype. Grilling complete; spec 
 oxblood, big grotesk, tabular figures), light + dark first-class, identity from scratch.
 
 ## Last action
-/dh:run autopilot. Slices 1-11 DONE + verified (…, 70c7c83). Slice 11: Live view state-based timer +
-Realtime (realtime-js 2.110.8) + mig 0008 (publication). 108 tests green (+1 opt-in integration).
+/dh:run autopilot. Slices 1-12 DONE + verified (…, 9819a70). Slice 12: mig 0009 admin RPCs (clock,
+confirm_payment, add_rebuy re-entry-only, total−1 eliminate/self_bust/undo, mark_no_show,
+complete_tournament + chop + recompute cadence) + Admin console UI + chop flow. 137 tests green.
+self_bust RPC ready for slice 15. Chop UI NEW → verify-ui candidate.
 
 ## Next step
-/dh:run continues — slice 12/16: ADMIN CONSOLE (heaviest). Mig 0009: clock (pause/resume/±1min/
-next/prev/reset/edit_blinds; auto-advance client-writes-at-0), confirm_payment, add_rebuy
-(eliminated-only), eliminate/self_bust (total−1) + undo, mark_no_show(excused), complete_tournament
-(auto ghost→no_show, recompute_final_table_size, fn_tournament_points, CHOP=split money+points
-co-champions). FE admin console. Chop UI is NEW (not in prototype) → flag for verify-ui.
+/dh:run continues — slice 13/16: Admin CRUD + season rollover. Mig 0010: create_tournament,
+update_season_config, close_season (archive+open next year, carry roster, reset points; NO undo,
+confirm modal). FE: CreateFecha + LeagueSettings (fills Admin sub-nav stubs).
