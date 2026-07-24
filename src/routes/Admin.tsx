@@ -321,11 +321,14 @@ function ConsolePanel() {
     if (autoAdvancedLevel.current === tournament.current_level) return
     if (autoAttemptAt.current === now) return // at most one attempt per tick
     autoAttemptAt.current = now
+    // Latch the level BEFORE the await so a tick that fires while the RPC is still
+    // in flight (round-trip > 1s, Kong-502 class) can't double-fire next_level and
+    // skip a level. On failure, release the latch so the next distinct tick retries;
+    // on success it stays latched (current_level advances via realtime).
+    autoAdvancedLevel.current = tournament.current_level
     void (async () => {
       const ok = await doClock('next_level')
-      // Only latch the level on success; on failure leave it unset so the next
-      // distinct tick retries. Latching pre-empts a double-fire mid-flight.
-      if (ok) autoAdvancedLevel.current = tournament.current_level
+      if (!ok) autoAdvancedLevel.current = null
     })()
   }, [state, remaining, now, doClock])
 

@@ -12,6 +12,9 @@ const h = vi.hoisted(() => ({
   single: {} as Record<string, { data: unknown; error: unknown }>,
   list: {} as Record<string, { data: unknown; error: unknown }>,
   rpc: {} as Record<string, { data: unknown; error: unknown }>,
+  // Optional per-RPC impl override — lets a test return a deferred/in-flight
+  // promise it resolves manually (for the auto-advance in-flight race test).
+  rpcImpl: {} as Record<string, (args: unknown) => Promise<{ data: unknown; error: unknown }>>,
   rpcCalls: [] as Array<{ name: string; args: unknown }>,
   // When set, the channel mock invokes subscribe's status callback with it
   // (e.g. 'CHANNEL_ERROR') so the reconnect banner can be exercised.
@@ -38,6 +41,7 @@ vi.mock('@/lib/supabase', () => ({
     },
     rpc: (name: string, args: unknown) => {
       h.rpcCalls.push({ name, args })
+      if (h.rpcImpl[name]) return h.rpcImpl[name](args)
       if (h.rpc[name]) return Promise.resolve(h.rpc[name])
       if (name === 'fn_pot') return Promise.resolve({ data: 140_000, error: null })
       return Promise.resolve({ data: [], error: null })
@@ -110,6 +114,7 @@ beforeEach(() => {
   h.single = {}
   h.list = {}
   h.rpc = {}
+  h.rpcImpl = {}
   h.rpcCalls = []
   h.channelStatus = undefined
   setLive()
@@ -284,6 +289,24 @@ describe('Admin console — auto-advance (single-writer clock)', () => {
     // The per-tick throttle blocks a tight loop within the same second, then the
     // 1s clock tick re-arms the attempt → a second next_level write is issued.
     await waitFor(() => expect(nextLevelCalls()).toBeGreaterThanOrEqual(2), { timeout: 3000 })
+  })
+
+  it('does NOT double-fire next_level when the clock RPC is still in flight across a tick', async () => {
+    setAutoExpired()
+    // Keep the next_level RPC in flight (unresolved) so ~2 one-second ticks elapse
+    // while it's pending. The pre-await latch must prevent a second fire (which the
+    // increment-based next_level would turn into a skipped level).
+    let resolveClock: (v: { data: unknown; error: unknown }) => void = () => {}
+    h.rpcImpl.clock = () =>
+      new Promise((res) => {
+        resolveClock = res
+      })
+    renderAdmin()
+    await waitFor(() => expect(nextLevelCalls()).toBe(1))
+    await new Promise((r) => setTimeout(r, 2200)) // ~2 real 1s ticks while in flight
+    expect(nextLevelCalls()).toBe(1) // latched before the await → no double-fire
+    resolveClock({ data: null, error: null }) // resolve success; stays latched
+    await waitFor(() => expect(nextLevelCalls()).toBe(1))
   })
 })
 
