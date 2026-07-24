@@ -9,6 +9,7 @@ import Leaderboard from '@/routes/Leaderboard'
 import Live from '@/routes/Live'
 import Login from '@/routes/Login'
 import Profile from '@/routes/Profile'
+import Seasons from '@/routes/Seasons'
 
 export default function App() {
   return (
@@ -21,6 +22,8 @@ export default function App() {
         <Route element={<RequireAuth />}>
           <Route element={<AppLayout />}>
             <Route path="/" element={<Leaderboard />} />
+            <Route path="/temporadas" element={<Seasons />} />
+            <Route path="/temporadas/:seasonId" element={<Leaderboard />} />
             <Route path="/fechas" element={<Fechas />} />
             <Route path="/fechas/:id" element={<FechaDetail />} />
             <Route path="/vivo" element={<Live />} />

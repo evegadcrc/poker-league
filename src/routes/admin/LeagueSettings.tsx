@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import Sheet from '@/components/Sheet'
 import { bandLabel, parseBands, type Band } from '@/lib/fechas'
@@ -41,6 +42,7 @@ function percentsToTemplate(text: string): number[] {
 // irreversible season rollover (close_season) behind a confirm modal.
 // ---------------------------------------------------------------------------
 export default function LeagueSettings() {
+  const navigate = useNavigate()
   const [season, setSeason] = useState<Season | null>(null)
   const [phase, setPhase] = useState<'loading' | 'ready' | 'error'>('loading')
 
@@ -130,10 +132,12 @@ export default function LeagueSettings() {
       setError(err.message)
       return
     }
+    // close_season returns the NEW active season row — land on its Tabla so the
+    // admin sees the fresh (roster-at-0) standings instead of a blank screen.
     const rows = (data ?? []) as Season[]
-    if (rows[0]) hydrate(rows[0])
-    setSaved(false)
-  }, [hydrate])
+    const next = rows[0]
+    if (next) navigate(`/temporadas/${next.id}`)
+  }, [navigate])
 
   if (phase === 'loading') return <div className="fd-note">Cargando ajustes…</div>
   if (phase === 'error' || !season)
