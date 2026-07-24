@@ -236,4 +236,95 @@ describe.skipIf(!canRun)('RLS / authz hardening (0012, local integration)', () =
     expect(created?.is_admin).toBe(false)
     if (created?.id) playerIds.push(created.id)
   })
+
+  // ------------------------------------------------------------------------
+  // CRITICAL (Phase-2, migration 0017) — tournament writes are ADMIN-ONLY. The
+  // 0001 policies allowed `created_by = auth_player_id()`, so a non-admin could
+  // self-INSERT a fecha and UPDATE any column of it — then, because
+  // fn_is_tournament_admin honours the created_by owner path, drive every
+  // fecha-scoped admin RPC (clock / eliminate_multi / complete_tournament) and
+  // inject season points. 0017 drops the owner escape.
+  it('blocks a non-admin from INSERTing a tournament (0017 admin-only INSERT policy)', async () => {
+    const { client, playerId } = await mkSignedInMember()
+    const { error } = await client
+      .from('tournament')
+      .insert({
+        season_id: seasonId,
+        name: `SEC ${RUN} phantom`,
+        scheduled_at: new Date().toISOString(),
+        status: 'scheduled',
+        created_by: playerId, // the old owner escape — must NOT pass now
+      })
+      .select()
+    expect(error).not.toBeNull()
+    expect(error?.code).toBe('42501') // new row violates row-level security policy
+    // Nothing was written.
+    const { count } = await admin
+      .from('tournament')
+      .select('id', { count: 'exact', head: true })
+      .eq('name', `SEC ${RUN} phantom`)
+    expect(count ?? 0).toBe(0)
+  })
+
+  it('blocks a non-admin from UPDATEing a tournament stamped with their created_by (0017)', async () => {
+    const { client, playerId } = await mkSignedInMember()
+    // Service-role plants the exact state the old policy would have let the
+    // attacker self-INSERT (created_by = attacker). The UPDATE must still fail.
+    const { data: t, error: tErr } = await admin
+      .from('tournament')
+      .insert({
+        season_id: seasonId,
+        name: `SEC ${RUN} owned`,
+        scheduled_at: new Date().toISOString(),
+        status: 'scheduled',
+        created_by: playerId,
+      })
+      .select('id')
+      .single()
+    if (tErr) throw tErr
+
+    const { data } = await client
+      .from('tournament')
+      .update({ payout_distribution: [{ place: 1, pct: 1 }], counts_for_league: false, status: 'completed' })
+      .eq('id', t.id)
+      .select()
+    expect(data ?? []).toHaveLength(0) // RLS using-clause matched no row
+
+    // Server truth: every column untouched (still the planted defaults).
+    const { data: row } = await admin.from('tournament').select('*').eq('id', t.id).single()
+    expect(row!.status).toBe('scheduled')
+    expect(row!.payout_distribution).toBeNull()
+    expect(row!.counts_for_league).toBe(true) // NOT the attacker's false
+  })
+
+  it('allows an admin member to UPDATE payout_distribution/counts_for_league directly (RLS admin path holds)', async () => {
+    const adminMember = await mkSignedInMember({ isAdmin: true })
+    const { data: t, error: tErr } = await admin
+      .from('tournament')
+      .insert({
+        season_id: seasonId,
+        name: `SEC ${RUN} adminedit`,
+        scheduled_at: new Date().toISOString(),
+        status: 'scheduled',
+      })
+      .select('id')
+      .single()
+    if (tErr) throw tErr
+
+    const dist = [
+      { place: 1, pct: 0.7 },
+      { place: 2, pct: 0.3 },
+    ]
+    const { data, error } = await adminMember.client
+      .from('tournament')
+      .update({ payout_distribution: dist, counts_for_league: false })
+      .eq('id', t.id)
+      .select()
+    expect(error).toBeNull()
+    expect(data ?? []).toHaveLength(1) // admin passes auth_is_admin() → write lands
+
+    const { data: row } = await admin.from('tournament').select('*').eq('id', t.id).single()
+    expect(row!.counts_for_league).toBe(false)
+    expect(row!.payout_distribution).toEqual(dist)
+  })
 })
