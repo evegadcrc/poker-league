@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { playCue, resumeAudio, type SoundCue } from '@/lib/sound'
+import { findLevel, remainingSeconds, type BlindLevel } from '@/lib/live'
+import type { EntryStatus } from '@/lib/fechas'
 
 /**
  * Event cues + in-app toasts + optional LOCAL notifications, fired off STATE
@@ -48,6 +50,67 @@ export type LiveEventSignal = {
    *  co-champions are excluded — a champion reaching a final position is not a
    *  "quedó fuera" event. New keys across observations => new eliminations. */
   out: Record<string, string>
+}
+
+/** Minimal loaded-state shape the cue engine needs to derive its signal. Both
+ *  the player `Live` screen and the admin `Consola` produce this from their own
+ *  (wider) state union; they used to carry byte-identical inline copies. */
+type LiveSignalState =
+  | { phase: 'loading' | 'error' | 'no-live' }
+  | {
+      phase: 'ready'
+      tournament: {
+        id: string
+        name: string
+        current_level: number
+        is_paused: boolean
+        paused_remaining_seconds: number | null
+        level_started_at: string | null
+      }
+      levels: readonly BlindLevel[]
+      entries: readonly { id: string; status: EntryStatus; player: { name: string } | null }[]
+    }
+
+/**
+ * Derive the state-transition signal the cue engine diffs (plan step 13). Built
+ * fresh every render so the final-seconds warning can read the ticking clock,
+ * but `useLiveEventCues` fires only on DISCRETE changes (fecha id / level / who
+ * is out), never per tick. `settled` is false while loading/error so the initial
+ * load onto an already-live fecha is never mistaken for an "opened" transition.
+ * Shared by `Live` (player view) and the admin `Consola`, which both refetch
+ * their whole state on every realtime event.
+ */
+export function deriveLiveSignal(state: LiveSignalState, now: number): LiveEventSignal {
+  if (state.phase !== 'ready') {
+    return { settled: state.phase === 'no-live', tournament: null, out: {} }
+  }
+  const t = state.tournament
+  const lvl = findLevel(state.levels, t.current_level)
+  const remaining = remainingSeconds(
+    {
+      isPaused: t.is_paused,
+      pausedRemainingSeconds: t.paused_remaining_seconds,
+      levelStartedAt: t.level_started_at,
+      levelDurationSeconds: lvl?.duration_seconds ?? 0,
+    },
+    now,
+  )
+  const out: Record<string, string> = {}
+  for (const e of state.entries) {
+    if (e.status === 'eliminated') out[e.id] = e.player?.name ?? 'Jugador'
+  }
+  return {
+    settled: true,
+    tournament: {
+      id: t.id,
+      name: t.name,
+      currentLevel: t.current_level,
+      smallBlind: lvl?.small_blind ?? 0,
+      bigBlind: lvl?.big_blind ?? 0,
+      remaining,
+    },
+    out,
+  }
 }
 
 export type LiveToast = { id: number; message: string }

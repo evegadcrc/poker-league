@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRole } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
-import { useLiveEventCues, type LiveEventSignal } from '@/lib/notify'
+import { deriveLiveSignal, useLiveEventCues } from '@/lib/notify'
 import Avatar from '@/components/Avatar'
 import Sheet from '@/components/Sheet'
 import PrizeDistributionEditor, {
@@ -207,45 +207,6 @@ async function fetchConsole(): Promise<State> {
   }
 }
 
-/**
- * State-transition signal for the cue engine (plan step 13). The admin is a
- * source of state changes (advancing the clock, eliminating), and hears the
- * same level-change / elimination cues off the post-action refetch. Built fresh
- * each render; the hook fires only on DISCRETE changes, never per tick.
- */
-function toSignal(state: State, now: number): LiveEventSignal {
-  if (state.phase !== 'ready') {
-    return { settled: state.phase === 'no-live', tournament: null, out: {} }
-  }
-  const t = state.tournament
-  const lvl = findLevel(state.levels, t.current_level)
-  const remaining = remainingSeconds(
-    {
-      isPaused: t.is_paused,
-      pausedRemainingSeconds: t.paused_remaining_seconds,
-      levelStartedAt: t.level_started_at,
-      levelDurationSeconds: lvl?.duration_seconds ?? 0,
-    },
-    now,
-  )
-  const out: Record<string, string> = {}
-  for (const e of state.entries) {
-    if (e.status === 'eliminated') out[e.id] = e.player?.name ?? 'Jugador'
-  }
-  return {
-    settled: true,
-    tournament: {
-      id: t.id,
-      name: t.name,
-      currentLevel: t.current_level,
-      smallBlind: lvl?.small_blind ?? 0,
-      bigBlind: lvl?.big_blind ?? 0,
-      remaining,
-    },
-    out,
-  }
-}
-
 function ConsolePanel() {
   const { isAdmin } = useRole()
   const [state, setState] = useState<State>({ phase: 'loading' })
@@ -393,7 +354,7 @@ function ConsolePanel() {
   // transitions (level advance, elimination). The admin hears the same cues via
   // the refetch that follows each action; fires once per transition, not per tick.
   const { toast: eventToast, permission: notifyPermission, requestNotifications } =
-    useLiveEventCues(toSignal(state, now))
+    useLiveEventCues(deriveLiveSignal(state, now))
 
   // Auto-advance: admin client is the single writer. When timer_mode='auto' and
   // the running clock hits 0, write next_level. It fires once per level on

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth, useRole } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
-import { useLiveEventCues, type LiveEventSignal } from '@/lib/notify'
+import { deriveLiveSignal, useLiveEventCues } from '@/lib/notify'
 import Sheet from '@/components/Sheet'
 import { aliveCount, colonesCompact, playedCount, type EntryStatus } from '@/lib/fechas'
 import {
@@ -57,6 +57,8 @@ type State =
 /** Realtime connection health — drives the subtle reconnect banner. */
 type Conn = 'connecting' | 'live' | 'reconnecting'
 
+// The cue-engine signal is derived by the shared `deriveLiveSignal` (notify.ts).
+
 const TOURNAMENT_COLUMNS =
   'id, name, ante_enabled, current_level, level_started_at, is_paused, paused_remaining_seconds, blind_structure_id, prizes, payout_distribution'
 
@@ -99,46 +101,6 @@ async function fetchLive(): Promise<State> {
     prizes: parsePrizes(tournament.prizes),
     // Pot is best-effort: a transient RPC hiccup shouldn't blank the screen.
     pot: potRes.error ? 0 : Number(potRes.data ?? 0),
-  }
-}
-
-/**
- * Derive the state-transition signal the cue engine diffs (plan step 13). Built
- * fresh every render so the final-seconds warning can read the ticking clock,
- * but the cue hook only fires off DISCRETE changes (fecha id / level / who is
- * out), never per tick. `settled` is false while loading/error so the initial
- * load onto an already-live fecha is never mistaken for an "opened" transition.
- */
-function toSignal(state: State, now: number): LiveEventSignal {
-  if (state.phase !== 'ready') {
-    return { settled: state.phase === 'no-live', tournament: null, out: {} }
-  }
-  const t = state.tournament
-  const lvl = findLevel(state.levels, t.current_level)
-  const remaining = remainingSeconds(
-    {
-      isPaused: t.is_paused,
-      pausedRemainingSeconds: t.paused_remaining_seconds,
-      levelStartedAt: t.level_started_at,
-      levelDurationSeconds: lvl?.duration_seconds ?? 0,
-    },
-    now,
-  )
-  const out: Record<string, string> = {}
-  for (const e of state.entries) {
-    if (e.status === 'eliminated') out[e.id] = e.player?.name ?? 'Jugador'
-  }
-  return {
-    settled: true,
-    tournament: {
-      id: t.id,
-      name: t.name,
-      currentLevel: t.current_level,
-      smallBlind: lvl?.small_blind ?? 0,
-      bigBlind: lvl?.big_blind ?? 0,
-      remaining,
-    },
-    out,
   }
 }
 
@@ -232,7 +194,7 @@ export default function Live() {
   // transitions (level advance, fecha opened, elimination). Non-admin observers
   // get these through the realtime refetch above — they never act.
   const { toast: eventToast, permission: notifyPermission, requestNotifications } =
-    useLiveEventCues(toSignal(state, now))
+    useLiveEventCues(deriveLiveSignal(state, now))
 
   if (state.phase === 'loading') {
     return <Framed overline="En juego" title="En vivo" note="Cargando torneo…" />
