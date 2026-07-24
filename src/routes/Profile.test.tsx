@@ -5,16 +5,19 @@ import userEvent from '@testing-library/user-event'
 // ---------------------------------------------------------------------------
 // Slice 14 — Perfil screen (RTL). Mocks useAuth (current player + updatePlayer)
 // and the supabase client (player_profile RPC + storage upload/getPublicUrl +
-// player update). Asserts stats + sparkline + reversed form, the loading and
-// empty states, and the avatar-upload happy path + error state.
+// the update_own_profile RPC). Asserts stats + sparkline + reversed form, the
+// loading and empty states, and the avatar-upload happy path + error state.
+// NB: migration 0012 dropped the direct player self-UPDATE RLS, so the avatar
+// save MUST go through update_own_profile — there is intentionally no `from`
+// table-write mock, so a regression to a direct write would throw.
 // ---------------------------------------------------------------------------
 const h = vi.hoisted(() => ({
   pending: false,
   rpcResult: { data: null as unknown, error: null as unknown },
   uploadResult: { data: { path: 'p/avatar' } as unknown, error: null as unknown },
-  updateResult: { error: null as unknown },
+  updateResult: { data: null as unknown, error: null as unknown },
   uploadCalls: [] as Array<{ path: string; file: unknown }>,
-  updateCalls: [] as Array<Record<string, unknown>>,
+  rpcCalls: [] as Array<{ name: string; args: Record<string, unknown> }>,
   player: { id: 'p-edw', name: 'Edwin V.', avatar_url: null } as {
     id: string
     name: string
@@ -30,7 +33,12 @@ vi.mock('@/lib/auth', () => ({
 
 vi.mock('@/lib/supabase', () => ({
   supabase: {
-    rpc: () => (h.pending ? new Promise(() => {}) : Promise.resolve(h.rpcResult)),
+    rpc: (name: string, args: Record<string, unknown>) => {
+      h.rpcCalls.push({ name, args })
+      if (name === 'update_own_profile') return Promise.resolve(h.updateResult)
+      // player_profile fetch
+      return h.pending ? new Promise(() => {}) : Promise.resolve(h.rpcResult)
+    },
     storage: {
       from: () => ({
         upload: (path: string, file: unknown) => {
@@ -41,16 +49,6 @@ vi.mock('@/lib/supabase', () => ({
           data: { publicUrl: `https://cdn.test/storage/${path}` },
         }),
       }),
-    },
-    from: () => {
-      const b: Record<string, unknown> = {
-        update: (patch: Record<string, unknown>) => {
-          h.updateCalls.push(patch)
-          return b
-        },
-        eq: () => Promise.resolve(h.updateResult),
-      }
-      return b
     },
   },
 }))
@@ -108,9 +106,9 @@ beforeEach(() => {
   h.pending = false
   h.rpcResult = { data: [FIXTURE], error: null }
   h.uploadResult = { data: { path: 'p-edw/avatar' }, error: null }
-  h.updateResult = { error: null }
+  h.updateResult = { data: null, error: null }
   h.uploadCalls = []
-  h.updateCalls = []
+  h.rpcCalls = []
   h.player = { id: 'p-edw', name: 'Edwin V.', avatar_url: null }
   h.updatePlayer = vi.fn()
   h.signOut = vi.fn()
@@ -188,8 +186,14 @@ describe('Profile (Perfil)', () => {
     // Uploaded under the player-id folder so the owner-only RLS policy matches.
     expect(h.uploadCalls).toHaveLength(1)
     expect(h.uploadCalls[0]!.path).toBe('p-edw/avatar')
-    // player.avatar_url persisted with the (cache-busted) public URL.
-    expect(h.updateCalls[0]!.avatar_url).toMatch(/^https:\/\/cdn\.test\/storage\/p-edw\/avatar\?t=\d+/)
+    // Persisted via the update_own_profile RPC (NOT a direct player table write,
+    // which 0012's RLS now blocks). Sends the current name + cache-busted URL.
+    const rpcCall = h.rpcCalls.find((c) => c.name === 'update_own_profile')
+    expect(rpcCall).toBeTruthy()
+    expect(rpcCall!.args.p_name).toBe('Edwin V.')
+    expect(rpcCall!.args.p_avatar_url).toMatch(
+      /^https:\/\/cdn\.test\/storage\/p-edw\/avatar\?t=\d+/,
+    )
     const updatedUrl = h.updatePlayer.mock.calls[0]![0].avatar_url as string
 
     // Hero avatar now shows the uploaded image.
@@ -208,8 +212,24 @@ describe('Profile (Perfil)', () => {
     await user.upload(screen.getByLabelText('Subir foto de perfil'), file)
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/no se pudo subir la foto/i)
-    // No player update attempted on a failed upload.
-    expect(h.updateCalls).toHaveLength(0)
+    // No profile-save RPC attempted on a failed upload.
+    expect(h.rpcCalls.find((c) => c.name === 'update_own_profile')).toBeFalsy()
+  })
+
+  it('shows a save-error message when the update_own_profile RPC fails', async () => {
+    h.updateResult = { data: null, error: { message: 'rls' } }
+    const user = userEvent.setup()
+    render(<Profile />)
+    await screen.findByTestId('prof-stats')
+
+    const file = new File(['x'], 'me.png', { type: 'image/png' })
+    await user.upload(screen.getByLabelText('Subir foto de perfil'), file)
+
+    // The RPC was attempted (upload succeeded) but reported an error.
+    expect(await screen.findByRole('alert')).toHaveTextContent(/no se pudo guardar/i)
+    expect(h.rpcCalls.find((c) => c.name === 'update_own_profile')).toBeTruthy()
+    // Context is not patched when the save failed.
+    expect(h.updatePlayer).not.toHaveBeenCalled()
   })
 
   it('renders an error state with a retry when the RPC errors', async () => {

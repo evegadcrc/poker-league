@@ -40,6 +40,8 @@ type FechaCard = {
   id: string
   name: string
   when: string
+  /** Raw ISO timestamp — sort key (the localized `when` string is not chronological). */
+  scheduledAt: string
   status: TournamentStatus
   buyIn: string
   pot: string
@@ -79,6 +81,7 @@ function buildCards(tournaments: TournamentRow[], entries: EntryRow[]): FechaCar
       id: t.id,
       name: t.name,
       when: formatWhen(t.scheduled_at),
+      scheduledAt: t.scheduled_at,
       status: t.status,
       buyIn: colonesCompact(t.buy_in),
       pot: colonesCompact(pot),
@@ -93,10 +96,11 @@ function buildCards(tournaments: TournamentRow[], entries: EntryRow[]): FechaCar
   return cards.sort((a, b) => {
     const s = STATUS_SORT[a.status] - STATUS_SORT[b.status]
     if (s !== 0) return s
-    // scheduled → soonest first; else most-recent first.
+    // Sort by the raw ISO timestamp (ISO-8601 sorts lexicographically ==
+    // chronologically) — scheduled → soonest first; else most-recent first.
     return a.status === 'scheduled'
-      ? a.when.localeCompare(b.when)
-      : b.when.localeCompare(a.when)
+      ? a.scheduledAt.localeCompare(b.scheduledAt)
+      : b.scheduledAt.localeCompare(a.scheduledAt)
   })
 }
 
@@ -160,7 +164,7 @@ export default function Fechas() {
       {state.status === 'error' && (
         <div className="lb-message" role="alert">
           <p>No se pudieron cargar las fechas.</p>
-          <button type="button" className="btn ghost sm" onClick={reload}>
+          <button type="button" className="btn ghost sm" onClick={() => reload()}>
             Reintentar
           </button>
         </div>

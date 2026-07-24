@@ -115,6 +115,44 @@ describe('Fechas list', () => {
     expect(within(cards[2]!).getByText('Fecha 7')).toBeInTheDocument() // completed
   })
 
+  it('orders two cards in the same status group chronologically (by scheduled_at, not the display string)', async () => {
+    // Two scheduled fechas. Aug 7 ("Vie 7 ago") precedes Aug 23 ("Dom 23 ago")
+    // chronologically, but a localeCompare on the display string sorts "Dom…"
+    // before "Vie…" — the exact bug. Correct order = soonest first: Aug 7, Aug 23.
+    h.list = {
+      tournament: {
+        data: [
+          {
+            id: 't-late',
+            name: 'Fecha Tardía',
+            scheduled_at: '2026-08-23T19:00:00Z',
+            status: 'scheduled',
+            buy_in: 20000,
+            rebuy_amount: 20000,
+            prize_pool_override: null,
+          },
+          {
+            id: 't-soon',
+            name: 'Fecha Pronta',
+            scheduled_at: '2026-08-07T19:00:00Z',
+            status: 'scheduled',
+            buy_in: 20000,
+            rebuy_amount: 20000,
+            prize_pool_override: null,
+          },
+        ],
+        error: null,
+      },
+      entry: { data: [], error: null },
+    }
+    renderFechas()
+    await screen.findByText('Fecha Pronta')
+    const cards = screen.getAllByTestId('tourn-card')
+    expect(cards).toHaveLength(2)
+    expect(within(cards[0]!).getByText('Fecha Pronta')).toBeInTheDocument() // Aug 7 soonest
+    expect(within(cards[1]!).getByText('Fecha Tardía')).toBeInTheDocument() // Aug 23 later
+  })
+
   it('renders the status badges (Live / Próxima / Jugada)', async () => {
     renderFechas()
     await screen.findByText('Fecha 8')

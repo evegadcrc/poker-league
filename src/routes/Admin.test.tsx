@@ -229,6 +229,64 @@ describe('Admin console — error / reconnect states (slice 16)', () => {
   })
 })
 
+// Auto-advance FE contract (single writer). The admin client, and only in
+// timer_mode='auto', advances the level when the LOCAL clock reaches 0. Uses
+// real fixtures (never forces manual mode to dodge the effect).
+describe('Admin console — auto-advance (single-writer clock)', () => {
+  // An auto tournament whose running clock has already expired (started well
+  // before its level duration) → remaining computes to 0.
+  function setAutoExpired(overrides: Record<string, unknown> = {}) {
+    setLive()
+    Object.assign(h.single.tournament.data as Record<string, unknown>, {
+      timer_mode: 'auto',
+      is_paused: false,
+      current_level: 1,
+      level_started_at: new Date(Date.now() - 10_000_000).toISOString(),
+      ...overrides,
+    })
+  }
+
+  const nextLevelCalls = () =>
+    h.rpcCalls.filter(
+      (c) => c.name === 'clock' && (c.args as { p_action?: string }).p_action === 'next_level',
+    ).length
+
+  it('fires clock(next_level) exactly once when an auto timer hits 0', async () => {
+    setAutoExpired()
+    renderAdmin()
+    await waitFor(() => expect(nextLevelCalls()).toBe(1))
+    // Latched for this level → does not fire again on the reconcile refetch.
+    await screen.findAllByTestId('admin-prow')
+    expect(nextLevelCalls()).toBe(1)
+  })
+
+  it('does NOT auto-advance while the clock is paused', async () => {
+    setAutoExpired({ is_paused: true, paused_remaining_seconds: 0 })
+    renderAdmin()
+    await screen.findAllByTestId('admin-prow')
+    expect(nextLevelCalls()).toBe(0)
+  })
+
+  it('does NOT auto-advance in manual mode even when expired', async () => {
+    setAutoExpired({ timer_mode: 'manual' })
+    renderAdmin()
+    await screen.findAllByTestId('admin-prow')
+    expect(nextLevelCalls()).toBe(0)
+  })
+
+  it('a FAILED auto-advance does not permanently stall — it retries on the next tick', async () => {
+    setAutoExpired()
+    h.rpc.clock = { data: null, error: { message: 'kong-502' } }
+    renderAdmin()
+    // First attempt fires and fails (toast shown), guard NOT latched.
+    await waitFor(() => expect(nextLevelCalls()).toBe(1))
+    expect(await screen.findByTestId('admin-toast')).toBeInTheDocument()
+    // The per-tick throttle blocks a tight loop within the same second, then the
+    // 1s clock tick re-arms the attempt → a second next_level write is issued.
+    await waitFor(() => expect(nextLevelCalls()).toBeGreaterThanOrEqual(2), { timeout: 3000 })
+  })
+})
+
 describe('Admin — WhatsApp summary (slice 15)', () => {
   it('does not show the Resumen action to a non-admin', async () => {
     h.isAdmin = false

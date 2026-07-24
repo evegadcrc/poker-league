@@ -13,6 +13,9 @@ const h = vi.hoisted(() => ({
   list: {} as Record<string, { data: unknown; error: unknown }>,
   rpcResult: { data: 0 as unknown, error: null as unknown },
   rpcCalls: [] as Array<{ name: string; args: unknown }>,
+  // Per-RPC error override (keyed by name) so e.g. self_bust can fail while
+  // fn_pot still resolves during the reconcile load().
+  rpcErrors: {} as Record<string, { message: string }>,
   handlers: [] as Array<(payload: unknown) => void>,
   subscribeStatus: 'SUBSCRIBED' as string,
   removed: 0,
@@ -40,6 +43,7 @@ vi.mock('@/lib/supabase', () => ({
     },
     rpc: (name: string, args: unknown) => {
       h.rpcCalls.push({ name, args })
+      if (h.rpcErrors[name]) return Promise.resolve({ data: null, error: h.rpcErrors[name] })
       return Promise.resolve(h.rpcResult)
     },
     channel: () => {
@@ -129,6 +133,7 @@ beforeEach(() => {
   h.list = {}
   h.rpcResult = { data: 140000, error: null }
   h.rpcCalls = []
+  h.rpcErrors = {}
   h.handlers = []
   h.subscribeStatus = 'SUBSCRIBED'
   h.removed = 0
@@ -287,5 +292,24 @@ describe('Live — self-report bust', () => {
     expect(call!.args).toMatchObject({ p_tournament_id: 't-live' })
     // Optimistic placement: 2 alive incl. Ana → 2º; friendly note replaces the button.
     expect(await screen.findByTestId('bust-reported')).toHaveTextContent('2º lugar')
+  })
+
+  it('on a FAILED self_bust: no false "reportado", error surfaced, retry still possible', async () => {
+    const user = userEvent.setup()
+    h.player = { id: 'p-ana', name: 'Ana', avatar_url: null } // Ana is playing
+    h.rpcErrors = { self_bust: { message: 'boom' } }
+    renderLive()
+
+    await user.click(await screen.findByRole('button', { name: /Estoy fuera — reportar/ }))
+    const dialog = screen.getByRole('dialog', { name: /Reportar que quedaste fuera/ })
+    await user.click(within(dialog).getByRole('button', { name: /Sí, quedé fuera/ }))
+
+    // The RPC was attempted …
+    expect(h.rpcCalls.find((c) => c.name === 'self_bust')).toBeTruthy()
+    // … but it failed, so there is NO false "reportado" note, an error is shown,
+    // and the report button remains (server still has Ana playing → retry).
+    expect(await screen.findByTestId('bust-error')).toBeInTheDocument()
+    expect(screen.queryByTestId('bust-reported')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Estoy fuera — reportar/ })).toBeInTheDocument()
   })
 })

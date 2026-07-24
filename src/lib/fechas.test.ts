@@ -70,10 +70,22 @@ describe('fechas helpers', () => {
     expect(colonesCompact(500)).toBe('₡500')
   })
 
-  it('maps every entry status to a pill label + class', () => {
-    expect(statusPill('confirmed')).toEqual({ label: 'Confirmado', cls: 's-confirmed' })
-    expect(statusPill('declined')).toEqual({ label: 'Canceló', cls: 's-declined' })
-    expect(statusPill('invited')).toEqual({ label: 'Sin resp.', cls: 's-none' })
-    expect(statusPill('winner')).toEqual({ label: 'Campeón', cls: 's-win' })
+  it('maps every entry status to a pill label + class (all 8 states)', () => {
+    // Full-enum contract — the map is a Record<EntryStatus, …>, so every one of
+    // the 8 lifecycle states must have its label + class pinned (TS guarantees
+    // the keys exist, not their values).
+    const expected: Record<EntryStatus, { label: string; cls: string }> = {
+      invited: { label: 'Sin resp.', cls: 's-none' },
+      confirmed: { label: 'Confirmado', cls: 's-confirmed' },
+      declined: { label: 'Canceló', cls: 's-declined' },
+      checked_in: { label: 'Check-in', cls: 's-checked' },
+      playing: { label: 'Jugando', cls: 's-playing' },
+      no_show: { label: 'No-show', cls: 's-noshow' },
+      eliminated: { label: 'Fuera', cls: 's-out' },
+      winner: { label: 'Campeón', cls: 's-win' },
+    }
+    for (const status of Object.keys(expected) as EntryStatus[]) {
+      expect(statusPill(status)).toEqual(expected[status])
+    }
   })
 })

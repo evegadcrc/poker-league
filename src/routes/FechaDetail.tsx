@@ -173,8 +173,10 @@ export default function FechaDetail() {
       patchMine(choice === 'confirm' ? 'confirmed' : 'declined')
       const { error } = await supabase.rpc('rsvp', { p_tournament_id: id, p_choice: choice })
       setBusy(false)
-      if (error) reload() // reconcile back to server truth on failure
-      else reload()
+      if (error) console.error('rsvp failed', error.message)
+      // Silent reconcile: keep the optimistic patch on screen (no skeleton
+      // flash) while the refetch confirms/corrects it against server truth.
+      reload({ silent: true })
     },
     [id, patchMine, reload],
   )
@@ -185,7 +187,7 @@ export default function FechaDetail() {
     patchMine('declined')
     const { error } = await supabase.rpc('cancel_rsvp', { p_tournament_id: id })
     setBusy(false)
-    reload()
+    reload({ silent: true })
     if (error) console.error('cancel_rsvp failed', error.message)
   }, [id, patchMine, reload])
 
@@ -218,7 +220,9 @@ export default function FechaDetail() {
     setCheckIn({ kind: 'idle' })
     patchMine('checked_in')
     setCelebrate({ earlyBird: row?.early_bird ?? false, chips: row?.chips ?? null })
-    reload()
+    // Silent so the "+2.000 fichas" celebration isn't unmounted by a skeleton
+    // flash while the refetch reconciles the optimistic check-in.
+    reload({ silent: true })
   }, [id, patchMine, reload])
 
   // Admin override for a player whose GPS failed (check_in_geo_ok=false in DB).
@@ -226,7 +230,7 @@ export default function FechaDetail() {
     async (entryId: string) => {
       const { error } = await supabase.rpc('admin_check_in', { p_entry_id: entryId })
       if (error) console.error('admin_check_in failed', error.message)
-      else reload()
+      else reload({ silent: true })
     },
     [reload],
   )
@@ -245,7 +249,7 @@ export default function FechaDetail() {
         <Back />
         <div className="fd-note" role="alert">
           <p>No se pudo cargar la fecha.</p>
-          <button type="button" className="btn ghost sm" onClick={reload}>
+          <button type="button" className="btn ghost sm" onClick={() => reload()}>
             Reintentar
           </button>
         </div>

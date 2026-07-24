@@ -21,18 +21,23 @@ export default function Login() {
   // Already signed in AND bound → nothing to do here; go home.
   if (session && player) return <Navigate to="/" replace />
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault()
-    if (!email.trim()) return
+  async function sendLink(target: string) {
     setStatus('sending')
     setError(null)
-    const { error: err } = await signInWithOtp(email.trim())
+    const { error: err } = await signInWithOtp(target)
     if (err) {
       setError(err)
       setStatus('error')
     } else {
       setStatus('sent')
     }
+  }
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault()
+    const target = email.trim()
+    if (!target) return
+    await sendLink(target)
   }
 
   // Signed in, but the email matched no pre-created player (or an RPC error).
@@ -101,7 +106,14 @@ export default function Login() {
 
           {status === 'sent' && (
             <p className="login-note ok">
-              ✉ Enlace enviado a {email}. Revisá tu correo para entrar.
+              ✉ Enlace enviado a {email}. Revisá tu correo para entrar.{' '}
+              <button
+                type="button"
+                className="link-btn"
+                onClick={() => void sendLink(email.trim())}
+              >
+                Reenviar enlace
+              </button>
             </p>
           )}
           {status === 'error' && (

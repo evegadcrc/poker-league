@@ -108,6 +108,8 @@ export default function Live() {
   const [busting, setBusting] = useState(false)
   // Non-null once the player has self-reported → shows the friendly "reportado" note.
   const [reportedPosition, setReportedPosition] = useState<number | null>(null)
+  // True after a failed self_bust → surfaces an error and keeps the retry button.
+  const [bustError, setBustError] = useState(false)
 
   // Refetch. Never blank a working screen: if a refetch errors while we already
   // hold ready data (e.g. mid-reconnect), keep the last-known values.
@@ -196,6 +198,7 @@ export default function Live() {
   const doSelfBust = async () => {
     if (!tid || !myEntry) return
     setBusting(true)
+    setBustError(false)
     const optimisticPos = entries.filter((e) => isAlive(e.status)).length
     setState((prev) => {
       if (prev.phase !== 'ready') return prev
@@ -206,11 +209,19 @@ export default function Live() {
       )
       return { ...prev, entries: next }
     })
-    setReportedPosition(optimisticPos)
     const { error } = await supabase.rpc('self_bust', { p_tournament_id: tid })
     setBusting(false)
     setConfirmBust(false)
-    if (error) console.error('self_bust failed', error.message)
+    if (error) {
+      // The RPC failed → the player is still `playing` server-side. Don't commit
+      // the "reportado" note; roll the optimistic drop back to server truth and
+      // surface an error so they can retry (self_bust is idempotent-safe).
+      setBustError(true)
+      void load()
+      return
+    }
+    // Commit the friendly note only after the server accepted the bust.
+    setReportedPosition(optimisticPos)
     void load() // reconcile optimistic placement with server truth
   }
 
@@ -306,14 +317,24 @@ export default function Live() {
             Reportado: {ordinal(reportedPosition)} lugar · el admin puede ajustar.
           </div>
         ) : canSelfBust ? (
-          <button
-            type="button"
-            className="btn blood full"
-            disabled={busting}
-            onClick={() => setConfirmBust(true)}
-          >
-            Estoy fuera — reportar
-          </button>
+          <>
+            {bustError && (
+              <div className="fd-note" role="alert" data-testid="bust-error">
+                No se pudo reportar. Probá de nuevo.
+              </div>
+            )}
+            <button
+              type="button"
+              className="btn blood full"
+              disabled={busting}
+              onClick={() => {
+                setBustError(false)
+                setConfirmBust(true)
+              }}
+            >
+              Estoy fuera — reportar
+            </button>
+          </>
         ) : null}
       </div>
 

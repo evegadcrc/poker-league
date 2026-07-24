@@ -72,7 +72,7 @@ export default function Leaderboard() {
       {state.status === 'error' && (
         <div className="lb-message" role="alert">
           <p>No se pudo cargar la tabla.</p>
-          <button type="button" className="btn ghost sm" onClick={reload}>
+          <button type="button" className="btn ghost sm" onClick={() => reload()}>
             Reintentar
           </button>
         </div>

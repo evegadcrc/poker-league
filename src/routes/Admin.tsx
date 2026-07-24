@@ -210,8 +210,12 @@ function ConsolePanel() {
   const [conn, setConn] = useState<Conn>('connecting')
   // Transient error surfaced after a failed action RPC (auto-dismisses).
   const [toast, setToast] = useState<string | null>(null)
-  // Fires next_level at most once per level when auto mode hits 0.
+  // Level we have SUCCESSFULLY auto-advanced past (blocks re-firing that level).
   const autoAdvancedLevel = useRef<number | null>(null)
+  // `now` value of the last auto-advance attempt → throttles retries to at most
+  // one per clock tick, so a failed write re-fires next second instead of either
+  // stalling forever or hammering the server in a tight reconcile loop.
+  const autoAttemptAt = useRef<number | null>(null)
 
   const load = useCallback(async () => {
     const next = await fetchConsole()
@@ -269,8 +273,8 @@ function ConsolePanel() {
   // toast AND refetch to reconcile with server truth — a retry can never
   // double-apply, because the state transition blocks the second call.
   const doClock = useCallback(
-    async (action: ClockAction, payload?: Json) => {
-      if (!tid) return
+    async (action: ClockAction, payload?: Json): Promise<boolean> => {
+      if (!tid) return false
       setBusy(true)
       setToast(null)
       const { error } = await supabase.rpc('clock', {
@@ -282,9 +286,10 @@ function ConsolePanel() {
       if (error) {
         setToast('No se pudo actualizar el reloj. Reintentá.')
         void load() // reconcile to server truth so a retry is safe
-      } else {
-        void load()
+        return false
       }
+      void load()
+      return true
     },
     [tid, load],
   )
@@ -304,16 +309,25 @@ function ConsolePanel() {
       : 0
 
   // Auto-advance: admin client is the single writer. When timer_mode='auto' and
-  // the running clock hits 0, write next_level exactly once for this level.
+  // the running clock hits 0, write next_level. It fires once per level on
+  // success; the per-tick throttle (autoAttemptAt) bounds retries so a transient
+  // failure re-fires on the NEXT second's tick — never stalling at 00:00 forever
+  // (Kong-502 class), never looping tightly on the failure-driven refetch.
   useEffect(() => {
     if (state.phase !== 'ready') return
     const { tournament } = state
     if (tournament.timer_mode !== 'auto' || tournament.is_paused) return
     if (remaining > 0) return
     if (autoAdvancedLevel.current === tournament.current_level) return
-    autoAdvancedLevel.current = tournament.current_level
-    void doClock('next_level')
-  }, [state, remaining, doClock])
+    if (autoAttemptAt.current === now) return // at most one attempt per tick
+    autoAttemptAt.current = now
+    void (async () => {
+      const ok = await doClock('next_level')
+      // Only latch the level on success; on failure leave it unset so the next
+      // distinct tick retries. Latching pre-empts a double-fire mid-flight.
+      if (ok) autoAdvancedLevel.current = tournament.current_level
+    })()
+  }, [state, remaining, now, doClock])
 
   if (state.phase === 'loading') return <div className="fd-note">Cargando consola…</div>
   if (state.phase === 'error')

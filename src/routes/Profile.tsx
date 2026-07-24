@@ -100,10 +100,14 @@ export default function Profile() {
       } = supabase.storage.from('avatars').getPublicUrl(path)
       const bustedUrl = `${publicUrl}?t=${Date.now()}`
 
-      const { error: updErr } = await supabase
-        .from('player')
-        .update({ avatar_url: bustedUrl })
-        .eq('id', player.id)
+      // Persist via the SECURITY DEFINER RPC — the direct `player` self-UPDATE
+      // policy was dropped in migration 0012, so a table write now affects 0
+      // rows. `update_own_profile` derives the row from auth.uid(); we resend
+      // the current name so the (name, avatar_url) pair stays intact.
+      const { error: updErr } = await supabase.rpc('update_own_profile', {
+        p_name: player.name,
+        p_avatar_url: bustedUrl,
+      })
       if (updErr) {
         setUpload({ status: 'error', message: 'La foto se subió, pero no se pudo guardar. Probá de nuevo.' })
         return
@@ -160,7 +164,7 @@ export default function Profile() {
         <div className="prof-message" role="alert">
           <p>No se pudo cargar tu perfil.</p>
           <div className="btn-row" style={{ justifyContent: 'center', padding: '8px 18px' }}>
-            <button type="button" className="btn ghost sm" onClick={reload}>
+            <button type="button" className="btn ghost sm" onClick={() => reload()}>
               Reintentar
             </button>
           </div>
