@@ -86,6 +86,9 @@ beforeEach(() => {
   }
   h.rpcCalls = []
   h.updates = []
+  // CreateFecha seeds its money defaults from localStorage (pf-fecha-defaults);
+  // clear it so each test starts from the hardcoded defaults.
+  localStorage.clear()
 })
 
 describe('Admin · Nueva fecha (slice 13)', () => {
@@ -106,11 +109,53 @@ describe('Admin · Nueva fecha (slice 13)', () => {
       .p_payload
     expect(payload.name).toBe('Fecha 10 — Casa de José')
     expect(payload.geofence_radius_m).toBe(100)
-    expect(payload.buy_in).toBe(20000)
-    expect(payload.starting_stack).toBe(10000)
-    expect(payload.rebuy_until_level).toBe(6)
+    // New defaults (CHANGE 9): buy-in 10.000, stack inicial 20.000, recompra hasta N8.
+    expect(payload.buy_in).toBe(10000)
+    expect(payload.starting_stack).toBe(20000)
+    expect(payload.rebuy_until_level).toBe(8)
     expect(payload.ante_enabled).toBe(true)
     expect(payload.blind_structure_id).toBe('bs-1')
+  })
+
+  it('displays money inputs with es-CR thousand separators but submits the raw integer', async () => {
+    const user = userEvent.setup()
+    renderAdmin()
+    await user.click(screen.getByRole('tab', { name: 'Nueva fecha' }))
+    await screen.findByTestId('create-fecha')
+
+    const buyIn = screen.getByLabelText('Buy-in / Recompra (₡)')
+    // Default seeds to 10.000 (formatted).
+    expect(buyIn).toHaveValue('10.000')
+
+    await user.clear(buyIn)
+    await user.type(buyIn, '25000')
+    // Formatted display while typing.
+    expect(buyIn).toHaveValue('25.000')
+
+    await user.click(screen.getByRole('button', { name: 'Crear fecha' }))
+    await waitFor(() => expect(rpc('create_tournament')).toBeTruthy())
+    const payload = (rpc('create_tournament')!.args as { p_payload: Record<string, unknown> })
+      .p_payload
+    // Persisted value is the raw integer, not the formatted string.
+    expect(payload.buy_in).toBe(25000)
+  })
+
+  it('"Guardar ajustes" persists the current money values to localStorage as defaults', async () => {
+    const user = userEvent.setup()
+    renderAdmin()
+    await user.click(screen.getByRole('tab', { name: 'Nueva fecha' }))
+    await screen.findByTestId('create-fecha')
+
+    const buyIn = screen.getByLabelText('Buy-in / Recompra (₡)')
+    await user.clear(buyIn)
+    await user.type(buyIn, '30000')
+    await user.click(screen.getByRole('button', { name: 'Guardar ajustes' }))
+
+    expect(await screen.findByText('✓ Guardado como predeterminado')).toBeInTheDocument()
+    const stored = JSON.parse(localStorage.getItem('pf-fecha-defaults') ?? '{}')
+    expect(stored.buyIn).toBe(30000)
+    expect(stored.startingStack).toBe(20000)
+    expect(stored.rebuyUntil).toBe(8)
   })
 
   it('shows a ₡ adornment on the colón money inputs (buy-in / rebuy)', async () => {
