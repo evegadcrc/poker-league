@@ -70,3 +70,18 @@ writes points), so cross-test/cross-run order leaks. Not a code defect — the a
 seed BEFORE the gate; treat a single red that clears on re-run as flake, not a real failure. A
 proper fix (transaction-wrap or per-test fixture reset for the integration suite) is a good
 simplify/review-loop follow-up — note it, don't silently ignore.
+
+## Simplify pass — behavior-preserving dedup (post-slice-16)
+2026-07-23 · simplify · tags: refactor, hooks, dedup
+
+- Extracted `src/lib/useLoadable.ts` — the attempt-counter + abort-guarded fetch effect that
+  flips to `loading`, fetches, and reconciles on `reload`. Reused in Fechas, Leaderboard, Profile
+  (via `enabled` gate for the null-player case), and FechaDetail (via exposed `setState` for its
+  optimistic `patchMine`). Each screen keeps its own state union + render policy at the call site.
+- Skipped (already clean): status→pill map (`statusPill` in fechas.ts, single consumer;
+  per-screen `BADGE`/`OVERLINE` are legitimately distinct); currency/date formatting (centralized
+  in `fechas.ts`, reused); clipboard/WhatsApp text (centralized in `summary.ts`, reused by Admin).
+- Skipped by judgment: Live+Admin share a realtime + 1s-clock + keep-prev-on-error load mechanic,
+  but it's only 2 sites (below the 3-site bar) and intertwined with screen-specific logic
+  (auto-advance, toast, self-bust) — extraction risked behavior drift for little gain.
+- Tests unchanged: 176 passed / 1 skipped. `npm run build` + `npm run lint` green.
