@@ -242,6 +242,48 @@ describe('FechaDetail', () => {
     expect(screen.getByRole('link', { name: /en vivo/i })).toBeInTheDocument()
   })
 
+  // Slice 24 — a late arrival can confirm ("Voy") on a LIVE fecha; decline/cancel
+  // stay scheduled-only.
+  it('live + non-confirmed player sees the "Voy" confirm button (no decline/cancel)', async () => {
+    setTournament('live')
+    setEntries('invited')
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    expect(screen.getByRole('button', { name: /Voy/i })).toBeInTheDocument()
+    // Decline / cancel are frozen once the fecha is opened.
+    expect(screen.queryByRole('button', { name: 'No voy' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Cancelar' })).not.toBeInTheDocument()
+  })
+
+  it('live: confirming (Voy) calls rsvp and the check-in button becomes reachable', async () => {
+    const user = userEvent.setup()
+    setTournament('live')
+    setEntries('invited')
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    const voy = screen.getByRole('button', { name: /Voy/i })
+    // The post-confirm silent reload returns the now-confirmed entry.
+    setEntries('confirmed')
+    await user.click(voy)
+
+    expect(h.rpcCalls).toContainEqual(['rsvp', { p_tournament_id: 't-1', p_choice: 'confirm' }])
+    // Confirmed → the geofenced check-in affordance takes over.
+    expect(await screen.findByRole('button', { name: /Hacer check-in/i })).toBeInTheDocument()
+  })
+
+  it('live: a player already in the game (playing) sees no RSVP/confirm button', async () => {
+    setTournament('live')
+    setEntries('playing')
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    expect(screen.queryByRole('button', { name: /Voy/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'No voy' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Cancelar' })).not.toBeInTheDocument()
+  })
+
   it('completed fecha shows finishing place + points per player (winner accented)', async () => {
     setTournament('completed')
     setCompletedEntries()

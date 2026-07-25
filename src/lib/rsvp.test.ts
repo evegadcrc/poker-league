@@ -177,12 +177,55 @@ describe.skipIf(!canRun)('rsvp / cancel_rsvp (slice 9, local integration)', () =
   })
 
   // ------------------------------------------------------------------------
-  it('rejects rsvp once the fecha is opened (status = live)', async () => {
+  // Slice 24 — a late arrival can still confirm ("Voy") on a LIVE fecha so the
+  // check-in flow can pick them up. Confirm is allowed; decline stays locked.
+  it("rsvp('confirm') on a LIVE fecha upserts the caller's entry to confirmed", async () => {
     const t = await mkTournament(new Date(Date.now() + 24 * HOUR_MS).toISOString(), 'live')
 
     const { error } = await member.rpc('rsvp', { p_tournament_id: t, p_choice: 'confirm' })
+    expect(error).toBeNull()
+
+    const entry = await readEntry(t, memberPlayerId)
+    expect(entry!.status).toBe('confirmed')
+    expect(entry!.rsvp_at).not.toBeNull()
+    expect(entry!.points_earned).toBeNull()
+  })
+
+  // ------------------------------------------------------------------------
+  it("rsvp('decline') on a LIVE fecha raises (declining a running game is locked)", async () => {
+    const t = await mkTournament(new Date(Date.now() + 24 * HOUR_MS).toISOString(), 'live')
+
+    const { error } = await member.rpc('rsvp', { p_tournament_id: t, p_choice: 'decline' })
     expect(error).not.toBeNull()
-    expect(error!.message).toMatch(/locked once the fecha is opened/i)
+    expect(error!.message).toMatch(/declining is locked once the fecha is opened/i)
+  })
+
+  // ------------------------------------------------------------------------
+  it("rsvp('confirm') on a CANCELLED fecha raises (RSVP is closed)", async () => {
+    const t = await mkTournament(new Date(Date.now() + 24 * HOUR_MS).toISOString(), 'live')
+    await admin.from('tournament').update({ cancelled_at: new Date().toISOString() }).eq('id', t)
+
+    const { error } = await member.rpc('rsvp', { p_tournament_id: t, p_choice: 'confirm' })
+    expect(error).not.toBeNull()
+    expect(error!.message).toMatch(/cancelled, RSVP is closed/i)
+  })
+
+  // ------------------------------------------------------------------------
+  it('rsvp does NOT clobber an entry that is already in the game (status = playing)', async () => {
+    const t = await mkTournament(new Date(Date.now() + 24 * HOUR_MS).toISOString(), 'live')
+    // Seat the player mid-game (admin fixture), then a stray re-RSVP must fail.
+    const { error: seatErr } = await admin
+      .from('entry')
+      .insert({ tournament_id: t, player_id: memberPlayerId, status: 'playing' })
+    expect(seatErr).toBeNull()
+
+    const { error } = await member.rpc('rsvp', { p_tournament_id: t, p_choice: 'confirm' })
+    expect(error).not.toBeNull()
+    expect(error!.message).toMatch(/already in the game cannot re-RSVP/i)
+
+    // Entry is untouched — still playing.
+    const entry = await readEntry(t, memberPlayerId)
+    expect(entry!.status).toBe('playing')
   })
 
   // ------------------------------------------------------------------------
