@@ -1,8 +1,8 @@
 ---
 goal: Build "Poker Friends" PWA (React+Vite+TS+Tailwind / Supabase) — Phase 2 (refinements + odds calc, sound, gallery/learning)
 task: poker-league-phase2
-step: review
-progress: 85%
+step: shipped
+progress: 100%
 blockers: none
 updated: 2026-07-24T08:00:00Z
 ---
