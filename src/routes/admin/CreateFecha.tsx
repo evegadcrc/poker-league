@@ -1,8 +1,15 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { requestPosition } from '@/lib/checkin'
-import type { Json } from '@/lib/database.types'
+import PrizeDistributionEditor, {
+  defaultRows,
+  isValidDist,
+  rowsToDist,
+  type PctRow,
+} from '@/components/PrizeDistributionEditor'
+import type { Database, Json } from '@/lib/database.types'
+import { formatMiles } from '@/lib/format'
 
 type Structure = { id: string; name: string }
 
@@ -15,15 +22,85 @@ const REBUY_OPTIONS: { label: string; value: number | null }[] = [
 ]
 
 // ---------------------------------------------------------------------------
+// Fecha money/rebuy defaults. The league/season config does NOT store these
+// (buy_in / rebuy_amount / starting_stack are tournament-level; bonus-stack and
+// a re-entry cap have no DB column at all), so "Guardar ajustes" persists them
+// client-side under `pf-fecha-defaults`. CreateFecha seeds the form from that
+// key on mount, falling back to the hardcoded template below. No schema change.
+// ---------------------------------------------------------------------------
+const FECHA_DEFAULTS_KEY = 'pf-fecha-defaults'
+
+type FechaDefaults = {
+  buyIn: number
+  rebuyAmount: number
+  startingStack: number
+  bonusStack: number
+  rebuyUntil: number | null
+  // Max re-entries a single player may buy in a fecha. COUNT of rebuys — distinct
+  // from rebuyUntil (the level the rebuy window stays open). No DB column yet, so
+  // this is a saved form default only (not persisted onto the tournament row).
+  maxRebuys: number
+}
+
+const HARDCODED_FECHA_DEFAULTS: FechaDefaults = {
+  buyIn: 10000,
+  rebuyAmount: 10000,
+  startingStack: 20000,
+  bonusStack: 5000,
+  rebuyUntil: 8,
+  maxRebuys: 8,
+}
+
+function loadFechaDefaults(): FechaDefaults {
+  try {
+    const raw = localStorage.getItem(FECHA_DEFAULTS_KEY)
+    if (!raw) return { ...HARDCODED_FECHA_DEFAULTS }
+    const parsed = JSON.parse(raw) as Partial<FechaDefaults>
+    const num = (v: unknown, fallback: number) =>
+      typeof v === 'number' && Number.isFinite(v) ? v : fallback
+    return {
+      buyIn: num(parsed.buyIn, HARDCODED_FECHA_DEFAULTS.buyIn),
+      rebuyAmount: num(parsed.rebuyAmount, HARDCODED_FECHA_DEFAULTS.rebuyAmount),
+      startingStack: num(parsed.startingStack, HARDCODED_FECHA_DEFAULTS.startingStack),
+      bonusStack: num(parsed.bonusStack, HARDCODED_FECHA_DEFAULTS.bonusStack),
+      rebuyUntil: parsed.rebuyUntil === null ? null : num(parsed.rebuyUntil, 8),
+      maxRebuys: num(parsed.maxRebuys, HARDCODED_FECHA_DEFAULTS.maxRebuys),
+    }
+  } catch {
+    return { ...HARDCODED_FECHA_DEFAULTS }
+  }
+}
+
+function saveFechaDefaults(d: FechaDefaults): void {
+  try {
+    localStorage.setItem(FECHA_DEFAULTS_KEY, JSON.stringify(d))
+  } catch {
+    // localStorage unavailable (private mode / quota) — non-fatal.
+  }
+}
+
+/** Strip every non-digit and return the raw integer (empty → 0). */
+const parseMoney = (s: string): number => {
+  const digits = s.replace(/\D/g, '')
+  return digits === '' ? 0 : Number(digits)
+}
+
+// ---------------------------------------------------------------------------
 // Admin · Nueva fecha (slice 13). Creates a scheduled fecha in the active
 // season via create_tournament. Venue is captured by geolocation ("usar mi
-// ubicación") or entered manually; early-bird bonus is a season setting shown
-// read-only here (edited in Liga · temporada).
+// ubicación") or entered manually. Money inputs display es-CR thousands
+// separators; their defaults + the rebuy cutoff seed from pf-fecha-defaults
+// (see loadFechaDefaults) and are saved back via "Guardar ajustes".
 // ---------------------------------------------------------------------------
 export default function CreateFecha() {
   const navigate = useNavigate()
   const [structures, setStructures] = useState<Structure[]>([])
-  const [earlyBirdChips, setEarlyBirdChips] = useState<number | null>(null)
+  // Payout split for this fecha — seeded from the season default template, then
+  // fully editable. Persisted to tournament.payout_distribution after create.
+  const [distRows, setDistRows] = useState<PctRow[]>(defaultRows)
+
+  // Money/rebuy defaults, seeded once from localStorage (falls back hardcoded).
+  const seeded = useMemo(loadFechaDefaults, [])
 
   const [name, setName] = useState('')
   const [date, setDate] = useState('')
@@ -31,12 +108,23 @@ export default function CreateFecha() {
   const [lat, setLat] = useState('')
   const [lng, setLng] = useState('')
   const [radius, setRadius] = useState('100')
-  const [buyIn, setBuyIn] = useState('20000')
-  const [rebuyAmount, setRebuyAmount] = useState('20000')
-  const [startingStack, setStartingStack] = useState('10000')
-  const [rebuyUntil, setRebuyUntil] = useState<number | null>(6)
+  const [buyIn, setBuyIn] = useState(seeded.buyIn)
+  const [rebuyAmount, setRebuyAmount] = useState(seeded.rebuyAmount)
+  const [startingStack, setStartingStack] = useState(seeded.startingStack)
+  const [bonusStack, setBonusStack] = useState(seeded.bonusStack)
+  const [rebuyUntil, setRebuyUntil] = useState<number | null>(seeded.rebuyUntil)
+  const [maxRebuys, setMaxRebuys] = useState(seeded.maxRebuys)
+  const [savedDefaults, setSavedDefaults] = useState(false)
   const [structureId, setStructureId] = useState('')
   const [anteEnabled, setAnteEnabled] = useState(false)
+  // Standalone-fecha toggle (Phase-2 step 7). ON by default: the fecha counts
+  // toward the season standings. OFF → it runs fully (clock / eliminations /
+  // prizes) but adds 0 to every player's season total.
+  const [countsForLeague, setCountsForLeague] = useState(true)
+  // Odds-calculator toggle (Phase-2 step 7). ON by default → the Calculadora is
+  // available. OFF → players can't use it while THIS fecha is live (the admin can
+  // also flip it mid-game from the live console). Persisted to odds_enabled.
+  const [oddsEnabled, setOddsEnabled] = useState(true)
 
   const [locating, setLocating] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -49,7 +137,7 @@ export default function CreateFecha() {
         supabase.from('blind_structure').select('id, name').order('name'),
         supabase
           .from('season')
-          .select('early_bird_bonus_chips')
+          .select('payout_template')
           .eq('status', 'active')
           .order('year', { ascending: false })
           .limit(1)
@@ -59,8 +147,19 @@ export default function CreateFecha() {
       const list = (structRes.data ?? []) as Structure[]
       setStructures(list)
       if (list.length > 0 && !structureId) setStructureId(list[0]!.id)
-      const season = seasonRes.data as { early_bird_bonus_chips: number } | null
-      if (season) setEarlyBirdChips(season.early_bird_bonus_chips)
+      const season = seasonRes.data as {
+        payout_template: unknown
+      } | null
+      if (season) {
+        // Seed the editor from the season's default template (raw fraction array,
+        // e.g. [0.60, 0.28, 0.12] → 60 / 28 / 12); fall back to the top-3 default.
+        const tmpl = Array.isArray(season.payout_template) ? season.payout_template : []
+        const rows = tmpl
+          .map((v) => Number(v))
+          .filter((v) => Number.isFinite(v))
+          .map((v) => ({ pct: String(Math.round(v * 1000) / 10) }))
+        setDistRows(rows.length > 0 ? rows : defaultRows())
+      }
     })()
     return () => {
       alive = false
@@ -82,6 +181,22 @@ export default function CreateFecha() {
     }
   }, [])
 
+  // Controlled formatted-money change handler: store the raw integer, invalidate
+  // the "guardado" note so it never lingers over edited values.
+  const onMoney = useCallback(
+    (setter: (n: number) => void) => (e: ChangeEvent<HTMLInputElement>) => {
+      setter(parseMoney(e.target.value))
+      setSavedDefaults(false)
+    },
+    [],
+  )
+
+  // Persist the current money/rebuy values as the defaults for future fechas.
+  const guardarAjustes = useCallback(() => {
+    saveFechaDefaults({ buyIn, rebuyAmount, startingStack, bonusStack, rebuyUntil, maxRebuys })
+    setSavedDefaults(true)
+  }, [buyIn, rebuyAmount, startingStack, bonusStack, rebuyUntil, maxRebuys])
+
   const submit = useCallback(async () => {
     setBusy(true)
     setError(null)
@@ -92,10 +207,10 @@ export default function CreateFecha() {
       venue_lat: lat === '' ? null : Number(lat),
       venue_lng: lng === '' ? null : Number(lng),
       geofence_radius_m: radius === '' ? 100 : Number(radius),
-      buy_in: buyIn === '' ? 0 : Number(buyIn),
-      rebuy_amount: rebuyAmount === '' ? null : Number(rebuyAmount),
+      buy_in: buyIn,
+      rebuy_amount: rebuyAmount === 0 ? null : rebuyAmount,
       rebuy_until_level: rebuyUntil,
-      starting_stack: startingStack === '' ? null : Number(startingStack),
+      starting_stack: startingStack === 0 ? null : startingStack,
       ante_enabled: anteEnabled,
       blind_structure_id: structureId || null,
     }
@@ -109,6 +224,21 @@ export default function CreateFecha() {
     }
     const rows = (data ?? []) as { id: string }[]
     const id = rows[0]?.id
+    // Persist the fecha's payout split + the standalone flag. create_tournament
+    // seeds a turnout-scaled default distribution; the admin's edited version is
+    // authoritative, so overwrite it. counts_for_league is always written (the
+    // column defaults true; a standalone fecha needs the explicit false).
+    // Non-blocking: a create succeeds regardless — both can be fixed live.
+    if (id) {
+      const update: Database['public']['Tables']['tournament']['Update'] = {
+        counts_for_league: countsForLeague,
+        odds_enabled: oddsEnabled,
+      }
+      if (isValidDist(distRows)) {
+        update.payout_distribution = rowsToDist(distRows) as unknown as Json
+      }
+      await supabase.from('tournament').update(update).eq('id', id)
+    }
     navigate(id ? `/fechas/${id}` : '/fechas')
   }, [
     name,
@@ -123,6 +253,9 @@ export default function CreateFecha() {
     startingStack,
     anteEnabled,
     structureId,
+    distRows,
+    countsForLeague,
+    oddsEnabled,
     navigate,
   ])
 
@@ -188,39 +321,43 @@ export default function CreateFecha() {
       <div className="field">
         <label htmlFor="cf-buyin">Buy-in / Recompra (₡)</label>
         <div className="two">
-          <input
-            id="cf-buyin"
-            inputMode="numeric"
-            value={buyIn}
-            onChange={(e) => setBuyIn(e.target.value)}
-          />
-          <input
-            id="cf-rebuy"
-            inputMode="numeric"
-            aria-label="Recompra"
-            value={rebuyAmount}
-            onChange={(e) => setRebuyAmount(e.target.value)}
-          />
+          <span className="money-input" data-symbol="₡">
+            <input
+              id="cf-buyin"
+              inputMode="numeric"
+              value={formatMiles(buyIn)}
+              onChange={onMoney(setBuyIn)}
+            />
+          </span>
+          <span className="money-input" data-symbol="₡">
+            <input
+              id="cf-rebuy"
+              inputMode="numeric"
+              aria-label="Recompra"
+              value={formatMiles(rebuyAmount)}
+              onChange={onMoney(setRebuyAmount)}
+            />
+          </span>
         </div>
       </div>
 
       <div className="field">
-        <label htmlFor="cf-stack">Stack inicial / Bonus llegada temprana</label>
+        <label htmlFor="cf-stack">Stack inicial / Bonus stack</label>
         <div className="two">
           <input
             id="cf-stack"
             inputMode="numeric"
-            value={startingStack}
-            onChange={(e) => setStartingStack(e.target.value)}
+            value={formatMiles(startingStack)}
+            onChange={onMoney(setStartingStack)}
           />
           <input
-            aria-label="Bonus llegada temprana"
-            value={earlyBirdChips != null ? `+${earlyBirdChips.toLocaleString('es-CR')}` : '—'}
-            disabled
-            readOnly
+            id="cf-bonus"
+            inputMode="numeric"
+            aria-label="Bonus stack"
+            value={formatMiles(bonusStack)}
+            onChange={onMoney(setBonusStack)}
           />
         </div>
-        <div className="hintline">El bonus de llegada temprana se ajusta en Liga · temporada.</div>
       </div>
 
       <div className="field">
@@ -228,7 +365,10 @@ export default function CreateFecha() {
         <select
           id="cf-rebuy-until"
           value={rebuyUntil === null ? 'none' : String(rebuyUntil)}
-          onChange={(e) => setRebuyUntil(e.target.value === 'none' ? null : Number(e.target.value))}
+          onChange={(e) => {
+            setRebuyUntil(e.target.value === 'none' ? null : Number(e.target.value))
+            setSavedDefaults(false)
+          }}
         >
           {REBUY_OPTIONS.map((o) => (
             <option key={o.label} value={o.value === null ? 'none' : String(o.value)}>
@@ -236,6 +376,20 @@ export default function CreateFecha() {
             </option>
           ))}
         </select>
+      </div>
+
+      <div className="field">
+        <label htmlFor="cf-max-rebuys">Máx recompras por jugador</label>
+        <input
+          id="cf-max-rebuys"
+          inputMode="numeric"
+          value={String(maxRebuys)}
+          onChange={(e) => {
+            const digits = e.target.value.replace(/\D/g, '')
+            setMaxRebuys(digits === '' ? 0 : Number(digits))
+            setSavedDefaults(false)
+          }}
+        />
       </div>
 
       <div className="field">
@@ -254,6 +408,8 @@ export default function CreateFecha() {
         </select>
       </div>
 
+      <PrizeDistributionEditor rows={distRows} onChange={setDistRows} disabled={busy} />
+
       <div className="toggle-row">
         <div>
           <div className="tl">Usar ante</div>
@@ -269,17 +425,58 @@ export default function CreateFecha() {
         />
       </div>
 
+      <div className="toggle-row">
+        <div>
+          <div className="tl">Cuenta para la liga</div>
+          <div className="ts">Si lo apagás, la fecha se juega igual pero no suma a la tabla</div>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={countsForLeague}
+          aria-label="Cuenta para la liga"
+          className={`switch${countsForLeague ? ' on' : ''}`}
+          onClick={() => setCountsForLeague((v) => !v)}
+        />
+      </div>
+
+      <div className="toggle-row">
+        <div>
+          <div className="tl">Permitir calculadora de probabilidades</div>
+          <div className="ts">Si lo apagás, la calculadora queda deshabilitada mientras la fecha esté en vivo</div>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={oddsEnabled}
+          aria-label="Permitir calculadora de probabilidades"
+          className={`switch${oddsEnabled ? ' on' : ''}`}
+          onClick={() => setOddsEnabled((v) => !v)}
+        />
+      </div>
+
       {error && (
         <div className="fd-note" role="alert" style={{ color: 'var(--oxblood)' }}>
           {error}
         </div>
       )}
+      {savedDefaults && (
+        <div className="fd-note" role="status">
+          ✓ Guardado como predeterminado
+        </div>
+      )}
+
+      <div className="btn-row" style={{ padding: '4px 18px 0' }}>
+        <button type="button" className="btn ghost full" onClick={guardarAjustes}>
+          Guardar ajustes
+        </button>
+      </div>
 
       <div className="btn-row" style={{ padding: '4px 18px 0' }}>
         <button
           type="button"
           className="btn blood full"
-          disabled={busy}
+          disabled={busy || !isValidDist(distRows)}
           onClick={() => void submit()}
         >
           {busy ? 'Creando…' : 'Crear fecha'}

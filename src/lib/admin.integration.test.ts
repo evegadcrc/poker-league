@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
+import { tieSplitMoneyEach } from '@/lib/admin'
+import { parsePrizes } from '@/lib/live'
 
 // ---------------------------------------------------------------------------
 // Slice 12 — admin console RPCs, integration tests against the local Supabase
@@ -64,13 +66,15 @@ describe.skipIf(!canRun)('admin console RPCs (slice 12, local integration)', () 
     withStructure?: boolean
     paused?: boolean
     levelStartedAt?: string | null
+    countsForLeague?: boolean
+    scheduledAt?: string
   }) {
     const { data, error } = await admin
       .from('tournament')
       .insert({
         season_id: seasonId,
         name: `T ${RUN}`,
-        scheduled_at: new Date().toISOString(),
+        scheduled_at: opts.scheduledAt ?? new Date().toISOString(),
         status: 'live',
         starting_stack: STACK,
         rebuy_amount: 20_000,
@@ -80,6 +84,7 @@ describe.skipIf(!canRun)('admin console RPCs (slice 12, local integration)', () 
         is_paused: opts.paused ?? false,
         blind_structure_id: opts.withStructure === false ? null : structureId,
         final_table_size: opts.finalTableSize ?? 5,
+        ...(opts.countsForLeague === undefined ? {} : { counts_for_league: opts.countsForLeague }),
       })
       .select('id')
       .single()
@@ -469,5 +474,257 @@ describe.skipIf(!canRun)('admin console RPCs (slice 12, local integration)', () 
     expect(error).toBeNull()
     expect((await readEntry(mine)).final_position).toBe(2)
     expect((await readEntry(mine)).status).toBe('eliminated')
+  })
+
+  // ========================================================================
+  // Phase-2 step 6 — simultaneous multi-bust (ordered + dead-even tie split).
+  // ========================================================================
+
+  // ------------------------------------------------------------------------
+  // Ordered: the entry LISTED FIRST (shortest starting stack) takes the WORST
+  // position; sequential total−1. No chop_group (ordered is not a tie).
+  it('eliminate_multi ordered: shortest-first → worse position (sequential total−1)', async () => {
+    const t = await mkTournament({ finalTableSize: 5 })
+    const short = await mkEntry(t, await mkPlayer())
+    const tall = await mkEntry(t, await mkPlayer())
+    const c = await mkEntry(t, await mkPlayer())
+    const d = await mkEntry(t, await mkPlayer())
+
+    // 4 alive → bust [short, tall] in order → short=4 (worst), tall=3.
+    const { error } = await admin.rpc('eliminate_multi', { p_entry_ids: [short, tall], p_tied: false })
+    expect(error).toBeNull()
+
+    const s = await readEntry(short)
+    const ta = await readEntry(tall)
+    expect(s.final_position).toBe(4)
+    expect(ta.final_position).toBe(3)
+    expect(s.status).toBe('eliminated')
+    expect(ta.status).toBe('eliminated')
+    // Ordered mode is NOT a tie → no chop_group, no champion flags.
+    expect(s.chop_group).toBeNull()
+    expect(ta.chop_group).toBeNull()
+    expect(s.chopped).toBe(false)
+    // The other two stay in play.
+    expect((await readEntry(c)).status).toBe('playing')
+    expect((await readEntry(d)).status).toBe('playing')
+  })
+
+  // ------------------------------------------------------------------------
+  // Dead-even tie at 7th/8th (mid-field): SPLIT points + money equally, and are
+  // NOT co-champions. THE TRAP — chop_group is set (for the points split) but
+  // chopped / status='winner' / made_final_table stay FALSE (else a gold form
+  // pill + phantom win via leaderboard's `final_position=1 OR chopped`).
+  it('eliminate_multi tie: mid-field 2-bust splits points+money, NOT champions', async () => {
+    const t = await mkTournament({ finalTableSize: 5 })
+    const players = []
+    for (let i = 0; i < 8; i++) players.push(await mkEntry(t, await mkPlayer()))
+    const [tieA, tieB, r1, r2, r3, r4, r5] = players // players[7] is the eventual winner
+
+    // 8 alive → tie-bust two → they occupy the bottom 2 positions (8 & 7).
+    const { error } = await admin.rpc('eliminate_multi', { p_entry_ids: [tieA!, tieB!], p_tied: true })
+    expect(error).toBeNull()
+
+    const a = await readEntry(tieA!)
+    const b = await readEntry(tieB!)
+    expect([a.final_position, b.final_position].sort()).toEqual([7, 8])
+    // Shared chop_group drives the equal points split…
+    expect(a.chop_group).not.toBeNull()
+    expect(a.chop_group).toBe(b.chop_group)
+    // …but NONE of the champion flags are set (the trap):
+    expect(a.chopped).toBe(false)
+    expect(b.chopped).toBe(false)
+    expect(a.status).toBe('eliminated')
+    expect(b.status).toBe('eliminated')
+    expect(a.made_final_table).toBe(false) // pos 7/8 > final-table size 5
+    expect(b.made_final_table).toBe(false)
+
+    // MONEY: give positions 7 & 8 distinct prize amounts; the tie splits their
+    // SUM equally (mirrors the chop money-split rounding) → both get the same.
+    await admin
+      .from('tournament')
+      .update({
+        prizes: [
+          { position: 7, pct: null, amount: 30_000 },
+          { position: 8, pct: null, amount: 10_000 },
+        ],
+      })
+      .eq('id', t)
+    const prizes = parsePrizes((await readTournament(t)).prizes)
+    expect(tieSplitMoneyEach(prizes, [7, 8])).toBe(20_000) // (30k+10k)/2, equal for both
+
+    // Play the rest down to a single winner, then complete → points computed.
+    for (const id of [r1!, r2!, r3!, r4!, r5!]) await admin.rpc('eliminate', { p_entry_id: id })
+    expect((await admin.rpc('complete_tournament', { p_tournament_id: t })).error).toBeNull()
+
+    // POINTS: N=8. pv(7)=(8−7)×10+2=12 ; pv(8)=0+2=2 ; avg=7 — equal for both.
+    const aDone = await readEntry(tieA!)
+    const bDone = await readEntry(tieB!)
+    expect(aDone.points_earned).toBe(7)
+    expect(bDone.points_earned).toBe(7)
+    expect(aDone.chopped).toBe(false)
+    expect(aDone.made_final_table).toBe(false)
+
+    // LEADERBOARD: NOT counted as wins/champions — no gold ('champion') form pill.
+    const { data: lb } = await admin.rpc('leaderboard', { p_season_id: seasonId })
+    const rows = (lb ?? []) as { player_id: string; wins: number; podiums: number; form: string[] }[]
+    for (const done of [aDone, bDone]) {
+      const row = rows.find((r) => r.player_id === done.player_id)!
+      expect(row.wins).toBe(0)
+      expect(row.podiums).toBe(0)
+      expect(row.form[0]).toBe('out')
+      expect(row.form[0]).not.toBe('champion')
+    }
+  })
+
+  // ------------------------------------------------------------------------
+  // Composition: a mid-field tie-split still composes with a LATER real chop at
+  // the final table — champion flags land ONLY on the final chop.
+  it('eliminate_multi tie composes with a later real final-table chop', async () => {
+    const t = await mkTournament({ finalTableSize: 5 })
+    const players = []
+    for (let i = 0; i < 8; i++) players.push(await mkEntry(t, await mkPlayer()))
+    const [tieA, tieB, m1, m2, m3, m4, finA, finB] = players
+
+    // Mid-field tie at 7/8.
+    await admin.rpc('eliminate_multi', { p_entry_ids: [tieA!, tieB!], p_tied: true })
+    // Bust 4 more down to the final 2 (finA, finB).
+    for (const id of [m1!, m2!, m3!, m4!]) await admin.rpc('eliminate', { p_entry_id: id })
+    // Real chop of the final 2 → co-champions.
+    const { error } = await admin.rpc('complete_tournament', {
+      p_tournament_id: t,
+      p_chop_entry_ids: [finA!, finB!],
+    })
+    expect(error).toBeNull()
+
+    const fa = await readEntry(finA!)
+    const fb = await readEntry(finB!)
+    const a = await readEntry(tieA!)
+    const b = await readEntry(tieB!)
+
+    // Final chop → champions (chopped, winner, top points 80 = avg(pv1,pv2)).
+    expect(fa.chopped).toBe(true)
+    expect(fb.chopped).toBe(true)
+    expect(fa.status).toBe('winner')
+    expect(fa.points_earned).toBe(80)
+    expect(fb.points_earned).toBe(80)
+    // The two chop cohorts are DISTINCT groups.
+    expect(fa.chop_group).toBe(fb.chop_group)
+    expect(a.chop_group).toBe(b.chop_group)
+    expect(a.chop_group).not.toBe(fa.chop_group)
+    // Tie group stays NON-champion (chopped false, mid-field points).
+    expect(a.chopped).toBe(false)
+    expect(b.chopped).toBe(false)
+    expect(a.points_earned).toBe(7)
+
+    // Leaderboard: finalists are wins/champions; the tie group is not.
+    const { data: lb } = await admin.rpc('leaderboard', { p_season_id: seasonId })
+    const rows = (lb ?? []) as { player_id: string; wins: number; form: string[] }[]
+    expect(rows.find((r) => r.player_id === fa.player_id)!.wins).toBe(1)
+    expect(rows.find((r) => r.player_id === fa.player_id)!.form[0]).toBe('champion')
+    expect(rows.find((r) => r.player_id === a.player_id)!.wins).toBe(0)
+    expect(rows.find((r) => r.player_id === a.player_id)!.form[0]).toBe('out')
+  })
+
+  // ------------------------------------------------------------------------
+  // REQUIRED (review iter 1): a multi-bust must leave ≥1 survivor. Selecting the
+  // WHOLE in-play field raises in BOTH modes (a real final-table/heads-up chop
+  // goes through complete_tournament, not eliminate_multi). Leaving ≥1 works.
+  it('eliminate_multi RAISES when it would empty the field (ordered, all selected)', async () => {
+    const t = await mkTournament({ finalTableSize: 5 })
+    const a = await mkEntry(t, await mkPlayer())
+    const b = await mkEntry(t, await mkPlayer())
+    const c = await mkEntry(t, await mkPlayer())
+
+    const { error } = await admin.rpc('eliminate_multi', { p_entry_ids: [a, b, c], p_tied: false })
+    expect(error).not.toBeNull()
+    // Field untouched — nothing eliminated (whole tx rolled back).
+    for (const id of [a, b, c]) expect((await readEntry(id)).status).toBe('playing')
+  })
+
+  it('eliminate_multi RAISES when it would empty the field (tie, all selected)', async () => {
+    const t = await mkTournament({ finalTableSize: 5 })
+    const a = await mkEntry(t, await mkPlayer())
+    const b = await mkEntry(t, await mkPlayer())
+
+    const { error } = await admin.rpc('eliminate_multi', { p_entry_ids: [a, b], p_tied: true })
+    expect(error).not.toBeNull()
+    for (const id of [a, b]) {
+      const e = await readEntry(id)
+      expect(e.status).toBe('playing')
+      expect(e.final_position).toBeNull()
+      expect(e.chop_group).toBeNull()
+    }
+  })
+
+  it('eliminate_multi allows leaving exactly one survivor (tie of N−1 → lone winner)', async () => {
+    const t = await mkTournament({ finalTableSize: 5 })
+    const a = await mkEntry(t, await mkPlayer())
+    const b = await mkEntry(t, await mkPlayer())
+    const survivor = await mkEntry(t, await mkPlayer())
+
+    // 3 alive → tie-bust 2 → survivor is crowned winner at pos 1.
+    const { error } = await admin.rpc('eliminate_multi', { p_entry_ids: [a, b], p_tied: true })
+    expect(error).toBeNull()
+    expect([(await readEntry(a)).final_position, (await readEntry(b)).final_position].sort()).toEqual([2, 3])
+    const s = await readEntry(survivor)
+    expect(s.status).toBe('winner')
+    expect(s.final_position).toBe(1)
+  })
+
+  // ========================================================================
+  // Phase-2 step 7 — standalone fecha (counts_for_league).
+  // ========================================================================
+  it('standalone fecha runs fully but adds 0 to the season standings', async () => {
+    const p1 = await mkPlayer()
+    const p2 = await mkPlayer()
+
+    // A LEAGUE fecha (counts) and a STANDALONE fecha (does not) in the SAME
+    // season, with the SAME two players finishing 1st / 2nd in each.
+    const runFecha = async (countsForLeague: boolean) => {
+      const t = await mkTournament({ finalTableSize: 5, countsForLeague })
+      const e1 = await mkEntry(t, p1)
+      const e2 = await mkEntry(t, p2)
+      await admin.rpc('eliminate', { p_entry_id: e2 }) // 2 alive → e2 pos 2, e1 winner pos 1
+      // Prizes exist for the fecha regardless of league-counting.
+      await admin
+        .from('tournament')
+        .update({ prizes: [{ position: 1, pct: 1, amount: 50_000 }] })
+        .eq('id', t)
+      expect((await admin.rpc('complete_tournament', { p_tournament_id: t })).error).toBeNull()
+      return { t, e1, e2 }
+    }
+
+    const league = await runFecha(true)
+    const solo = await runFecha(false)
+
+    // Both fechas ran fully: positions, points, prizes all materialized.
+    expect((await readTournament(solo.t)).status).toBe('completed')
+    expect((await readTournament(solo.t)).counts_for_league).toBe(false)
+    expect((await readEntry(solo.e1)).points_earned).not.toBeNull()
+    expect((await readEntry(solo.e1)).final_position).toBe(1)
+    expect(parsePrizes((await readTournament(solo.t)).prizes).length).toBeGreaterThan(0)
+
+    // Per-fecha points are identical in both (winner pos 1, N=2):
+    //   (2−1)×10 + bmf 5 + top3 8 + attendance 2 = 25.
+    expect((await readEntry(league.e1)).points_earned).toBe(25)
+    expect((await readEntry(solo.e1)).points_earned).toBe(25)
+
+    // SEASON standings: only the LEAGUE fecha moves the leaderboard — the
+    // standalone one adds 0 (points, games, wins all reflect one fecha).
+    const { data: lb, error } = await admin.rpc('leaderboard', { p_season_id: seasonId })
+    expect(error).toBeNull()
+    const rows = (lb ?? []) as {
+      player_id: string
+      total_points: number
+      games_played: number
+      wins: number
+    }[]
+    const row1 = rows.find((r) => r.player_id === p1)!
+    const row2 = rows.find((r) => r.player_id === p2)!
+    expect(row1.total_points).toBe(25) // league 25 only, NOT 50 (would be both)
+    expect(row1.games_played).toBe(1) // one counting fecha, not two
+    expect(row1.wins).toBe(1)
+    expect(row2.total_points).toBe(15) // pos 2: (2−2)×10 + 5 + 8 + 2 = 15
+    expect(row2.games_played).toBe(1)
   })
 })

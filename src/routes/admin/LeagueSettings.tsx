@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import Sheet from '@/components/Sheet'
 import { bandLabel, parseBands, type Band } from '@/lib/fechas'
@@ -41,6 +42,7 @@ function percentsToTemplate(text: string): number[] {
 // irreversible season rollover (close_season) behind a confirm modal.
 // ---------------------------------------------------------------------------
 export default function LeagueSettings() {
+  const navigate = useNavigate()
   const [season, setSeason] = useState<Season | null>(null)
   const [phase, setPhase] = useState<'loading' | 'ready' | 'error'>('loading')
 
@@ -51,7 +53,6 @@ export default function LeagueSettings() {
   const [batt, setBatt] = useState('')
   const [ftSize, setFtSize] = useState('')
   const [noShow, setNoShow] = useState('')
-  const [earlyBird, setEarlyBird] = useState('')
   const [payout, setPayout] = useState('')
 
   const [busy, setBusy] = useState(false)
@@ -68,7 +69,6 @@ export default function LeagueSettings() {
     setBatt(String(s.bonus_attendance))
     setFtSize(s.final_table_size_override != null ? String(s.final_table_size_override) : '')
     setNoShow(String(s.no_show_penalty))
-    setEarlyBird(String(s.early_bird_bonus_chips))
     setPayout(templateToPercents(s.payout_template))
   }, [])
 
@@ -103,7 +103,9 @@ export default function LeagueSettings() {
       bonus_top3: btop3 === '' ? 0 : Number(btop3),
       bonus_attendance: batt === '' ? 0 : Number(batt),
       no_show_penalty: noShow === '' ? 0 : Number(noShow),
-      early_bird_bonus_chips: earlyBird === '' ? 0 : Number(earlyBird),
+      // Early-bird bonus is a fecha-level setting now (removed from this view);
+      // preserve the season's stored value so the save doesn't reset it.
+      early_bird_bonus_chips: season?.early_bird_bonus_chips ?? 0,
       final_table_size_override: ftSize === '' ? '' : Number(ftSize),
       payout_template: percentsToTemplate(payout),
     }
@@ -118,7 +120,7 @@ export default function LeagueSettings() {
     const rows = (data ?? []) as Season[]
     if (rows[0]) hydrate(rows[0])
     setSaved(true)
-  }, [name, mult, bmf, btop3, batt, noShow, earlyBird, ftSize, payout, hydrate])
+  }, [name, mult, bmf, btop3, batt, noShow, season, ftSize, payout, hydrate])
 
   const doClose = useCallback(async () => {
     setBusy(true)
@@ -130,10 +132,12 @@ export default function LeagueSettings() {
       setError(err.message)
       return
     }
+    // close_season returns the NEW active season row — land on its Tabla so the
+    // admin sees the fresh (roster-at-0) standings instead of a blank screen.
     const rows = (data ?? []) as Season[]
-    if (rows[0]) hydrate(rows[0])
-    setSaved(false)
-  }, [hydrate])
+    const next = rows[0]
+    if (next) navigate(`/temporadas/${next.id}`)
+  }, [navigate])
 
   if (phase === 'loading') return <div className="fd-note">Cargando ajustes…</div>
   if (phase === 'error' || !season)
@@ -199,16 +203,6 @@ export default function LeagueSettings() {
           placeholder="Automático"
           value={ftSize}
           onChange={(e) => setFtSize(e.target.value)}
-        />
-      </div>
-
-      <div className="field">
-        <label htmlFor="ls-earlybird">Bonus llegada temprana (fichas)</label>
-        <input
-          id="ls-earlybird"
-          inputMode="numeric"
-          value={earlyBird}
-          onChange={(e) => setEarlyBird(e.target.value)}
         />
       </div>
 

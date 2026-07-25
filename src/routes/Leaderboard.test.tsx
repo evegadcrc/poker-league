@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 
 // Mutable, hoisted so the vi.mock factories can close over it. Tests set the
 // season / RPC results and the current player before rendering.
 const h = vi.hoisted(() => ({
   pending: false,
   seasonResult: { data: null as unknown, error: null as unknown },
+  // Scoped read (`/temporadas/:seasonId`) resolves via .maybeSingle() to this.
+  seasonByIdResult: { data: null as unknown, error: null as unknown },
   rpcResult: { data: null as unknown, error: null as unknown },
   player: null as { id: string } | null,
 }))
@@ -17,11 +20,15 @@ vi.mock('@/lib/auth', () => ({
 vi.mock('@/lib/supabase', () => ({
   supabase: {
     from: () => {
+      // The active-season read ends in .limit() (array, never throws on >1); the
+      // scoped by-id read ends in .maybeSingle() — each terminal has its own fixture.
       const builder: Record<string, unknown> = {
         select: () => builder,
         eq: () => builder,
+        order: () => builder,
+        limit: () => (h.pending ? new Promise(() => {}) : Promise.resolve(h.seasonResult)),
         maybeSingle: () =>
-          h.pending ? new Promise(() => {}) : Promise.resolve(h.seasonResult),
+          h.pending ? new Promise(() => {}) : Promise.resolve(h.seasonByIdResult),
       }
       return builder
     },
@@ -32,6 +39,20 @@ vi.mock('@/lib/supabase', () => ({
 // Imported after the mocks are declared.
 import Leaderboard from './Leaderboard'
 
+// The Tabla now reads a `seasonId` route param; every render needs a router.
+const renderLb = () => render(<Leaderboard />, { wrapper: MemoryRouter })
+
+// Renders the season-scoped Tabla at `/temporadas/<id>` so useParams resolves.
+function renderScoped(seasonId: string) {
+  return render(
+    <MemoryRouter initialEntries={[`/temporadas/${seasonId}`]}>
+      <Routes>
+        <Route path="/temporadas/:seasonId" element={<Leaderboard />} />
+      </Routes>
+    </MemoryRouter>,
+  )
+}
+
 type Row = {
   player_id: string
   player_name: string
@@ -41,6 +62,7 @@ type Row = {
   wins: number
   podiums: number
   form: string[]
+  form_positions: number[]
 }
 
 const ACTIVE_SEASON = { id: 'season-1', name: 'Liga 2026', year: 2026 }
@@ -57,6 +79,7 @@ const FIXTURE: Row[] = [
     podiums: 5,
     // latest→oldest: champion, podium, final, out, out
     form: ['champion', 'podium', 'final', 'out', 'out'],
+    form_positions: [1, 3, 5, 8, 10],
   },
   {
     player_id: 'p-edw',
@@ -67,6 +90,7 @@ const FIXTURE: Row[] = [
     wins: 1,
     podiums: 3,
     form: ['podium', 'out', 'champion', 'final', 'podium'],
+    form_positions: [2, 9, 1, 4, 3],
   },
   {
     player_id: 'p-ran',
@@ -77,6 +101,7 @@ const FIXTURE: Row[] = [
     wins: 0,
     podiums: 0,
     form: ['out', 'final', 'out', 'out', 'out'],
+    form_positions: [7, 5, 8, 9, 11],
   },
 ]
 
@@ -88,14 +113,17 @@ function tierClasses(row: HTMLElement): string[] {
 
 beforeEach(() => {
   h.pending = false
-  h.seasonResult = { data: ACTIVE_SEASON, error: null }
+  // Active-season read returns an ARRAY now (ordered, limit 1); the component
+  // takes the first row. beforeEach gives the happy single-active case.
+  h.seasonResult = { data: [ACTIVE_SEASON], error: null }
+  h.seasonByIdResult = { data: null, error: null }
   h.rpcResult = { data: FIXTURE, error: null }
   h.player = { id: 'p-edw' } // Edwin is the signed-in player.
 })
 
 describe('Leaderboard (Tabla)', () => {
   it('renders rows in the RPC order returned by the leaderboard function', async () => {
-    render(<Leaderboard />)
+    renderLb()
     await screen.findByText('Mauricio A.')
 
     const names = screen
@@ -106,7 +134,7 @@ describe('Leaderboard (Tabla)', () => {
   })
 
   it('renders the form pills newest-on-the-RIGHT (RPC array reversed) with correct tier classes', async () => {
-    render(<Leaderboard />)
+    renderLb()
     await screen.findByText('Mauricio A.')
 
     const mauricioRow = screen.getAllByTestId('lb-row')[0]!
@@ -119,10 +147,14 @@ describe('Leaderboard (Tabla)', () => {
     expect(pills[pills.length - 1]!.classList.contains('champ')).toBe(true)
     // Oldest game (RPC last = 'out') is the leftmost pill.
     expect(pills[0]!.classList.contains('out')).toBe(true)
+
+    // Finishing NUMBERS render inside the pills (mig 0018), same reversal as the
+    // tiers: form_positions [1,3,5,8,10] → left→right [10,8,5,3,1].
+    expect(Array.from(pills).map((el) => el.textContent)).toEqual(['10', '8', '5', '3', '1'])
   })
 
   it("highlights the current player's row and appends '· tú'", async () => {
-    render(<Leaderboard />)
+    renderLb()
     await screen.findByText('Mauricio A.')
 
     const highlighted = document.querySelector('.lb-row.you')
@@ -137,13 +169,17 @@ describe('Leaderboard (Tabla)', () => {
   })
 
   it('shows the PJ / Tít / Pts stats and the fechas count', async () => {
-    render(<Leaderboard />)
+    renderLb()
     await screen.findByText('Mauricio A.')
 
     const mauricioRow = screen.getAllByTestId('lb-row')[0]!
-    expect(within(mauricioRow).getByText('8')).toBeInTheDocument() // PJ
-    expect(within(mauricioRow).getByText('3')).toBeInTheDocument() // Tít
-    expect(within(mauricioRow).getByText('420')).toBeInTheDocument() // Pts
+    // Scope to the stats column: form-pill finishing numbers (mig 0018) can now
+    // share a value with a stat (e.g. a position-8 pill vs PJ=8), so an unscoped
+    // getByText would match multiple nodes.
+    const stats = within(mauricioRow.querySelector('.lb-stats') as HTMLElement)
+    expect(stats.getByText('8')).toBeInTheDocument() // PJ
+    expect(stats.getByText('3')).toBeInTheDocument() // Tít
+    expect(stats.getByText('420')).toBeInTheDocument() // Pts
 
     // max(games_played) = 8 → "8 fechas"
     expect(screen.getByText('8 fechas')).toBeInTheDocument()
@@ -151,7 +187,7 @@ describe('Leaderboard (Tabla)', () => {
 
   it('shows skeleton rows while loading', () => {
     h.pending = true
-    const { container } = render(<Leaderboard />)
+    const { container } = renderLb()
 
     expect(container.querySelectorAll('.skeleton-row')).toHaveLength(6)
     expect(screen.queryByText('Mauricio A.')).not.toBeInTheDocument()
@@ -159,17 +195,31 @@ describe('Leaderboard (Tabla)', () => {
 
   it('shows an empty-roster message when the RPC returns no players', async () => {
     h.rpcResult = { data: [], error: null }
-    render(<Leaderboard />)
+    renderLb()
 
     expect(await screen.findByText(/no hay jugadores en el roster/i)).toBeInTheDocument()
     expect(screen.queryAllByTestId('lb-row')).toHaveLength(0)
   })
 
   it('shows a no-season message when there is no active season', async () => {
-    h.seasonResult = { data: null, error: null }
-    render(<Leaderboard />)
+    h.seasonResult = { data: [], error: null }
+    renderLb()
 
     expect(await screen.findByText(/no hay una temporada activa/i)).toBeInTheDocument()
+  })
+
+  it('does not throw and renders the roster when more than one active season exists', async () => {
+    // Defensive: even if the single-active DB invariant is violated (>1 active
+    // row), the ordered read takes the first and the Tabla still renders.
+    h.seasonResult = {
+      data: [ACTIVE_SEASON, { id: 'season-2', name: 'Liga 2027', year: 2027 }],
+      error: null,
+    }
+    renderLb()
+
+    await screen.findByText('Mauricio A.')
+    expect(screen.getAllByTestId('lb-row')).toHaveLength(3)
+    expect(screen.queryByText(/no hay una temporada activa/i)).not.toBeInTheDocument()
   })
 
   it('renders the roster at 0 pts for a brand-new season', async () => {
@@ -184,11 +234,12 @@ describe('Leaderboard (Tabla)', () => {
           wins: 0,
           podiums: 0,
           form: [],
+          form_positions: [],
         },
       ],
       error: null,
     }
-    render(<Leaderboard />)
+    renderLb()
     await screen.findByText('Nuevo Jugador')
 
     const row = screen.getAllByTestId('lb-row')[0]!
@@ -197,5 +248,24 @@ describe('Leaderboard (Tabla)', () => {
     expect(row.querySelector('.stat.pts .v')?.textContent).toBe('0')
     // No completed games → no form pills.
     expect(row.querySelectorAll('.pill')).toHaveLength(0)
+  })
+
+  it('scoped to a seasonId, shows THAT season (by-id read), not the active one', async () => {
+    // The active-season read must NOT be used when a seasonId param is present:
+    // fail it loudly so a regression that ignores the param surfaces as no-season.
+    h.seasonResult = { data: [], error: null }
+    h.seasonByIdResult = {
+      data: { id: 'season-2', name: 'Liga 2025', year: 2025, status: 'archived' },
+      error: null,
+    }
+    h.rpcResult = { data: FIXTURE, error: null }
+
+    renderScoped('season-2')
+    await screen.findByText('Mauricio A.')
+
+    // The scoped season's name replaces the generic overline.
+    expect(screen.getByText('Liga 2025')).toBeInTheDocument()
+    expect(screen.getAllByTestId('lb-row')).toHaveLength(3)
+    expect(screen.queryByText(/no hay una temporada activa/i)).not.toBeInTheDocument()
   })
 })

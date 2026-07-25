@@ -1,22 +1,32 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth, useRole } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
+import { cn } from '@/lib/utils'
 import { useLoadable } from '@/lib/useLoadable'
 import Avatar from '@/components/Avatar'
+import Galeria, { galleryUrl } from '@/components/Galeria'
+import PrizeList from '@/components/PrizeList'
 import Sheet from '@/components/Sheet'
+import { chopAdjustedPrizes } from '@/lib/admin'
 import { classifyCheckInError, requestPosition, type Coords } from '@/lib/checkin'
+import { formatMiles } from '@/lib/format'
+import { parsePrizes, type Prize } from '@/lib/live'
 import {
   attendanceCounts,
   bandLabel,
   formatWhen,
   hoursUntil,
   parseBands,
+  parseLeagueConfig,
   pickBand,
+  pointsExample,
   statusPill,
   statusRank,
+  toDatetimeLocal,
   type Band,
   type EntryStatus,
+  type LeagueConfig,
   type TournamentStatus,
 } from '@/lib/fechas'
 
@@ -27,6 +37,12 @@ type TournamentRow = {
   scheduled_at: string
   status: TournamentStatus
   geofence_radius_m: number
+  cover_url: string | null
+  counts_for_league: boolean
+  prizes: unknown
+  buy_in: number
+  rebuy_amount: number | null
+  starting_stack: number | null
 }
 
 type EntryRow = {
@@ -40,6 +56,8 @@ type EntryRow = {
   chips: number | null
   points_earned: number | null
   final_position: number | null
+  chopped: boolean
+  chop_group: number | null
   rebuys_count: number
   player: { name: string; avatar_url: string | null } | null
 }
@@ -66,6 +84,10 @@ type Ready = {
   tournament: TournamentRow
   entries: EntryRow[]
   bands: Band[]
+  /** Season scoring config for the "cómo se juega" info card. */
+  config: LeagueConfig
+  /** Final materialized prizes (set_prizes → tournament.prizes); [] pre-final. */
+  prizes: Prize[]
 }
 type State =
   | { phase: 'loading' }
@@ -82,7 +104,9 @@ const OVERLINE: Record<TournamentStatus, string> = {
 async function fetchDetail(id: string): Promise<State> {
   const { data: t, error: tErr } = await supabase
     .from('tournament')
-    .select('id, season_id, name, scheduled_at, status, geofence_radius_m')
+    .select(
+      'id, season_id, name, scheduled_at, status, geofence_radius_m, cover_url, counts_for_league, prizes, buy_in, rebuy_amount, starting_stack',
+    )
     .eq('id', id)
     .maybeSingle()
 
@@ -94,10 +118,16 @@ async function fetchDetail(id: string): Promise<State> {
     supabase
       .from('entry')
       .select(
-        'id, player_id, status, rsvp_at, cancelled_at, checked_in_at, early_bird, chips, points_earned, final_position, rebuys_count, player:player_id(name, avatar_url)',
+        'id, player_id, status, rsvp_at, cancelled_at, checked_in_at, early_bird, chips, points_earned, final_position, chopped, chop_group, rebuys_count, player:player_id(name, avatar_url)',
       )
       .eq('tournament_id', id),
-    supabase.from('season').select('cancel_bands').eq('id', tournament.season_id).maybeSingle(),
+    supabase
+      .from('season')
+      .select(
+        'cancel_bands, points_multiplier, bonus_final_table, bonus_top3, bonus_attendance, no_show_penalty, early_bird_bonus_chips',
+      )
+      .eq('id', tournament.season_id)
+      .maybeSingle(),
   ])
 
   if (eErr || sErr) return { phase: 'error' }
@@ -106,11 +136,15 @@ async function fetchDetail(id: string): Promise<State> {
     .slice()
     .sort((a, b) => statusRank(a.status) - statusRank(b.status))
 
+  const seasonRow = (season ?? null) as { cancel_bands?: unknown } | null
+
   return {
     phase: 'ready',
     tournament,
     entries: rows,
-    bands: parseBands((season as { cancel_bands: unknown } | null)?.cancel_bands),
+    bands: parseBands(seasonRow?.cancel_bands),
+    config: parseLeagueConfig(seasonRow),
+    prizes: parsePrizes(tournament.prizes),
   }
 }
 
@@ -156,6 +190,8 @@ export default function FechaDetail() {
             chips: null,
             points_earned: null,
             final_position: null,
+            chopped: false,
+            chop_group: null,
             rebuys_count: 0,
             player: { name: player.name, avatar_url: player.avatar_url },
           })
@@ -235,6 +271,20 @@ export default function FechaDetail() {
     [reload],
   )
 
+  // Admin edited the scheduled start (0017 admin-only tournament UPDATE): patch
+  // the displayed date/time immediately, then reconcile against server truth.
+  const patchSchedule = useCallback(
+    (iso: string) => {
+      setState((prev) =>
+        prev.phase === 'ready'
+          ? { ...prev, tournament: { ...prev.tournament, scheduled_at: iso } }
+          : prev,
+      )
+      reload({ silent: true })
+    },
+    [setState, reload],
+  )
+
   if (state.phase === 'loading') {
     return (
       <>
@@ -265,14 +315,19 @@ export default function FechaDetail() {
     )
   }
 
-  const { tournament, entries, bands } = state
+  const { tournament, entries, bands, config, prizes } = state
   const counts = attendanceCounts(entries)
   const myEntry = player ? entries.find((e) => e.player_id === player.id) ?? null : null
   const scheduled = tournament.status === 'scheduled'
   const live = tournament.status === 'live'
+  const completed = tournament.status === 'completed'
   const canCheckIn = live && myEntry?.status === 'confirmed'
   const alreadyCheckedIn = live && myEntry != null && CHECKED_IN_STATUSES.has(myEntry.status)
   const locating = checkIn.kind === 'locating' || checkIn.kind === 'submitting'
+  // Completed fecha: the ACTUAL payout per place — the materialized
+  // tournament.prizes, chop-adjusted (a chopped top splits its pooled slots
+  // equally). Standalone fechas are still played for money → show it too.
+  const finalPrizes = completed ? chopAdjustedPrizes(prizes, entries) : []
 
   return (
     <>
@@ -286,6 +341,18 @@ export default function FechaDetail() {
       <div className="tc-sub" style={{ padding: '0 18px 4px' }}>
         {formatWhen(tournament.scheduled_at)}
       </div>
+      {scheduled && isAdmin && (
+        <ScheduleEditor
+          tournamentId={tournament.id}
+          scheduledAt={tournament.scheduled_at}
+          onSaved={patchSchedule}
+        />
+      )}
+      {tournament.counts_for_league === false && (
+        <div className="fd-standalone" data-testid="fd-standalone">
+          Amistoso · no suma a la liga
+        </div>
+      )}
       <div className="rule faint" />
 
       <div className="att-head" data-testid="att-head">
@@ -337,11 +404,29 @@ export default function FechaDetail() {
             key={e.id}
             entry={e}
             isMe={player?.id === e.player_id}
+            completed={completed}
             canAdminCheckIn={isAdmin && live && e.status === 'confirmed'}
             onAdminCheckIn={doAdminCheckIn}
           />
         ))}
       </div>
+
+      {finalPrizes.length > 0 && (
+        <PrizeList prizes={finalPrizes} formatAmount={(n) => `₡${formatMiles(n)}`} />
+      )}
+
+      <FechaInfo tournament={tournament} config={config} />
+
+      {isAdmin && (
+        <CoverControl
+          tournamentId={tournament.id}
+          uploaderId={player?.id ?? null}
+          coverUrl={tournament.cover_url}
+          onUpdated={() => reload({ silent: true })}
+        />
+      )}
+
+      <Galeria tournamentId={tournament.id} />
 
       <CancelSheet
         open={cancelOpen}
@@ -362,6 +447,184 @@ export default function FechaDetail() {
       </button>
     )
   }
+}
+
+// Admin-only inline editor for a SCHEDULED fecha's start date/time. Writes
+// tournament.scheduled_at via the admin-only UPDATE policy (mig 0017) — the same
+// direct-.update() path CoverControl uses. datetime-local values are local time;
+// new Date(value).toISOString() converts back to the stored timestamptz.
+function ScheduleEditor({
+  tournamentId,
+  scheduledAt,
+  onSaved,
+}: {
+  tournamentId: string
+  scheduledAt: string
+  onSaved: (iso: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(() => toDatetimeLocal(scheduledAt))
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const open = useCallback(() => {
+    setValue(toDatetimeLocal(scheduledAt))
+    setError(null)
+    setEditing(true)
+  }, [scheduledAt])
+
+  const save = useCallback(async () => {
+    const d = new Date(value)
+    if (Number.isNaN(d.getTime())) {
+      setError('Fecha inválida.')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    const iso = d.toISOString()
+    const { error: err } = await supabase
+      .from('tournament')
+      .update({ scheduled_at: iso })
+      .eq('id', tournamentId)
+    setBusy(false)
+    if (err) {
+      setError('No se pudo guardar la fecha y hora.')
+      return
+    }
+    setEditing(false)
+    onSaved(iso)
+  }, [value, tournamentId, onSaved])
+
+  if (!editing) {
+    return (
+      <div className="fd-sched-edit">
+        <button
+          type="button"
+          className="btn ghost sm"
+          data-testid="sched-edit-open"
+          onClick={open}
+        >
+          ✎ Editar fecha y hora
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="fd-sched-edit" data-testid="sched-editor">
+      <input
+        type="datetime-local"
+        className="fd-sched-input"
+        aria-label="Fecha y hora de la fecha"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+      />
+      <div className="btn-row">
+        <button
+          type="button"
+          className="btn ghost"
+          style={{ flex: 1 }}
+          disabled={busy}
+          onClick={() => setEditing(false)}
+        >
+          Cancelar
+        </button>
+        <button
+          type="button"
+          className="btn primary"
+          style={{ flex: 1 }}
+          disabled={busy}
+          onClick={() => void save()}
+        >
+          {busy ? 'Guardando…' : 'Guardar'}
+        </button>
+      </div>
+      {error && (
+        <div className="fd-note" role="alert">
+          <p>{error}</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Collapsible "Cómo se juega" card — visible in every status. Explains the §5
+// points formula with a worked example built from THIS league's configured
+// values, lists the fecha's bonuses / no-show penalty, and its entry + chips.
+function FechaInfo({ tournament, config }: { tournament: TournamentRow; config: LeagueConfig }) {
+  const [open, setOpen] = useState(false)
+  const ex = pointsExample(config)
+  const winnerBase = (ex.n - 1) * config.multiplier
+  const penalty = Math.abs(config.noShowPenalty)
+  const rebuy =
+    tournament.rebuy_amount != null ? `₡${formatMiles(tournament.rebuy_amount)}` : 'No aplica'
+
+  return (
+    <section className="fd-info" data-testid="fd-info-section">
+      <button
+        type="button"
+        className="calc-rankings-toggle"
+        aria-expanded={open}
+        aria-controls="fd-info-body"
+        data-testid="fd-info-toggle"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span>Cómo se juega</span>
+        <span className="chev" aria-hidden="true">
+          ⌄
+        </span>
+      </button>
+      {open && (
+        <div className="calc-rankings-body" id="fd-info-body">
+          <div className="fd-info-block">
+            <h4>Cómo se calculan los puntos</h4>
+            <p>
+              Puntos = (N − P) × multiplicador + bonos − castigos. <b>N</b> = jugadores que
+              entraron, <b>P</b> = tu lugar (1 = campeón). Multiplicador actual:{' '}
+              <b>{config.multiplier}</b>.
+            </p>
+            <p className="fd-info-example">
+              Ejemplo con <b>{ex.n} jugadores</b>: el 1º gana ({ex.n}−1)×{config.multiplier} ={' '}
+              <b>{winnerBase} pts</b> de base. Quien queda <b>{ex.p}º</b> gana ({ex.n}−{ex.p})×
+              {config.multiplier} = {ex.base} + {ex.bonusTop3} (Top 3) + {ex.bonusFinalTable} (Mesa
+              Final) + {ex.bonusAttendance} (Asistencia) = <b>{ex.total} pts</b>.
+            </p>
+          </div>
+
+          <div className="fd-info-block">
+            <h4>Bonos de esta fecha</h4>
+            <InfoRow label="Bonus Mesa Final" value={`+${config.bonusFinalTable}`} />
+            <InfoRow label="Bonus Top 3" value={`+${config.bonusTop3}`} />
+            <InfoRow label="Bonus Asistencia" value={`+${config.bonusAttendance}`} />
+            <InfoRow label="Castigo no-show" value={`−${penalty}`} />
+          </div>
+
+          <div className="fd-info-block">
+            <h4>Entrada y fichas</h4>
+            <InfoRow label="Buy-in" value={`₡${formatMiles(tournament.buy_in ?? 0)}`} />
+            <InfoRow label="Recompra" value={rebuy} />
+            <InfoRow
+              label="Stack inicial"
+              value={`${formatMiles(tournament.starting_stack ?? 0)} fichas`}
+            />
+            <InfoRow
+              label="Llegada temprana"
+              value={`+${formatMiles(config.earlyBirdChips)} fichas`}
+            />
+          </div>
+        </div>
+      )}
+    </section>
+  )
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="fd-info-row">
+      <span>{label}</span>
+      <b>{value}</b>
+    </div>
+  )
 }
 
 function RsvpActions({
@@ -420,16 +683,22 @@ function ChipCount({ tone, n, label }: { tone: string; n: number; label: string 
 function PlayerAttendanceRow({
   entry,
   isMe,
+  completed,
   canAdminCheckIn,
   onAdminCheckIn,
 }: {
   entry: EntryRow
   isMe: boolean
+  completed: boolean
   canAdminCheckIn: boolean
   onAdminCheckIn: (entryId: string) => void
 }) {
   const pill = statusPill(entry.status)
   const name = entry.player?.name ?? 'Jugador'
+  // On a COMPLETED fecha, finishers and no-shows swap their CAMPEÓN / FUERA /
+  // no-show status badge for their finishing PLACE + the POINTS they earned that
+  // fecha (entry.points_earned = the fn_tournament_points engine value).
+  const result = completed ? fechaResult(entry) : null
   return (
     <div className="prow" data-testid="prow">
       <Avatar name={name} url={entry.player?.avatar_url} size={36} />
@@ -438,7 +707,7 @@ function PlayerAttendanceRow({
           {name}
           {isMe ? ' · tú' : ''}
         </b>
-        <div className="sub">{noteFor(entry)}</div>
+        {!result && <div className="sub">{noteFor(entry)}</div>}
       </div>
       {canAdminCheckIn ? (
         <button
@@ -448,9 +717,83 @@ function PlayerAttendanceRow({
         >
           Registrar
         </button>
+      ) : result ? (
+        <FechaResult result={result} />
       ) : (
         <span className={`status ${pill.cls}`}>{pill.label}</span>
       )}
+    </div>
+  )
+}
+
+/** Completed-fecha per-player outcome shown in place of the status badge. */
+type FechaResultData =
+  | { kind: 'place'; place: number; isChamp: boolean; points: number }
+  | { kind: 'noshow'; points: number }
+
+/**
+ * For a completed fecha, the outcome to render for one entry — or null for rows
+ * that keep their ordinary status pill (declined / invited / non-participants).
+ * Ranked finishers show their place; chopped co-champions share `1º` (they sit
+ * at the top K positions) and keep the champion accent.
+ */
+function fechaResult(e: EntryRow): FechaResultData | null {
+  if (e.final_position != null) {
+    return {
+      kind: 'place',
+      place: e.chopped ? 1 : e.final_position,
+      isChamp: e.chopped || e.final_position === 1,
+      points: e.points_earned ?? 0,
+    }
+  }
+  if (e.status === 'no_show') {
+    return { kind: 'noshow', points: e.points_earned ?? 0 }
+  }
+  return null
+}
+
+/** Signed points label: "+34 pts", "−15 pts", "0 pts" (U+2212 minus). */
+function signedPoints(pts: number): string {
+  if (pts > 0) return `+${pts} pts`
+  if (pts < 0) return `−${Math.abs(pts)} pts`
+  return '0 pts'
+}
+
+// Podium markers for the non-champion places: silver 2nd, bronze 3rd. The
+// champion (1º / chopped co-champion) keeps the crown idiom below; places 4+
+// show no marker. `cls` tints the place ordinal per medal via App.css tokens.
+const PODIUM_MEDAL: Record<number, { glyph: string; cls: string }> = {
+  2: { glyph: '🥈', cls: 'silver' },
+  3: { glyph: '🥉', cls: 'bronze' },
+}
+
+function FechaResult({ result }: { result: FechaResultData }) {
+  if (result.kind === 'noshow') {
+    return (
+      <div className="fd-result" data-testid="fd-result">
+        <span className="status s-noshow">No Show</span>
+        <span className="pts neg">{signedPoints(result.points)}</span>
+      </div>
+    )
+  }
+  const medal = result.isChamp ? null : PODIUM_MEDAL[result.place]
+  return (
+    <div className="fd-result" data-testid="fd-result">
+      <span className={cn('place', result.isChamp && 'champ', medal?.cls)}>
+        {result.isChamp ? (
+          <span className="crown" aria-hidden="true">
+            👑
+          </span>
+        ) : medal ? (
+          <span className="medal" data-testid="fd-medal" data-place={result.place} aria-hidden="true">
+            {medal.glyph}
+          </span>
+        ) : null}
+        {result.place}º
+      </span>
+      <span className={cn('pts', result.points < 0 ? 'neg' : 'pos')}>
+        {signedPoints(result.points)}
+      </span>
     </div>
   )
 }
@@ -541,6 +884,102 @@ function CheckInCelebration({
         </button>
       </div>
     </Sheet>
+  )
+}
+
+// Admin-only: set / change this fecha's history cover. Uploads to the public
+// `gallery` bucket (under the admin's own player-id folder so the storage RLS
+// matches) then writes tournament.cover_url via the existing "admin update
+// tournament" policy (0001). The history list (Fechas) renders it full-bleed.
+function CoverControl({
+  tournamentId,
+  uploaderId,
+  coverUrl,
+  onUpdated,
+}: {
+  tournamentId: string
+  uploaderId: string | null
+  coverUrl: string | null
+  onUpdated: () => void
+}) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const onFile = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0]
+      e.target.value = ''
+      if (!file || !uploaderId) return
+      setBusy(true)
+      setError(null)
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+      const path = `${uploaderId}/covers/${tournamentId}-${crypto.randomUUID()}.${ext}`
+      const { error: upErr } = await supabase.storage
+        .from('gallery')
+        .upload(path, file, { contentType: file.type || undefined })
+      if (upErr) {
+        setBusy(false)
+        setError('No se pudo subir la portada. Probá de nuevo.')
+        return
+      }
+      const publicUrl = galleryUrl(path)
+      const { error: updErr } = await supabase
+        .from('tournament')
+        .update({ cover_url: publicUrl })
+        .eq('id', tournamentId)
+      setBusy(false)
+      if (updErr) {
+        setError('La portada se subió, pero no se pudo guardar.')
+        return
+      }
+      onUpdated()
+    },
+    [tournamentId, uploaderId, onUpdated],
+  )
+
+  return (
+    <section className="cover-admin" data-testid="cover-admin">
+      <div className="section-head" style={{ paddingBottom: 2 }}>
+        <div>
+          <span className="overline">Portada</span>
+        </div>
+        <button
+          type="button"
+          className="upload-icon"
+          disabled={busy}
+          onClick={() => inputRef.current?.click()}
+          aria-label={coverUrl ? 'Cambiar portada' : 'Subir portada'}
+          title={busy ? 'Subiendo…' : coverUrl ? 'Cambiar portada' : 'Subir portada'}
+          data-testid="cover-upload"
+        >
+          🖼️
+        </button>
+      </div>
+      {coverUrl && (
+        <div
+          className="cover-preview"
+          style={{ backgroundImage: `url("${coverUrl}")` }}
+          data-testid="cover-preview"
+          role="img"
+          aria-label="Portada de la fecha"
+        />
+      )}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        aria-label="Subir portada"
+        onChange={onFile}
+        disabled={busy}
+        style={{ position: 'absolute', width: 1, height: 1, opacity: 0, overflow: 'hidden' }}
+      />
+      {error && (
+        <div className="fd-note" role="alert">
+          <p>{error}</p>
+        </div>
+      )}
+    </section>
   )
 }
 

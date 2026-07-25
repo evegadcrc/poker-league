@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  chopAdjustedPrizes,
   chopPreview,
   isInPlay,
   playerActions,
   pointValueForPosition,
+  tieSplitMoneyEach,
   type ScoringConfig,
 } from '@/lib/admin'
 import type { Prize } from '@/lib/live'
@@ -56,6 +58,90 @@ describe('chopPreview', () => {
   it('is safe with fewer prize slices than choppers', () => {
     const p = chopPreview(2, [{ position: 1, pct: 1, amount: 50_000 }], 0, CFG)
     expect(p.moneyEach).toBe(25_000)
+  })
+})
+
+describe('tieSplitMoneyEach (dead-even multi-bust money split)', () => {
+  const prizes: Prize[] = [
+    { position: 1, pct: 0.6, amount: 85_000 },
+    { position: 2, pct: 0.28, amount: 40_000 },
+    { position: 3, pct: 0.12, amount: 15_000 },
+  ]
+
+  it('splits the summed prize amounts of the tied positions equally', () => {
+    // tie at 2nd/3rd → (40k + 15k)/2 = 27.5k → 27500 (mirrors chop rounding)
+    expect(tieSplitMoneyEach(prizes, [2, 3])).toBe(27_500)
+  })
+
+  it('a mid-field tie at unpaid positions splits ₡0', () => {
+    // positions 7 & 8 have no prize slice → 0
+    expect(tieSplitMoneyEach(prizes, [7, 8])).toBe(0)
+  })
+
+  it('rounds a 3-way split like chopPreview', () => {
+    // (85k + 40k + 15k)/3 = 46666.67 → 46667
+    expect(tieSplitMoneyEach(prizes, [1, 2, 3])).toBe(46_667)
+  })
+
+  it('is 0 with no positions', () => {
+    expect(tieSplitMoneyEach(prizes, [])).toBe(0)
+  })
+})
+
+describe('chopAdjustedPrizes (completed-fecha payout per place)', () => {
+  const prizes: Prize[] = [
+    { position: 1, pct: 0.5, amount: 80_000 },
+    { position: 2, pct: 0.3, amount: 50_000 },
+    { position: 3, pct: 0.2, amount: 30_000 },
+  ]
+
+  it('no chop → returns the template amounts unchanged (fresh copy)', () => {
+    const out = chopAdjustedPrizes(prizes, [
+      { final_position: 1, chopped: false, chop_group: null },
+      { final_position: 2, chopped: false, chop_group: null },
+    ])
+    expect(out.map((p) => p.amount)).toEqual([80_000, 50_000, 30_000])
+    expect(out[0]).not.toBe(prizes[0]) // does not mutate/alias the input
+  })
+
+  it('a two-way top chop pools 1º+2º and pays each the equal split', () => {
+    const out = chopAdjustedPrizes(prizes, [
+      { final_position: 1, chopped: true, chop_group: 1 },
+      { final_position: 2, chopped: true, chop_group: 1 },
+      { final_position: 3, chopped: false, chop_group: null },
+    ])
+    // (80k + 50k)/2 = 65k for the two chopped places; 3º stays 30k.
+    expect(out.find((p) => p.position === 1)!.amount).toBe(65_000)
+    expect(out.find((p) => p.position === 2)!.amount).toBe(65_000)
+    expect(out.find((p) => p.position === 3)!.amount).toBe(30_000)
+  })
+
+  it('splits a dead-even mid-field tie (chopped:false) sharing a chop_group at paid places', () => {
+    // eliminate_multi tie (mig 0015) sets chop_group but leaves chopped=false by
+    // design; decision 2026-07-24 (A) still splits money equally. Survivor crowned
+    // 1º, the two tied players take paid places 2º/3º sharing chop_group 3.
+    const out = chopAdjustedPrizes(prizes, [
+      { final_position: 1, chopped: false, chop_group: null },
+      { final_position: 2, chopped: false, chop_group: 3 },
+      { final_position: 3, chopped: false, chop_group: 3 },
+    ])
+    // pooled = round((50k + 30k) / 2) = 40k each; non-tied 1º unaffected.
+    const each = Math.round((50_000 + 30_000) / 2)
+    expect(out.find((p) => p.position === 1)!.amount).toBe(80_000)
+    expect(out.find((p) => p.position === 2)!.amount).toBe(each)
+    expect(out.find((p) => p.position === 3)!.amount).toBe(each)
+  })
+
+  it('splits independent chop_groups separately', () => {
+    const out = chopAdjustedPrizes(prizes, [
+      { final_position: 1, chopped: false, chop_group: null },
+      { final_position: 2, chopped: true, chop_group: 7 },
+      { final_position: 3, chopped: true, chop_group: 7 },
+    ])
+    // group 7 pools 2º+3º → (50k + 30k)/2 = 40k each; 1º untouched.
+    expect(out.find((p) => p.position === 1)!.amount).toBe(80_000)
+    expect(out.find((p) => p.position === 2)!.amount).toBe(40_000)
+    expect(out.find((p) => p.position === 3)!.amount).toBe(40_000)
   })
 })
 

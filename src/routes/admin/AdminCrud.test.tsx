@@ -11,6 +11,7 @@ const h = vi.hoisted(() => ({
   list: {} as Record<string, { data: unknown; error: unknown }>,
   rpcResults: {} as Record<string, { data: unknown; error: unknown }>,
   rpcCalls: [] as Array<{ name: string; args: unknown }>,
+  updates: [] as Array<{ table: string; payload: unknown }>,
 }))
 
 vi.mock('@/lib/auth', () => ({
@@ -27,6 +28,10 @@ vi.mock('@/lib/supabase', () => ({
         in: () => b,
         order: () => b,
         limit: () => b,
+        update: (payload: unknown) => {
+          h.updates.push({ table, payload })
+          return b
+        },
         maybeSingle: () => Promise.resolve(h.single[table] ?? { data: null, error: null }),
         single: () => Promise.resolve(h.single[table] ?? { data: null, error: null }),
         then: (resolve: (v: unknown) => void) => resolve(h.list[table] ?? { data: [], error: null }),
@@ -80,6 +85,10 @@ beforeEach(() => {
     close_season: { data: [{ ...SEASON, id: 's-2027', name: 'Liga 2027', year: 2027 }], error: null },
   }
   h.rpcCalls = []
+  h.updates = []
+  // CreateFecha seeds its money defaults from localStorage (pf-fecha-defaults);
+  // clear it so each test starts from the hardcoded defaults.
+  localStorage.clear()
 })
 
 describe('Admin · Nueva fecha (slice 13)', () => {
@@ -100,11 +109,72 @@ describe('Admin · Nueva fecha (slice 13)', () => {
       .p_payload
     expect(payload.name).toBe('Fecha 10 — Casa de José')
     expect(payload.geofence_radius_m).toBe(100)
-    expect(payload.buy_in).toBe(20000)
-    expect(payload.starting_stack).toBe(10000)
-    expect(payload.rebuy_until_level).toBe(6)
+    // New defaults (CHANGE 9): buy-in 10.000, stack inicial 20.000, recompra hasta N8.
+    expect(payload.buy_in).toBe(10000)
+    expect(payload.starting_stack).toBe(20000)
+    expect(payload.rebuy_until_level).toBe(8)
     expect(payload.ante_enabled).toBe(true)
     expect(payload.blind_structure_id).toBe('bs-1')
+  })
+
+  it('displays money inputs with es-CR thousand separators but submits the raw integer', async () => {
+    const user = userEvent.setup()
+    renderAdmin()
+    await user.click(screen.getByRole('tab', { name: 'Nueva fecha' }))
+    await screen.findByTestId('create-fecha')
+
+    const buyIn = screen.getByLabelText('Buy-in / Recompra (₡)')
+    // Default seeds to 10.000 (formatted).
+    expect(buyIn).toHaveValue('10.000')
+
+    await user.clear(buyIn)
+    await user.type(buyIn, '25000')
+    // Formatted display while typing.
+    expect(buyIn).toHaveValue('25.000')
+
+    await user.click(screen.getByRole('button', { name: 'Crear fecha' }))
+    await waitFor(() => expect(rpc('create_tournament')).toBeTruthy())
+    const payload = (rpc('create_tournament')!.args as { p_payload: Record<string, unknown> })
+      .p_payload
+    // Persisted value is the raw integer, not the formatted string.
+    expect(payload.buy_in).toBe(25000)
+  })
+
+  it('"Guardar ajustes" persists the current money values to localStorage as defaults', async () => {
+    const user = userEvent.setup()
+    renderAdmin()
+    await user.click(screen.getByRole('tab', { name: 'Nueva fecha' }))
+    await screen.findByTestId('create-fecha')
+
+    const buyIn = screen.getByLabelText('Buy-in / Recompra (₡)')
+    await user.clear(buyIn)
+    await user.type(buyIn, '30000')
+    await user.click(screen.getByRole('button', { name: 'Guardar ajustes' }))
+
+    expect(await screen.findByText('✓ Guardado como predeterminado')).toBeInTheDocument()
+    const stored = JSON.parse(localStorage.getItem('pf-fecha-defaults') ?? '{}')
+    expect(stored.buyIn).toBe(30000)
+    expect(stored.startingStack).toBe(20000)
+    expect(stored.rebuyUntil).toBe(8)
+  })
+
+  it('shows a ₡ adornment on the colón money inputs (buy-in / rebuy)', async () => {
+    const user = userEvent.setup()
+    renderAdmin()
+    await user.click(screen.getByRole('tab', { name: 'Nueva fecha' }))
+    await screen.findByTestId('create-fecha')
+
+    // The buy-in and rebuy inputs are wrapped in a .money-input adornment that
+    // renders the ₡ symbol (display only — the submitted value stays the bare
+    // number, verified by the create_tournament payload test above).
+    expect(screen.getByLabelText('Buy-in / Recompra (₡)').closest('.money-input')).toHaveAttribute(
+      'data-symbol',
+      '₡',
+    )
+    expect(screen.getByLabelText('Recompra').closest('.money-input')).toHaveAttribute(
+      'data-symbol',
+      '₡',
+    )
   })
 
   it('captures manual venue coordinates into the payload', async () => {
@@ -122,6 +192,53 @@ describe('Admin · Nueva fecha (slice 13)', () => {
       .p_payload
     expect(payload.venue_lat).toBe(9.9281)
     expect(payload.venue_lng).toBe(-84.0907)
+  })
+
+  it('seeds the prize-distribution editor from the season template and persists it on create', async () => {
+    const user = userEvent.setup()
+    renderAdmin()
+    await user.click(screen.getByRole('tab', { name: 'Nueva fecha' }))
+    await screen.findByTestId('create-fecha')
+
+    // Seeded from season.payout_template [0.6, 0.28, 0.12] → 60 / 28 / 12, sum 100%.
+    const editor = screen.getByTestId('prize-dist-editor')
+    expect(within(editor).getAllByRole('textbox')).toHaveLength(3)
+    expect(within(editor).getByTestId('dist-sum')).toHaveTextContent('Suma: 100%')
+
+    await user.click(screen.getByRole('button', { name: 'Crear fecha' }))
+
+    await waitFor(() => expect(rpc('create_tournament')).toBeTruthy())
+    // After create, the fecha's payout_distribution is persisted via .update().
+    await waitFor(() => expect(h.updates.find((u) => u.table === 'tournament')).toBeTruthy())
+    const upd = h.updates.find((u) => u.table === 'tournament')!.payload as {
+      payout_distribution: Array<{ place: number; pct: number }>
+    }
+    expect(upd.payout_distribution).toEqual([
+      { place: 1, pct: 0.6 },
+      { place: 2, pct: 0.28 },
+      { place: 3, pct: 0.12 },
+    ])
+  })
+
+  it('persists odds_enabled=false when the calculator toggle is turned off', async () => {
+    const user = userEvent.setup()
+    renderAdmin()
+    await user.click(screen.getByRole('tab', { name: 'Nueva fecha' }))
+    await screen.findByTestId('create-fecha')
+
+    // Default ON (the calculator is allowed) → turn it off for this fecha.
+    const toggle = screen.getByRole('switch', { name: 'Permitir calculadora de probabilidades' })
+    expect(toggle).toHaveAttribute('aria-checked', 'true')
+    await user.click(toggle)
+
+    await user.click(screen.getByRole('button', { name: 'Crear fecha' }))
+    await waitFor(() => expect(rpc('create_tournament')).toBeTruthy())
+    // The new tournament id is patched with odds_enabled=false via .update().
+    await waitFor(() => expect(h.updates.find((u) => u.table === 'tournament')).toBeTruthy())
+    const upd = h.updates.find((u) => u.table === 'tournament')!.payload as {
+      odds_enabled?: boolean
+    }
+    expect(upd.odds_enabled).toBe(false)
   })
 })
 

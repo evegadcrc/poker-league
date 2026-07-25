@@ -185,6 +185,13 @@ describe.skipIf(!canRun)('points engine + leaderboard (slice 5, local integratio
     expect(row(p3).form).toEqual(['podium'])
     expect(row(p4).form).toEqual(['final'])
     expect(row(p6).form).toEqual(['out'])
+    // form_positions (mig 0018): each entry's final_position, aligned with form.
+    expect(row(p1).form_positions).toEqual([1])
+    expect(row(p3).form_positions).toEqual([3])
+    expect(row(p4).form_positions).toEqual([4])
+    expect(row(p6).form_positions).toEqual([6])
+    // form and form_positions are the SAME length / order for every row.
+    for (const r of lb) expect(r.form_positions.length).toBe(r.form.length)
     expect(row(p1).total_points).toBe(85)
     expect(row(p1).wins).toBe(1)
     expect(row(p1).games_played).toBe(1)
@@ -192,6 +199,7 @@ describe.skipIf(!canRun)('points engine + leaderboard (slice 5, local integratio
     expect(row(p9).total_points).toBe(-15)
     expect(row(p9).games_played).toBe(0)
     expect(row(p9).form).toEqual([])
+    expect(row(p9).form_positions).toEqual([])
     // leaderboard ordered by points desc → winner first, no-show last
     expect(lb[0].player_id).toBe(p1)
     expect(lb[lb.length - 1].player_id).toBe(p9)
@@ -304,6 +312,7 @@ describe.skipIf(!canRun)('points engine + leaderboard (slice 5, local integratio
     expect(row(pz).total_points).toBe(0)
     expect(row(pz).games_played).toBe(0)
     expect(row(pz).form).toEqual([])
+    expect(row(pz).form_positions).toEqual([]) // roster-at-0 → empty positions
     // order by points desc → B, A, C, then Z (roster at 0) last
     const order = lb.map((r) => r.player_id)
     expect(order.indexOf(pb)).toBeLessThan(order.indexOf(pa))
@@ -317,6 +326,9 @@ describe.skipIf(!canRun)('points engine + leaderboard (slice 5, local integratio
     // form MOST-RECENT-FIRST (late then early)
     expect(row(pa).form).toEqual(['podium', 'champion']) // late pos3, early pos1
     expect(row(pb).form).toEqual(['champion', 'podium']) // late pos1, early pos2
+    // form_positions aligned 1:1 with form, same most-recent-first order.
+    expect(row(pa).form_positions).toEqual([3, 1]) // late final_position 3, early 1
+    expect(row(pb).form_positions).toEqual([1, 2]) // late final_position 1, early 2
   })
 
   // ------------------------------------------------------------------------

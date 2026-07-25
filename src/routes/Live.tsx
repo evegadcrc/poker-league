@@ -2,8 +2,11 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth, useRole } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
+import { deriveLiveSignal, useLiveEventCues } from '@/lib/notify'
 import Sheet from '@/components/Sheet'
+import PrizeList from '@/components/PrizeList'
 import { aliveCount, colonesCompact, playedCount, type EntryStatus } from '@/lib/fechas'
+import { formatMiles } from '@/lib/format'
 import {
   chipsInPlay,
   compactChips,
@@ -13,8 +16,9 @@ import {
   liveStandings,
   nextLevel,
   ordinal,
+  parseDistribution,
   parsePrizes,
-  pctLabel,
+  proposedPrizes,
   remainingSeconds,
   showAnte,
   type BlindLevel,
@@ -32,6 +36,7 @@ type LiveTournament = {
   paused_remaining_seconds: number | null
   blind_structure_id: string | null
   prizes: unknown
+  payout_distribution: unknown
 }
 
 type EntryRow = StandingEntry & { player_id: string }
@@ -53,8 +58,10 @@ type State =
 /** Realtime connection health — drives the subtle reconnect banner. */
 type Conn = 'connecting' | 'live' | 'reconnecting'
 
+// The cue-engine signal is derived by the shared `deriveLiveSignal` (notify.ts).
+
 const TOURNAMENT_COLUMNS =
-  'id, name, ante_enabled, current_level, level_started_at, is_paused, paused_remaining_seconds, blind_structure_id, prizes'
+  'id, name, ante_enabled, current_level, level_started_at, is_paused, paused_remaining_seconds, blind_structure_id, prizes, payout_distribution'
 
 async function fetchLive(): Promise<State> {
   // A single fecha is live at a time; take the most recent just in case.
@@ -80,7 +87,7 @@ async function fetchLive(): Promise<State> {
       : Promise.resolve({ data: [] as BlindLevel[], error: null }),
     supabase
       .from('entry')
-      .select('id, player_id, status, final_position, chips, player:player_id(name, avatar_url)')
+      .select('id, player_id, status, final_position, chips, paid, player:player_id(name, avatar_url)')
       .eq('tournament_id', tournament.id),
     supabase.rpc('fn_pot', { p_tournament_id: tournament.id }),
   ])
@@ -164,6 +171,32 @@ export default function Live() {
     }
   }, [tid, load])
 
+  // While NO fecha is live (idle), watch the tournament table so a fecha going
+  // live is caught and reloaded → the "opened" cue can fire for a player who is
+  // sitting on the En Vivo screen. Gated on `no-live` (not `loading`) so a fresh
+  // mount onto an already-live fecha never spins up this scan channel.
+  const idle = state.phase === 'no-live'
+  useEffect(() => {
+    if (!idle) return
+    const channel = supabase
+      .channel('live:scan')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tournament' }, () => {
+        void load()
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') void load()
+      })
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [idle, load])
+
+  // Sound cues + in-app toasts + optional local notifications, off state
+  // transitions (level advance, fecha opened, elimination). Non-admin observers
+  // get these through the realtime refetch above — they never act.
+  const { toast: eventToast, permission: notifyPermission, requestNotifications } =
+    useLiveEventCues(deriveLiveSignal(state, now))
+
   if (state.phase === 'loading') {
     return <Framed overline="En juego" title="En vivo" note="Cargando torneo…" />
   }
@@ -241,6 +274,12 @@ export default function Live() {
   const alive = aliveCount(entries)
   const played = playedCount(entries)
   const chips = chipsInPlay(entries)
+  // Always show a split: materialized prizes when set_prizes has run, otherwise
+  // the PROPOSED split (payout_distribution × pot) — visible even pre-final.
+  const proposed = prizes.length === 0
+  const displayPrizes = proposed
+    ? proposedPrizes(parseDistribution(tournament.payout_distribution), pot)
+    : prizes
 
   return (
     <>
@@ -255,6 +294,25 @@ export default function Live() {
       {conn === 'reconnecting' && (
         <div className="live-reconnect" role="status" data-testid="reconnect">
           Reconectando… mostrando los últimos datos
+        </div>
+      )}
+
+      {eventToast && (
+        <div className="live-reconnect" role="status" data-testid="live-toast">
+          {eventToast.message}
+        </div>
+      )}
+
+      {notifyPermission === 'default' && (
+        <div className="btn-row" style={{ marginTop: 8 }}>
+          <button
+            type="button"
+            className="btn ghost sm"
+            data-testid="notify-cta"
+            onClick={() => void requestNotifications()}
+          >
+            🔔 Activar notificaciones
+          </button>
         </div>
       )}
 
@@ -290,8 +348,6 @@ export default function Live() {
         </div>
         <Stat value={compactChips(chips)} label="Fichas en juego" />
       </div>
-
-      <Premios prizes={prizes} />
 
       <div className="section-head" style={{ paddingBottom: 6 }}>
         <div>
@@ -338,6 +394,8 @@ export default function Live() {
         ) : null}
       </div>
 
+      <PrizeList prizes={displayPrizes} proposed={proposed} />
+
       {/* Self-report bust confirm */}
       <Sheet open={confirmBust} onClose={() => setConfirmBust(false)} title="Reportar que quedaste fuera">
         <p>
@@ -372,13 +430,13 @@ function nextLabel(level: BlindLevel | null): string {
   if (!level) return 'Último nivel'
   const when = formatClock(level.duration_seconds)
   if (level.is_break) return `Siguiente · Nivel ${level.level_number} — Descanso · ${when}`
-  return `Siguiente · Nivel ${level.level_number} — ${level.small_blind} / ${level.big_blind} · ${when}`
+  return `Siguiente · Nivel ${level.level_number} — ${formatMiles(level.small_blind)} / ${formatMiles(level.big_blind)} · ${when}`
 }
 
 function Blind({ label, value }: { label: string; value: number }) {
   return (
     <div className="b">
-      <div className="v">{value}</div>
+      <div className="v">{formatMiles(value)}</div>
       <div className="k">{label}</div>
     </div>
   )
@@ -393,31 +451,6 @@ function Stat({ value, label }: { value: string; label: string }) {
   )
 }
 
-function Premios({ prizes }: { prizes: Prize[] }) {
-  return (
-    <div className="premios" data-testid="premios">
-      <div className="ph">
-        <span className="t">Premios</span>
-        <span className="s">según el pozo</span>
-      </div>
-      {prizes.length === 0 ? (
-        <div className="prow-prize">
-          <span className="nm">Los premios se definen según el pozo final.</span>
-        </div>
-      ) : (
-        prizes.map((p) => (
-          <div className="prow-prize" key={p.position}>
-            <span className="pl">{ordinal(p.position)}</span>
-            <span className="nm" />
-            <span className="pct">{pctLabel(p.pct)}</span>
-            <span className="amt">{colonesCompact(p.amount)}</span>
-          </div>
-        ))
-      )}
-    </div>
-  )
-}
-
 function StandingRow({ entry }: { entry: StandingEntry }) {
   const alive = isAlive(entry.status)
   const name = entry.player?.name ?? 'Jugador'
@@ -425,7 +458,12 @@ function StandingRow({ entry }: { entry: StandingEntry }) {
     <div className={`standing ${alive ? 'alive' : 'out'}`} data-testid="standing">
       <div className="pos">{alive ? '•' : ordinal(entry.final_position ?? 0)}</div>
       <div className="nm">{name}</div>
-      {alive && <span className="mini-badge">Vivo</span>}
+      {!entry.paid && (
+        <span className="mini-badge pending" data-testid="pendiente-pago">
+          Pendiente Pago
+        </span>
+      )}
+      {alive && <span className="mini-badge">En juego</span>}
     </div>
   )
 }

@@ -1,8 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRole } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
+import { deriveLiveSignal, useLiveEventCues } from '@/lib/notify'
 import Avatar from '@/components/Avatar'
 import Sheet from '@/components/Sheet'
+import PrizeDistributionEditor, {
+  distToRows,
+  isValidDist,
+  rowsToDist,
+  type PctRow,
+} from '@/components/PrizeDistributionEditor'
 import CreateFecha from '@/routes/admin/CreateFecha'
 import LeagueSettings from '@/routes/admin/LeagueSettings'
 import type { Json } from '@/lib/database.types'
@@ -17,6 +24,7 @@ import {
   chopPreview,
   isInPlay,
   playerActions,
+  tieSplitMoneyEach,
   type ClockAction,
   type ScoringConfig,
 } from '@/lib/admin'
@@ -25,10 +33,12 @@ import {
   formatClock,
   nextLevel,
   ordinal,
+  parseDistribution,
   parsePrizes,
   remainingSeconds,
   showAnte,
   type BlindLevel,
+  type DistSlice,
   type Prize,
 } from '@/lib/live'
 
@@ -109,8 +119,10 @@ type ConsoleTournament = {
   paused_remaining_seconds: number | null
   blind_structure_id: string | null
   prizes: unknown
+  payout_distribution: unknown
   final_table_size: number | null
   starting_stack: number | null
+  odds_enabled: boolean
 }
 
 type ConsoleEntry = {
@@ -140,7 +152,7 @@ type State = { phase: 'loading' } | { phase: 'error' } | { phase: 'no-live' } | 
 type Conn = 'connecting' | 'live' | 'reconnecting'
 
 const TOURNAMENT_COLUMNS =
-  'id, name, season_id, ante_enabled, timer_mode, current_level, level_started_at, is_paused, paused_remaining_seconds, blind_structure_id, prizes, final_table_size, starting_stack'
+  'id, name, season_id, ante_enabled, timer_mode, current_level, level_started_at, is_paused, paused_remaining_seconds, blind_structure_id, prizes, payout_distribution, final_table_size, starting_stack, odds_enabled'
 
 async function fetchConsole(): Promise<State> {
   const { data: t, error: tErr } = await supabase
@@ -204,6 +216,8 @@ function ConsolePanel() {
   const [confirmKill, setConfirmKill] = useState<ConsoleEntry | null>(null)
   const [noShowFor, setNoShowFor] = useState<ConsoleEntry | null>(null)
   const [blindsOpen, setBlindsOpen] = useState(false)
+  const [prizesOpen, setPrizesOpen] = useState(false)
+  const [multiBustOpen, setMultiBustOpen] = useState(false)
   const [completeOpen, setCompleteOpen] = useState(false)
   const [whatsOpen, setWhatsOpen] = useState(false)
   // Realtime health → subtle reconnect banner (mirrors the En Vivo screen).
@@ -294,6 +308,35 @@ function ConsolePanel() {
     [tid, load],
   )
 
+  // Edit the live fecha's payout SPLIT (not just amounts): write the new
+  // distribution to tournament.payout_distribution directly (existing admin
+  // update-tournament RLS policy — no new RPC), then re-run set_prizes to
+  // re-materialize prizes against the current pot, and reload.
+  const saveDistribution = useCallback(
+    async (dist: DistSlice[]) => {
+      if (!tid) return
+      setBusy(true)
+      setToast(null)
+      const { error: upErr } = await supabase
+        .from('tournament')
+        .update({ payout_distribution: dist as unknown as Json })
+        .eq('id', tid)
+      if (upErr) {
+        setBusy(false)
+        setToast('No se pudieron guardar los premios. Reintentá.')
+        void load()
+        return
+      }
+      const { error: rpcErr } = await supabase.rpc('set_prizes', { p_tournament_id: tid })
+      setBusy(false)
+      if (rpcErr) {
+        setToast('No se pudieron recalcular los premios. Reintentá.')
+      }
+      void load()
+    },
+    [tid, load],
+  )
+
   const level = state.phase === 'ready' ? findLevel(state.levels, state.tournament.current_level) : null
   const remaining =
     state.phase === 'ready'
@@ -307,6 +350,12 @@ function ConsolePanel() {
           now,
         )
       : 0
+
+  // Sound cues + in-app toasts + optional local notifications, off state
+  // transitions (level advance, elimination). The admin hears the same cues via
+  // the refetch that follows each action; fires once per transition, not per tick.
+  const { toast: eventToast, permission: notifyPermission, requestNotifications } =
+    useLiveEventCues(deriveLiveSignal(state, now))
 
   // Auto-advance: admin client is the single writer. When timer_mode='auto' and
   // the running clock hits 0, write next_level. It fires once per level on
@@ -385,6 +434,23 @@ function ConsolePanel() {
           </button>
         </div>
       )}
+      {eventToast && (
+        <div className="live-reconnect" role="status" data-testid="admin-event-toast">
+          {eventToast.message}
+        </div>
+      )}
+      {notifyPermission === 'default' && (
+        <div className="btn-row" style={{ marginTop: 8 }}>
+          <button
+            type="button"
+            className="btn ghost sm"
+            data-testid="admin-notify-cta"
+            onClick={() => void requestNotifications()}
+          >
+            🔔 Activar notificaciones
+          </button>
+        </div>
+      )}
       <div className={`live-wrap${tournament.is_paused ? ' paused' : ''}`} style={{ padding: 16 }}>
         <div className="lvl">
           Nivel {tournament.current_level} · reloj{tournament.is_paused ? ' · en pausa' : ''}
@@ -443,6 +509,14 @@ function ConsolePanel() {
         >
           ✎  Editar blinds
         </button>
+        <button
+          type="button"
+          className="btn ghost wide"
+          disabled={busy}
+          onClick={() => setPrizesOpen(true)}
+        >
+          🏆  Editar premios
+        </button>
       </div>
 
       <div className="live-stats" style={{ marginBottom: 6 }}>
@@ -458,6 +532,32 @@ function ConsolePanel() {
           <div className="v">{tournament.final_table_size ?? '—'}</div>
           <div className="k">Mesa final</div>
         </div>
+      </div>
+
+      <div className="toggle-row">
+        <div>
+          <div className="tl">
+            Calculadora de probabilidades: {tournament.odds_enabled ? 'Activada' : 'Desactivada'}
+          </div>
+          <div className="ts">Apagala para que nadie la use mientras juegan esta fecha</div>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          data-testid="admin-odds-toggle"
+          aria-checked={tournament.odds_enabled}
+          aria-label="Calculadora de probabilidades"
+          className={`switch${tournament.odds_enabled ? ' on' : ''}`}
+          disabled={busy}
+          onClick={() =>
+            void runAction(() =>
+              supabase
+                .from('tournament')
+                .update({ odds_enabled: !tournament.odds_enabled })
+                .eq('id', tournament.id),
+            )
+          }
+        />
       </div>
 
       <div className="section-head" style={{ paddingBottom: 6 }}>
@@ -479,6 +579,17 @@ function ConsolePanel() {
             onNoShow={() => setNoShowFor(e)}
           />
         ))}
+      </div>
+
+      <div className="btn-row">
+        <button
+          type="button"
+          className="btn ghost full"
+          disabled={busy || entries.filter((e) => isInPlay(e.status) && e.status !== 'winner').length < 2}
+          onClick={() => setMultiBustOpen(true)}
+        >
+          ✖✖  Eliminar varios (misma mano)
+        </button>
       </div>
 
       {isAdmin && (
@@ -586,6 +697,33 @@ function ConsolePanel() {
         onSave={(payload) => {
           setBlindsOpen(false)
           void doClock('edit_blinds', payload)
+        }}
+      />
+
+      {/* Edit prizes (payout distribution → re-materialize) */}
+      <EditPrizesSheet
+        open={prizesOpen}
+        onClose={() => setPrizesOpen(false)}
+        distribution={parseDistribution(tournament.payout_distribution)}
+        busy={busy}
+        onSave={(dist) => {
+          setPrizesOpen(false)
+          void saveDistribution(dist)
+        }}
+      />
+
+      {/* Simultaneous multi-bust (ordered / dead-even tie) */}
+      <MultiBustSheet
+        open={multiBustOpen}
+        onClose={() => setMultiBustOpen(false)}
+        entries={entries}
+        prizes={prizes}
+        busy={busy}
+        onBust={(ids, tied) => {
+          setMultiBustOpen(false)
+          void runAction(() =>
+            supabase.rpc('eliminate_multi', { p_entry_ids: ids, p_tied: tied }),
+          )
         }}
       />
 
@@ -782,7 +920,7 @@ function AdminPlayerRow({
           {entry.rebuys_count > 0 && <span className="mini-badge">↺ {entry.rebuys_count}</span>}
           {entry.chips != null && entry.chips > 0 && (
             <span className="chips-badge">
-              {entry.chips.toLocaleString('es-CR')} fichas{entry.early_bird ? ' · +2.000' : ''}
+              {entry.chips.toLocaleString('es-CR')} fichas iniciales{entry.early_bird ? ' · +2.000' : ''}
             </span>
           )}
         </div>
@@ -858,6 +996,188 @@ function EditBlindsSheet({
           }
         >
           Guardar blinds
+        </button>
+      </div>
+    </Sheet>
+  )
+}
+
+function EditPrizesSheet({
+  open,
+  onClose,
+  distribution,
+  busy,
+  onSave,
+}: {
+  open: boolean
+  onClose: () => void
+  distribution: DistSlice[]
+  busy: boolean
+  onSave: (dist: DistSlice[]) => void
+}) {
+  const [rows, setRows] = useState<PctRow[]>([])
+  const wasOpen = useRef(false)
+
+  // Seed the editor from the fecha's current split ONLY on the open transition
+  // (the `distribution` prop is a fresh array each render — seeding on every
+  // render would wipe the admin's in-progress edits once per clock tick).
+  useEffect(() => {
+    if (open && !wasOpen.current) setRows(distToRows(distribution))
+    wasOpen.current = open
+  }, [open, distribution])
+
+  return (
+    <Sheet open={open} onClose={onClose} title="Editar premios del torneo">
+      <p>
+        Cambiá el reparto de premios de esta fecha. Al guardar se recalculan los montos según el
+        pozo actual.
+      </p>
+      <PrizeDistributionEditor rows={rows} onChange={setRows} disabled={busy} />
+      <div className="btn-row">
+        <button
+          type="button"
+          className="btn blood full"
+          disabled={busy || !isValidDist(rows)}
+          onClick={() => onSave(rowsToDist(rows))}
+        >
+          Guardar premios
+        </button>
+      </div>
+    </Sheet>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Simultaneous multi-bust (Phase-2 step 6). Two modes for "2+ out on one hand":
+//   • Eliminaron en orden — ordered total−1: the shortest starting stack takes
+//     the WORST position. No live stacks in the app, so the admin sets the order
+//     (players are shown shortest-chips-first; that order is passed through).
+//   • Empataron (reparten) — a dead-even all-in: the tied players SPLIT the
+//     positions they occupy (equal points + equal money). NOT co-champions.
+// ---------------------------------------------------------------------------
+function MultiBustSheet({
+  open,
+  onClose,
+  entries,
+  prizes,
+  busy,
+  onBust,
+}: {
+  open: boolean
+  onClose: () => void
+  entries: ConsoleEntry[]
+  prizes: Prize[]
+  busy: boolean
+  onBust: (ids: string[], tied: boolean) => void
+}) {
+  const [sel, setSel] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    if (open) setSel(new Set())
+  }, [open])
+
+  // In-play players, shortest chips FIRST (→ worst position in ordered mode).
+  const inPlay = useMemo(
+    () =>
+      entries
+        .filter((e) => isInPlay(e.status) && e.status !== 'winner')
+        .slice()
+        .sort((a, b) => (a.chips ?? 0) - (b.chips ?? 0)),
+    [entries],
+  )
+
+  const toggle = (id: string) =>
+    setSel((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  // Selected ids in the displayed (shortest-first) order.
+  const ids = inPlay.filter((e) => sel.has(e.id)).map((e) => e.id)
+  const k = ids.length
+  // A multi-bust must leave ≥1 survivor: selecting the ENTIRE in-play field is a
+  // final-table/heads-up chop, which goes through "Completar fecha", not here.
+  const emptiesField = k >= inPlay.length
+  const canBust = k >= 2 && !emptiesField
+
+  // Tie money preview: the tied group takes the bottom K positions of the
+  // current in-play count → split the summed prize amounts for those positions.
+  const tiePositions = Array.from({ length: k }, (_, i) => inPlay.length - i)
+  const tieMoneyEach = k >= 2 ? tieSplitMoneyEach(prizes, tiePositions) : 0
+
+  return (
+    <Sheet open={open} onClose={onClose} title="Eliminar varios (misma mano)">
+      <p>
+        Marcá a los jugadores que salieron en la misma mano. <b>En orden</b>: el de menos fichas
+        termina más abajo. <b>Empataron</b>: reparten posición, puntos y dinero en partes iguales.
+      </p>
+
+      <div className="plist" data-testid="multibust-list" style={{ borderTop: '1.5px solid var(--ink)' }}>
+        {inPlay.length === 0 ? (
+          <div className="fd-note">No quedan jugadores en juego.</div>
+        ) : (
+          inPlay.map((e) => {
+            const name = e.player?.name ?? 'Jugador'
+            return (
+              <label key={e.id} className="prow" style={{ cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={sel.has(e.id)}
+                  onChange={() => toggle(e.id)}
+                  aria-label={`Eliminar ${name}`}
+                />
+                <Avatar name={name} url={e.player?.avatar_url} size={36} />
+                <div className="pinfo">
+                  <b>{name}</b>
+                  <div className="sub">
+                    {e.chips != null ? `${e.chips.toLocaleString('es-CR')} fichas` : 'En juego'}
+                  </div>
+                </div>
+              </label>
+            )
+          })
+        )}
+      </div>
+
+      {k >= 2 && (
+        <div className="premios" data-testid="tie-preview" style={{ marginLeft: 0, marginRight: 0 }}>
+          <div className="ph">
+            <span className="t">Empate de {k}</span>
+            <span className="s">si reparten en partes iguales</span>
+          </div>
+          <div className="prow-prize">
+            <span className="nm">Dinero c/u</span>
+            <span className="amt">{colonesFull(tieMoneyEach)}</span>
+          </div>
+        </div>
+      )}
+
+      {emptiesField && inPlay.length >= 2 && (
+        <div className="fd-note" data-testid="multibust-survivor-hint">
+          Debe quedar al menos un jugador en juego. Para un chop de mesa final usá “Completar fecha”.
+        </div>
+      )}
+
+      <div className="btn-row" style={{ gap: 10 }}>
+        <button
+          type="button"
+          className="btn ghost"
+          style={{ flex: 1 }}
+          disabled={busy || !canBust}
+          onClick={() => onBust(ids, false)}
+        >
+          En orden ({k})
+        </button>
+        <button
+          type="button"
+          className="btn blood"
+          style={{ flex: 1 }}
+          disabled={busy || !canBust}
+          onClick={() => onBust(ids, true)}
+        >
+          Empataron ({k})
         </button>
       </div>
     </Sheet>

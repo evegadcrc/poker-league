@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { getSoundSettings, setMuted, setVolume } from '@/lib/sound'
 
 // ---------------------------------------------------------------------------
 // Slice 14 — Perfil screen (RTL). Mocks useAuth (current player + updatePlayer)
@@ -237,5 +238,49 @@ describe('Profile (Perfil)', () => {
     render(<Profile />)
     expect(await screen.findByRole('alert')).toHaveTextContent(/no se pudo cargar tu perfil/i)
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
+  })
+})
+
+// The sound store (@/lib/sound) is a real module-level singleton — reset it to
+// defaults before each test so state doesn't bleed between cases.
+describe('Profile — Sonido settings', () => {
+  beforeEach(() => {
+    setMuted(false)
+    setVolume(0.7)
+    localStorage.removeItem('pf-sound')
+  })
+
+  it('toggles mute and persists it to pf-sound', async () => {
+    const user = userEvent.setup()
+    render(<Profile />)
+
+    const toggle = await screen.findByRole('switch', { name: 'Silenciar' })
+    expect(toggle).toHaveAttribute('aria-checked', 'false')
+
+    await user.click(toggle)
+
+    expect(toggle).toHaveAttribute('aria-checked', 'true')
+    expect(getSoundSettings().muted).toBe(true)
+    expect(JSON.parse(localStorage.getItem('pf-sound')!).muted).toBe(true)
+  })
+
+  it('changes the volume via the range and persists it', async () => {
+    render(<Profile />)
+
+    const range = (await screen.findByLabelText('Volumen')) as HTMLInputElement
+    fireEvent.change(range, { target: { value: '0.4' } })
+
+    expect(getSoundSettings().volume).toBeCloseTo(0.4)
+    expect(JSON.parse(localStorage.getItem('pf-sound')!).volume).toBeCloseTo(0.4)
+  })
+
+  it('reflects the persisted muted state on mount', async () => {
+    setMuted(true)
+    render(<Profile />)
+
+    const toggle = await screen.findByRole('switch', { name: 'Silenciar' })
+    expect(toggle).toHaveAttribute('aria-checked', 'true')
+    // Muted disables the volume slider.
+    expect(screen.getByLabelText('Volumen')).toBeDisabled()
   })
 })

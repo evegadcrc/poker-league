@@ -76,6 +76,70 @@ export function chopPreview(
   return { k, moneyEach, pointsEach, n }
 }
 
+/**
+ * Money each player of a DEAD-EVEN tie group receives: the summed prize amounts
+ * for the finishing positions the tie occupies, split equally (mirrors
+ * chopPreview's money rounding — round(Σ amounts / K)). Money is not persisted
+ * per entry — it is display-derived from tournament.prizes[position].amount —
+ * so the tied players (who share a chop_group) all render this same amount.
+ * Positions with no prize slice contribute 0 (a mid-field tie splits ₡0).
+ */
+export function tieSplitMoneyEach(prizes: readonly Prize[], positions: readonly number[]): number {
+  const k = positions.length
+  if (k === 0) return 0
+  const set = new Set(positions)
+  const money = prizes.filter((p) => set.has(p.position)).reduce((sum, p) => sum + (p.amount ?? 0), 0)
+  return Math.round(money / k)
+}
+
+/** A finisher, as far as the chop-adjusted payout needs to know it. */
+type ChopFinisher = { final_position: number | null; chopped: boolean; chop_group: number | null }
+
+/**
+ * Per-place prize amounts for a COMPLETED fecha, adjusted for any chop(s) OR any
+ * dead-even mid-field tie. `tournament.prizes` stays per-position (set_prizes);
+ * a shared `chop_group` instead POOLS the positions that group occupies and pays
+ * each member the equal split (`tieSplitMoneyEach` = round(Σ amounts / K)). This
+ * rewrites every pooled position's amount to its group's split-each and leaves
+ * un-pooled places at the template amount — so the Premios list shows the ACTUAL
+ * payout, not the pre-chop template.
+ *
+ * Pooling keys off `chop_group` REGARDLESS of the `chopped` flag: a dead-even
+ * `eliminate_multi` tie (mig 0015) sets `chop_group` but deliberately leaves
+ * `chopped=false` (the anti-mislabel trap), yet decision 2026-07-24 (A) requires
+ * such a tie to split BOTH points and money equally — including at PAID places
+ * (e.g. a 2º/3º tie). The points side already splits via `chop_group` in the SQL;
+ * this covers the money display. Final-table chops (`chopped=true`) also carry
+ * `chop_group`, so their behavior is unchanged. Returns a fresh array; the input
+ * prizes are never mutated.
+ */
+export function chopAdjustedPrizes(
+  prizes: readonly Prize[],
+  finishers: readonly ChopFinisher[],
+): Prize[] {
+  // chop_group → the finishing positions that group occupies. Any finishers that
+  // share a non-null chop_group split the pooled money of their positions equally,
+  // whether the group is a final-table chop (chopped=true) or a dead-even tie
+  // (chopped=false).
+  const groups = new Map<number, number[]>()
+  for (const f of finishers) {
+    if (f.final_position == null || f.chop_group == null) continue
+    const positions = groups.get(f.chop_group) ?? []
+    positions.push(f.final_position)
+    groups.set(f.chop_group, positions)
+  }
+  if (groups.size === 0) return prizes.map((p) => ({ ...p }))
+
+  const splitByPosition = new Map<number, number>()
+  for (const positions of groups.values()) {
+    const each = tieSplitMoneyEach(prizes, positions)
+    for (const pos of positions) splitByPosition.set(pos, each)
+  }
+  return prizes.map((p) =>
+    splitByPosition.has(p.position) ? { ...p, amount: splitByPosition.get(p.position)! } : { ...p },
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Per-player action buttons in the console list.
 // ---------------------------------------------------------------------------

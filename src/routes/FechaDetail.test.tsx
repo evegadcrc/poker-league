@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
+// Inject App.css so class-based layout (e.g. .att-head centering) is computable.
+import '@/App.css'
 
 const h = vi.hoisted(() => ({
   player: { id: 'p-me', name: 'Edwin V.', avatar_url: null } as {
@@ -63,9 +65,24 @@ function setTournament(status = 'scheduled', scheduledAt = NINE_HOURS) {
       scheduled_at: scheduledAt,
       status,
       geofence_radius_m: 100,
+      buy_in: 20000,
+      rebuy_amount: 20000,
+      starting_stack: 10000,
     },
     error: null,
   }
+}
+
+// Season config used by the "cómo se juega" info card — mirrors the seed values
+// (mult 10, mesa final 5, top3 8, asistencia 2, no-show −15, early bird 2000).
+const SEASON_CONFIG = {
+  cancel_bands: DEFAULT_BANDS,
+  points_multiplier: 10,
+  bonus_final_table: 5,
+  bonus_top3: 8,
+  bonus_attendance: 2,
+  no_show_penalty: -15,
+  early_bird_bonus_chips: 2000,
 }
 
 function setEntries(myStatus: string) {
@@ -76,6 +93,29 @@ function setEntries(myStatus: string) {
       { id: 'e3', player_id: 'p3', status: 'invited', rsvp_at: null, cancelled_at: null, checked_in_at: null, early_bird: false, points_earned: null, final_position: null, rebuys_count: 0, player: { name: 'José V.', avatar_url: null } },
       { id: 'e4', player_id: 'p4', status: 'declined', rsvp_at: null, cancelled_at: null, checked_in_at: null, early_bird: false, points_earned: null, final_position: null, rebuys_count: 0, player: { name: 'Ana M.', avatar_url: null } },
       { id: 'e5', player_id: 'p5', status: 'declined', rsvp_at: null, cancelled_at: null, checked_in_at: null, early_bird: false, points_earned: -15, final_position: null, rebuys_count: 0, player: { name: 'Luis C.', avatar_url: null } },
+    ],
+    error: null,
+  }
+}
+
+// A finished fecha: ranked finishers (winner + eliminated) each carry a
+// final_position and the engine's points_earned; a confirmed-but-ghosted player
+// is a no_show with the negative penalty.
+function setCompletedEntries() {
+  const base = {
+    rsvp_at: null,
+    cancelled_at: null,
+    checked_in_at: null,
+    early_bird: false,
+    rebuys_count: 0,
+    chopped: false,
+  }
+  h.list.entry = {
+    data: [
+      { id: 'w', player_id: 'pw', status: 'winner', points_earned: 45, final_position: 1, ...base, player: { name: 'Mauricio A.', avatar_url: null } },
+      { id: 'e2', player_id: 'p2', status: 'eliminated', points_earned: 34, final_position: 2, ...base, player: { name: 'Andrés R.', avatar_url: null } },
+      { id: 'e3', player_id: 'p3', status: 'eliminated', points_earned: 20, final_position: 3, ...base, player: { name: 'Sofía M.', avatar_url: null } },
+      { id: 'ns', player_id: 'pns', status: 'no_show', points_earned: -15, final_position: null, ...base, player: { name: 'Luis C.', avatar_url: null } },
     ],
     error: null,
   }
@@ -94,12 +134,34 @@ beforeEach(() => {
   h.player = { id: 'p-me', name: 'Edwin V.', avatar_url: null }
   h.rpcCalls = []
   h.rpcResult = { data: null, error: null }
-  h.single = { season: { data: { cancel_bands: DEFAULT_BANDS }, error: null } }
+  h.single = { season: { data: SEASON_CONFIG, error: null } }
   setTournament('scheduled')
   setEntries('confirmed')
 })
 
 describe('FechaDetail', () => {
+  it('info card shows the §5 formula, a worked example, and bonus/entry numbers', async () => {
+    const user = userEvent.setup()
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    // Collapsible → expand it, then assert against the info section only.
+    await user.click(screen.getByRole('button', { name: /Cómo se juega/i }))
+    const info = screen.getByTestId('fd-info-section')
+
+    // Formula in words + worked example total (10 players, 3rd = 70+8+5+2 = 85).
+    expect(info.textContent).toMatch(/\(N − P\) × multiplicador/)
+    expect(info.textContent).toContain('85 pts')
+    // Bonus values (mesa final 5, top3 8, asistencia 2) + no-show penalty (−15).
+    expect(info.textContent).toContain('+5')
+    expect(info.textContent).toContain('+8')
+    expect(info.textContent).toContain('−15')
+    // Entry + chips: buy-in ₡20.000, stack 10.000 fichas, early bird 2.000 fichas.
+    expect(info.textContent).toContain('₡20.000')
+    expect(info.textContent).toContain('10.000 fichas')
+    expect(info.textContent).toContain('2.000 fichas')
+  })
+
   it('renders the header, attendance chips grouped by status with counts', async () => {
     renderDetail()
     await screen.findByRole('heading', { name: 'Fecha 9' })
@@ -181,5 +243,216 @@ describe('FechaDetail', () => {
     expect(screen.queryByRole('button', { name: 'Cancelar' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Voy' })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: /en vivo/i })).toBeInTheDocument()
+  })
+
+  it('completed fecha shows finishing place + points per player (winner accented)', async () => {
+    setTournament('completed')
+    setCompletedEntries()
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    const rows = screen.getAllByTestId('prow')
+    const byName = (n: string) => rows.find((r) => within(r).queryByText(new RegExp(n)))!
+
+    // Winner: 1º + champion accent + positive points; no CAMPEÓN status badge.
+    const champ = within(byName('Mauricio')).getByTestId('fd-result')
+    expect(champ.textContent).toContain('1º')
+    expect(champ.textContent).toContain('+45 pts')
+    expect(champ.querySelector('.place.champ')).not.toBeNull()
+    expect(within(byName('Mauricio')).queryByText('Campeón')).not.toBeInTheDocument()
+
+    // Runner-up: 2º + points, not champ-accented; no FUERA badge.
+    const second = within(byName('Andrés')).getByTestId('fd-result')
+    expect(second.textContent).toContain('2º')
+    expect(second.textContent).toContain('+34 pts')
+    expect(second.querySelector('.place.champ')).toBeNull()
+    expect(within(byName('Andrés')).queryByText('Fuera')).not.toBeInTheDocument()
+
+    // 3rd place renders its ordinal too.
+    expect(within(byName('Sofía')).getByTestId('fd-result').textContent).toContain('3º')
+  })
+
+  it('completed fecha: medal icons for 2º (silver) / 3º (bronze), none for 4º+', async () => {
+    setTournament('completed')
+    const base = {
+      rsvp_at: null,
+      cancelled_at: null,
+      checked_in_at: null,
+      early_bird: false,
+      rebuys_count: 0,
+      chopped: false,
+    }
+    h.list.entry = {
+      data: [
+        { id: 'w', player_id: 'pw', status: 'winner', points_earned: 45, final_position: 1, ...base, player: { name: 'Uno P.', avatar_url: null } },
+        { id: 'e2', player_id: 'p2', status: 'eliminated', points_earned: 34, final_position: 2, ...base, player: { name: 'Dos P.', avatar_url: null } },
+        { id: 'e3', player_id: 'p3', status: 'eliminated', points_earned: 20, final_position: 3, ...base, player: { name: 'Tres P.', avatar_url: null } },
+        { id: 'e4', player_id: 'p4', status: 'eliminated', points_earned: 10, final_position: 4, ...base, player: { name: 'Cuatro P.', avatar_url: null } },
+      ],
+      error: null,
+    }
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    const rows = screen.getAllByTestId('prow')
+    const byName = (n: string) => rows.find((r) => within(r).queryByText(new RegExp(n)))!
+
+    // 1º keeps the champion crown (no runner-up medal marker).
+    expect(within(byName('Uno')).getByTestId('fd-result').querySelector('.crown')).not.toBeNull()
+    expect(within(byName('Uno')).queryByTestId('fd-medal')).toBeNull()
+
+    // 2º → silver medal + silver-tinted place; 3º → bronze medal + bronze tint.
+    const second = within(byName('Dos')).getByTestId('fd-result')
+    expect(within(second).getByTestId('fd-medal').textContent).toBe('🥈')
+    expect(second.querySelector('.place.silver')).not.toBeNull()
+
+    const third = within(byName('Tres')).getByTestId('fd-result')
+    expect(within(third).getByTestId('fd-medal').textContent).toBe('🥉')
+    expect(third.querySelector('.place.bronze')).not.toBeNull()
+
+    // 4º+ show no medal (just the ordinal).
+    expect(within(byName('Cuatro')).queryByTestId('fd-medal')).toBeNull()
+  })
+
+  it('centers the RSVP summary chips row', async () => {
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+    const head = screen.getByTestId('att-head')
+    expect(getComputedStyle(head).justifyContent).toBe('center')
+  })
+
+  it('completed fecha: a no-show shows "No Show" + the penalty points', async () => {
+    setTournament('completed')
+    setCompletedEntries()
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    const noShow = screen
+      .getAllByTestId('prow')
+      .find((r) => within(r).queryByText(/Luis/))!
+    const result = within(noShow).getByTestId('fd-result')
+    expect(result.textContent).toContain('No Show')
+    expect(result.textContent).toContain('−15 pts')
+  })
+
+  it('completed fecha: chopped co-champions share 1º and keep the champion accent', async () => {
+    setTournament('completed')
+    const base = {
+      rsvp_at: null,
+      cancelled_at: null,
+      checked_in_at: null,
+      early_bird: false,
+      rebuys_count: 0,
+      points_earned: 40,
+    }
+    h.list.entry = {
+      data: [
+        { id: 'ca', player_id: 'pca', status: 'winner', final_position: 1, chopped: true, ...base, player: { name: 'Ana M.', avatar_url: null } },
+        // Co-champion with final_position=2 must still render 1º (shared place).
+        { id: 'cb', player_id: 'pcb', status: 'winner', final_position: 2, chopped: true, ...base, player: { name: 'Beto S.', avatar_url: null } },
+      ],
+      error: null,
+    }
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    const rows = screen.getAllByTestId('prow')
+    for (const nm of ['Ana', 'Beto']) {
+      const res = within(rows.find((r) => within(r).queryByText(new RegExp(nm)))!).getByTestId(
+        'fd-result',
+      )
+      expect(res.textContent).toContain('1º')
+      expect(res.textContent).toContain('+40 pts')
+      expect(res.querySelector('.place.champ')).not.toBeNull()
+    }
+  })
+
+  // A completed fecha with a tournament header that also carries the materialized
+  // `prizes` (set_prizes output). `extra` merges onto the tournament mock so tests
+  // can add prizes / counts_for_league without repeating the whole row.
+  function setCompletedTournament(extra: Record<string, unknown>) {
+    h.single.tournament = {
+      data: {
+        id: 't-1',
+        season_id: 's1',
+        name: 'Fecha 9',
+        scheduled_at: NINE_HOURS,
+        status: 'completed',
+        geofence_radius_m: 100,
+        counts_for_league: true,
+        ...extra,
+      },
+      error: null,
+    }
+  }
+
+  it('completed fecha: Premios list renders below the results with final ₡ amounts', async () => {
+    setCompletedTournament({
+      prizes: [
+        { position: 1, pct: 0.5, amount: 100000, overridden: false },
+        { position: 2, pct: 0.3, amount: 60000, overridden: false },
+        { position: 3, pct: 0.2, amount: 40000, overridden: false },
+      ],
+    })
+    setCompletedEntries()
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    const premios = screen.getByTestId('premios')
+    // Full ₡ + "." thousands separators (not the compact "₡100K" live style).
+    expect(premios.textContent).toContain('₡100.000')
+    expect(premios.textContent).toContain('₡60.000')
+    expect(premios.textContent).toContain('₡40.000')
+
+    // Sits AFTER the player list in the DOM (bottom of the results block).
+    const firstRow = screen.getAllByTestId('prow')[0]
+    expect(firstRow.compareDocumentPosition(premios) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('completed fecha: a chopped top-place shows the split amount, not the template', async () => {
+    setCompletedTournament({
+      prizes: [
+        { position: 1, pct: 0.5, amount: 80000, overridden: false },
+        { position: 2, pct: 0.3, amount: 50000, overridden: false },
+        { position: 3, pct: 0.2, amount: 30000, overridden: false },
+      ],
+    })
+    const base = { rsvp_at: null, cancelled_at: null, checked_in_at: null, early_bird: false, rebuys_count: 0 }
+    h.list.entry = {
+      data: [
+        { id: 'ca', player_id: 'pca', status: 'winner', points_earned: 40, final_position: 1, chopped: true, chop_group: 1, ...base, player: { name: 'Ana M.', avatar_url: null } },
+        { id: 'cb', player_id: 'pcb', status: 'winner', points_earned: 40, final_position: 2, chopped: true, chop_group: 1, ...base, player: { name: 'Beto S.', avatar_url: null } },
+        { id: 'e3', player_id: 'p3', status: 'eliminated', points_earned: 20, final_position: 3, chopped: false, chop_group: null, ...base, player: { name: 'Sofía M.', avatar_url: null } },
+      ],
+      error: null,
+    }
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    const premios = screen.getByTestId('premios')
+    // 1º + 2º chopped → each shows (80.000 + 50.000) / 2 = ₡65.000, NOT the template.
+    expect(premios.textContent).toContain('₡65.000')
+    expect(premios.textContent).not.toContain('₡80.000')
+    expect(premios.textContent).not.toContain('₡50.000')
+    // 3º is un-chopped → keeps its template amount.
+    expect(premios.textContent).toContain('₡30.000')
+  })
+
+  it('standalone completed fecha (no suma a la liga) still shows the Premios section', async () => {
+    setCompletedTournament({
+      counts_for_league: false,
+      prizes: [
+        { position: 1, pct: 0.6, amount: 90000, overridden: false },
+        { position: 2, pct: 0.4, amount: 60000, overridden: false },
+      ],
+    })
+    setCompletedEntries()
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    expect(screen.getByTestId('fd-standalone')).toBeInTheDocument()
+    const premios = screen.getByTestId('premios')
+    expect(premios.textContent).toContain('₡90.000')
+    expect(premios.textContent).toContain('₡60.000')
   })
 })

@@ -16,6 +16,8 @@ const h = vi.hoisted(() => ({
   // promise it resolves manually (for the auto-advance in-flight race test).
   rpcImpl: {} as Record<string, (args: unknown) => Promise<{ data: unknown; error: unknown }>>,
   rpcCalls: [] as Array<{ name: string; args: unknown }>,
+  // Captured tournament .update() payloads (payout_distribution edit).
+  updates: [] as Array<{ table: string; payload: unknown }>,
   // When set, the channel mock invokes subscribe's status callback with it
   // (e.g. 'CHANNEL_ERROR') so the reconnect banner can be exercised.
   channelStatus: undefined as string | undefined,
@@ -34,6 +36,10 @@ vi.mock('@/lib/supabase', () => ({
         eq: () => b,
         order: () => b,
         limit: () => b,
+        update: (payload: unknown) => {
+          h.updates.push({ table, payload })
+          return b
+        },
         maybeSingle: () => Promise.resolve(h.single[table] ?? { data: null, error: null }),
         then: (resolve: (v: unknown) => void) => resolve(h.list[table] ?? { data: [], error: null }),
       }
@@ -85,8 +91,14 @@ function setLive() {
         { position: 2, pct: 0.28, amount: 40_000 },
         { position: 3, pct: 0.12, amount: 15_000 },
       ],
+      payout_distribution: [
+        { place: 1, pct: 0.6 },
+        { place: 2, pct: 0.28 },
+        { place: 3, pct: 0.12 },
+      ],
       final_table_size: 5,
       starting_stack: 10_000,
+      odds_enabled: true,
     },
     error: null,
   }
@@ -116,6 +128,7 @@ beforeEach(() => {
   h.rpc = {}
   h.rpcImpl = {}
   h.rpcCalls = []
+  h.updates = []
   h.channelStatus = undefined
   setLive()
 })
@@ -131,6 +144,8 @@ describe('Admin console (slice 12)', () => {
     // paid / unpaid badges rendered.
     expect(screen.getAllByText('✓ Pagó').length).toBeGreaterThan(0)
     expect(screen.getByText('● Sin pagar')).toBeInTheDocument()
+    // chips badge is labeled "fichas iniciales" (buy-in chips, not a live stack).
+    expect(screen.getAllByText(/fichas iniciales/).length).toBeGreaterThan(0)
   })
 
   it('clock buttons call the clock RPC (pause)', async () => {
@@ -207,6 +222,107 @@ describe('Admin console (slice 12)', () => {
     const call = h.rpcCalls.find((c) => c.name === 'complete_tournament')
     expect(call).toBeTruthy()
     expect((call!.args as Record<string, unknown>).p_chop_entry_ids).toBeUndefined()
+  })
+
+  // Multi-bust must leave ≥1 survivor: selecting the WHOLE in-play field is a
+  // final-table/heads-up chop (→ "Completar fecha"), so both bust actions
+  // disable and a survivor hint appears. A subset (leaving ≥1) enables them.
+  it('MultiBustSheet disables En orden + Empataron when all in-play are selected', async () => {
+    const user = userEvent.setup()
+    h.list.entry = {
+      data: [
+        { id: 'e-a', player_id: 'p-a', status: 'playing', paid: true, chips: 10_000, rebuys_count: 0, early_bird: false, final_position: null, player: { name: 'Ana', avatar_url: null } },
+        { id: 'e-b', player_id: 'p-b', status: 'playing', paid: true, chips: 20_000, rebuys_count: 0, early_bird: false, final_position: null, player: { name: 'Bea', avatar_url: null } },
+        { id: 'e-c', player_id: 'p-c', status: 'playing', paid: true, chips: 30_000, rebuys_count: 0, early_bird: false, final_position: null, player: { name: 'Cid', avatar_url: null } },
+      ],
+      error: null,
+    }
+    renderAdmin()
+    await screen.findAllByTestId('admin-prow')
+
+    await user.click(screen.getByRole('button', { name: /Eliminar varios/ }))
+    const dialog = screen.getByRole('dialog', { name: /Eliminar varios/ })
+    const orden = within(dialog).getByRole('button', { name: /En orden/ })
+    const empate = within(dialog).getByRole('button', { name: /Empataron/ })
+
+    // Select 2 of 3 (leaves 1 survivor) → both actions enabled, no hint.
+    await user.click(within(dialog).getByLabelText('Eliminar Ana'))
+    await user.click(within(dialog).getByLabelText('Eliminar Bea'))
+    expect(orden).toBeEnabled()
+    expect(empate).toBeEnabled()
+    expect(within(dialog).queryByTestId('multibust-survivor-hint')).not.toBeInTheDocument()
+
+    // Select the 3rd too (whole field, 0 survivors) → both disabled + hint.
+    await user.click(within(dialog).getByLabelText('Eliminar Cid'))
+    expect(orden).toBeDisabled()
+    expect(empate).toBeDisabled()
+    expect(within(dialog).getByTestId('multibust-survivor-hint')).toBeInTheDocument()
+  })
+})
+
+describe('Admin console — odds-calculator toggle (Phase-2 step 7)', () => {
+  it('flips odds_enabled on the live fecha via .update()', async () => {
+    const user = userEvent.setup()
+    renderAdmin()
+    await screen.findAllByTestId('admin-prow')
+
+    // Fixture starts enabled → the switch reflects that.
+    const toggle = screen.getByTestId('admin-odds-toggle')
+    expect(toggle).toHaveAttribute('aria-checked', 'true')
+
+    await user.click(toggle)
+
+    // The live console writes the flipped value to the tournament row.
+    await waitFor(() => expect(h.updates.find((u) => u.table === 'tournament')).toBeTruthy())
+    const upd = h.updates.find((u) => u.table === 'tournament')!.payload as {
+      odds_enabled?: boolean
+    }
+    expect(upd.odds_enabled).toBe(false)
+  })
+})
+
+describe('Admin console — edit prizes (payout distribution, Phase-2 step 5)', () => {
+  it('editing the split updates payout_distribution then re-materializes via set_prizes', async () => {
+    const user = userEvent.setup()
+    renderAdmin()
+    await screen.findAllByTestId('admin-prow')
+
+    await user.click(screen.getByRole('button', { name: /Editar premios/ }))
+    const dialog = await screen.findByRole('dialog', { name: 'Editar premios del torneo' })
+    // Seeded from the fecha's current distribution (60 / 28 / 12).
+    const editor = within(dialog).getByTestId('prize-dist-editor')
+    expect(within(editor).getAllByRole('textbox')).toHaveLength(3)
+
+    // Add a 4th place and rebalance to keep the sum at 100% (60/25/10/5).
+    await user.click(within(editor).getByRole('button', { name: '+ Agregar lugar' }))
+    const [first, second, third, fourth] = within(editor).getAllByRole('textbox')
+    await user.clear(second!)
+    await user.type(second!, '25')
+    await user.clear(third!)
+    await user.type(third!, '10')
+    await user.clear(fourth!)
+    await user.type(fourth!, '5')
+    void first
+
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar premios' }))
+
+    // (1) payout_distribution written directly to the tournament row …
+    await waitFor(() => expect(h.updates.find((u) => u.table === 'tournament')).toBeTruthy())
+    const upd = h.updates.find((u) => u.table === 'tournament')!.payload as {
+      payout_distribution: Array<{ place: number; pct: number }>
+    }
+    expect(upd.payout_distribution).toEqual([
+      { place: 1, pct: 0.6 },
+      { place: 2, pct: 0.25 },
+      { place: 3, pct: 0.1 },
+      { place: 4, pct: 0.05 },
+    ])
+    // (2) … then set_prizes re-materializes prizes against the current pot.
+    await waitFor(() =>
+      expect(h.rpcCalls.find((c) => c.name === 'set_prizes')).toMatchObject({
+        args: { p_tournament_id: 't-live' },
+      }),
+    )
   })
 })
 

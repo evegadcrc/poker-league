@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { useLoadable } from '@/lib/useLoadable'
+import { useSound } from '@/lib/sound'
 import Avatar from '@/components/Avatar'
 import FormPills from '@/components/FormPills'
 
@@ -254,10 +255,71 @@ export default function Profile() {
         </>
       )}
 
+      <div className="rule faint" />
+
+      <SoundSettings />
+
       <div className="btn-row">
         <button type="button" className="btn ghost full" onClick={() => void signOut()}>
           Cerrar sesión
         </button>
+      </div>
+    </>
+  )
+}
+
+/**
+ * "Sonido" — mute + volume control for the Web-Audio cue engine (`@/lib/sound`).
+ * Settings persist to `localStorage['pf-sound']`; toggling here later drives the
+ * timer/level/elimination cues wired in a follow-up slice. Each interaction also
+ * resumes the audio context (autoplay policy needs a user gesture) so cues are
+ * unlocked as soon as the player touches the control.
+ */
+function SoundSettings() {
+  const { muted, volume, setMuted, setVolume, resumeAudio } = useSound()
+
+  return (
+    <>
+      <div className="section-head" style={{ paddingBottom: 2 }}>
+        <div>
+          <span className="overline">Sonido</span>
+        </div>
+      </div>
+
+      <div className="toggle-row">
+        <div>
+          <div className="tl">Silenciar</div>
+          <div className="ts">Apagá los sonidos del torneo</div>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={muted}
+          aria-label="Silenciar"
+          className={`switch${muted ? ' on' : ''}`}
+          onClick={() => {
+            resumeAudio()
+            setMuted(!muted)
+          }}
+        />
+      </div>
+
+      <div className="sound-volume">
+        <label htmlFor="pf-volume">Volumen</label>
+        <input
+          id="pf-volume"
+          type="range"
+          min={0}
+          max={1}
+          step={0.05}
+          value={volume}
+          disabled={muted}
+          aria-label="Volumen"
+          onChange={(e) => {
+            resumeAudio()
+            setVolume(Number(e.target.value))
+          }}
+        />
       </div>
     </>
   )

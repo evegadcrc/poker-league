@@ -34,7 +34,7 @@ export default function PlayerRow({ row, rank, isCurrent }: PlayerRowProps) {
             {row.player_name}
             {isCurrent ? ' · tú' : ''}
           </b>
-          <FormPills form={row.form} />
+          <FormPills form={row.form} positions={row.form_positions} />
         </div>
       </div>
       <div className="lb-stats">

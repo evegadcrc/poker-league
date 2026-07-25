@@ -104,6 +104,45 @@ export type Database = {
           },
         ]
       }
+      gallery_photo: {
+        Row: {
+          created_at: string
+          id: string
+          storage_path: string
+          tournament_id: string
+          uploader_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          storage_path: string
+          tournament_id: string
+          uploader_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          storage_path?: string
+          tournament_id?: string
+          uploader_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gallery_photo_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournament"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gallery_photo_uploader_id_fkey"
+            columns: ["uploader_id"]
+            isOneToOne: false
+            referencedRelation: "player"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       entry: {
         Row: {
           cancelled_at: string | null
@@ -271,6 +310,8 @@ export type Database = {
           ante_enabled: boolean
           blind_structure_id: string | null
           buy_in: number
+          counts_for_league: boolean
+          cover_url: string | null
           created_at: string
           created_by: string | null
           current_level: number
@@ -280,7 +321,9 @@ export type Database = {
           is_paused: boolean
           level_started_at: string | null
           name: string
+          odds_enabled: boolean
           paused_remaining_seconds: number | null
+          payout_distribution: Json | null
           prize_pool_override: number | null
           prizes: Json | null
           rebuy_amount: number | null
@@ -297,6 +340,8 @@ export type Database = {
           ante_enabled?: boolean
           blind_structure_id?: string | null
           buy_in?: number
+          counts_for_league?: boolean
+          cover_url?: string | null
           created_at?: string
           created_by?: string | null
           current_level?: number
@@ -306,7 +351,9 @@ export type Database = {
           is_paused?: boolean
           level_started_at?: string | null
           name: string
+          odds_enabled?: boolean
           paused_remaining_seconds?: number | null
+          payout_distribution?: Json | null
           prize_pool_override?: number | null
           prizes?: Json | null
           rebuy_amount?: number | null
@@ -323,6 +370,8 @@ export type Database = {
           ante_enabled?: boolean
           blind_structure_id?: string | null
           buy_in?: number
+          counts_for_league?: boolean
+          cover_url?: string | null
           created_at?: string
           created_by?: string | null
           current_level?: number
@@ -332,7 +381,9 @@ export type Database = {
           is_paused?: boolean
           level_started_at?: string | null
           name?: string
+          odds_enabled?: boolean
           paused_remaining_seconds?: number | null
+          payout_distribution?: Json | null
           prize_pool_override?: number | null
           prizes?: Json | null
           rebuy_amount?: number | null
@@ -520,6 +571,8 @@ export type Database = {
           ante_enabled: boolean
           blind_structure_id: string | null
           buy_in: number
+          counts_for_league: boolean
+          cover_url: string | null
           created_at: string
           created_by: string | null
           current_level: number
@@ -529,7 +582,9 @@ export type Database = {
           is_paused: boolean
           level_started_at: string | null
           name: string
+          odds_enabled: boolean
           paused_remaining_seconds: number | null
+          payout_distribution: Json | null
           prize_pool_override: number | null
           prizes: Json | null
           rebuy_amount: number | null
@@ -580,6 +635,8 @@ export type Database = {
           ante_enabled: boolean
           blind_structure_id: string | null
           buy_in: number
+          counts_for_league: boolean
+          cover_url: string | null
           created_at: string
           created_by: string | null
           current_level: number
@@ -589,7 +646,9 @@ export type Database = {
           is_paused: boolean
           level_started_at: string | null
           name: string
+          odds_enabled: boolean
           paused_remaining_seconds: number | null
+          payout_distribution: Json | null
           prize_pool_override: number | null
           prizes: Json | null
           rebuy_amount: number | null
@@ -663,6 +722,8 @@ export type Database = {
           ante_enabled: boolean
           blind_structure_id: string | null
           buy_in: number
+          counts_for_league: boolean
+          cover_url: string | null
           created_at: string
           created_by: string | null
           current_level: number
@@ -672,7 +733,9 @@ export type Database = {
           is_paused: boolean
           level_started_at: string | null
           name: string
+          odds_enabled: boolean
           paused_remaining_seconds: number | null
+          payout_distribution: Json | null
           prize_pool_override: number | null
           prizes: Json | null
           rebuy_amount: number | null
@@ -722,6 +785,36 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      eliminate_multi: {
+        Args: { p_entry_ids: string[]; p_tied?: boolean }
+        Returns: {
+          cancelled_at: string | null
+          check_in_geo_ok: boolean | null
+          checked_in_at: string | null
+          chips: number | null
+          chop_group: number | null
+          chopped: boolean
+          created_at: string
+          early_bird: boolean
+          eliminated_at: string | null
+          final_position: number | null
+          id: string
+          made_final_table: boolean
+          paid: boolean
+          player_id: string
+          points_earned: number | null
+          rebuys_count: number
+          rsvp_at: string | null
+          status: Database["public"]["Enums"]["entry_status"]
+          tournament_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "entry"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       fn_eliminate_entry: { Args: { p_entry_id: string }; Returns: string }
       fn_final_table_size: {
         Args: { p_checked_in: number; p_season_id: string }
@@ -741,6 +834,7 @@ export type Database = {
         Returns: {
           avatar_url: string
           form: string[]
+          form_positions: number[]
           games_played: number
           player_id: string
           player_name: string
@@ -785,6 +879,8 @@ export type Database = {
           ante_enabled: boolean
           blind_structure_id: string | null
           buy_in: number
+          counts_for_league: boolean
+          cover_url: string | null
           created_at: string
           created_by: string | null
           current_level: number
@@ -794,7 +890,9 @@ export type Database = {
           is_paused: boolean
           level_started_at: string | null
           name: string
+          odds_enabled: boolean
           paused_remaining_seconds: number | null
+          payout_distribution: Json | null
           prize_pool_override: number | null
           prizes: Json | null
           rebuy_amount: number | null

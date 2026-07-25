@@ -25,6 +25,7 @@ type TournamentRow = {
   buy_in: number
   rebuy_amount: number | null
   prize_pool_override: number | null
+  cover_url: string | null
 }
 
 type EntryRow = {
@@ -50,6 +51,8 @@ type FechaCard = {
   alive: number
   played: number
   winner: string | null
+  /** History cover image (completed fechas); null → themed gradient fallback. */
+  cover: string | null
 }
 
 type State =
@@ -90,6 +93,7 @@ function buildCards(tournaments: TournamentRow[], entries: EntryRow[]): FechaCar
       alive: aliveCount(es),
       played: playedCount(es),
       winner: champ?.player?.name ?? null,
+      cover: t.cover_url,
     }
   })
 
@@ -116,7 +120,7 @@ async function fetchState(): Promise<State> {
 
   const { data: tournaments, error: tErr } = await supabase
     .from('tournament')
-    .select('id, name, scheduled_at, status, buy_in, rebuy_amount, prize_pool_override')
+    .select('id, name, scheduled_at, status, buy_in, rebuy_amount, prize_pool_override, cover_url')
     .eq('season_id', season.id)
     .order('scheduled_at', { ascending: false })
 
@@ -215,6 +219,36 @@ const BADGE: Record<TournamentStatus, { cls: string; label: string }> = {
 
 function TournamentCard({ card, onOpen }: { card: FechaCard; onOpen: () => void }) {
   const badge = BADGE[card.status]
+
+  // Completed / history fechas render as full-bleed cover cards: the cover_url
+  // image (or a themed gradient fallback when null — never a broken image)
+  // fills the header, title + badge overlaid on a legibility scrim.
+  if (card.status === 'completed') {
+    return (
+      <button
+        type="button"
+        className="tourn-card cover-card"
+        onClick={onOpen}
+        data-testid="tourn-card"
+      >
+        <div
+          className={`cover-media${card.cover ? '' : ' fallback'}`}
+          style={card.cover ? { backgroundImage: `url("${card.cover}")` } : undefined}
+          data-testid="cover-media"
+          data-cover={card.cover ? 'image' : 'fallback'}
+        >
+          <div className="cover-scrim" aria-hidden="true" />
+          <div className="cover-head">
+            <span className={`badge ${badge.cls}`}>{badge.label}</span>
+            <div className="tc-title">{card.name}</div>
+            <div className="tc-sub">{card.when}</div>
+          </div>
+        </div>
+        <div className="tc-foot">{footCells(card)}</div>
+      </button>
+    )
+  }
+
   return (
     <button type="button" className="tourn-card" onClick={onOpen} data-testid="tourn-card">
       <div className="tc-top">
