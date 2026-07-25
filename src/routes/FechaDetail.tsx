@@ -20,7 +20,6 @@ import {
   parseBands,
   parseLeagueConfig,
   pickBand,
-  pointsExample,
   statusPill,
   statusRank,
   toDatetimeLocal,
@@ -43,6 +42,7 @@ type TournamentRow = {
   buy_in: number
   rebuy_amount: number | null
   starting_stack: number | null
+  cancelled_at: string | null
 }
 
 type EntryRow = {
@@ -105,7 +105,7 @@ async function fetchDetail(id: string): Promise<State> {
   const { data: t, error: tErr } = await supabase
     .from('tournament')
     .select(
-      'id, season_id, name, scheduled_at, status, geofence_radius_m, cover_url, counts_for_league, prizes, buy_in, rebuy_amount, starting_stack',
+      'id, season_id, name, scheduled_at, status, geofence_radius_m, cover_url, counts_for_league, prizes, buy_in, rebuy_amount, starting_stack, cancelled_at',
     )
     .eq('id', id)
     .maybeSingle()
@@ -124,7 +124,7 @@ async function fetchDetail(id: string): Promise<State> {
     supabase
       .from('season')
       .select(
-        'cancel_bands, points_multiplier, bonus_final_table, bonus_top3, bonus_attendance, no_show_penalty, early_bird_bonus_chips',
+        'cancel_bands, points_multiplier, bonus_final_table, bonus_attendance, no_show_penalty, early_bird_bonus_chips, top_finish_bonuses',
       )
       .eq('id', tournament.season_id)
       .maybeSingle(),
@@ -285,6 +285,47 @@ export default function FechaDetail() {
     [setState, reload],
   )
 
+  // Admin: mark a scheduled/live fecha as cancelled (soft flag via the admin-only
+  // tournament UPDATE policy, 0017). The row stays; it just stops being runnable.
+  const doCancelFecha = useCallback(async () => {
+    if (
+      !window.confirm(
+        '¿Cancelar esta fecha? Quedará marcada como cancelada y no se podrá abrir ni jugar.',
+      )
+    )
+      return
+    setBusy(true)
+    const { error } = await supabase
+      .from('tournament')
+      .update({ cancelled_at: new Date().toISOString() })
+      .eq('id', id)
+    setBusy(false)
+    if (error) {
+      console.error('cancel fecha failed', error.message)
+      return
+    }
+    reload({ silent: true })
+  }, [id, reload])
+
+  // Admin: hard-delete a fecha created by mistake (delete_tournament RPC removes
+  // its gallery + entries + the row), then return to the fechas list.
+  const doDeleteFecha = useCallback(async () => {
+    if (
+      !window.confirm(
+        '¿Eliminar esta fecha para siempre? Se borrarán sus inscripciones y fotos. Esta acción no se puede deshacer.',
+      )
+    )
+      return
+    setBusy(true)
+    const { error } = await supabase.rpc('delete_tournament', { p_id: id })
+    setBusy(false)
+    if (error) {
+      console.error('delete fecha failed', error.message)
+      return
+    }
+    navigate('/fechas')
+  }, [id, navigate])
+
   if (state.phase === 'loading') {
     return (
       <>
@@ -321,7 +362,11 @@ export default function FechaDetail() {
   const scheduled = tournament.status === 'scheduled'
   const live = tournament.status === 'live'
   const completed = tournament.status === 'completed'
-  const canCheckIn = live && myEntry?.status === 'confirmed'
+  // A cancelled fecha keeps its row + status but can no longer be opened/played/
+  // checked-in — every "run" affordance is gated on `runnable`.
+  const cancelled = tournament.cancelled_at != null
+  const runnable = !cancelled
+  const canCheckIn = live && runnable && myEntry?.status === 'confirmed'
   const alreadyCheckedIn = live && myEntry != null && CHECKED_IN_STATUSES.has(myEntry.status)
   const locating = checkIn.kind === 'locating' || checkIn.kind === 'submitting'
   // Completed fecha: the ACTUAL payout per place — the materialized
@@ -337,15 +382,35 @@ export default function FechaDetail() {
           <span className="overline">{OVERLINE[tournament.status]}</span>
           <h1>{tournament.name}</h1>
         </div>
+        {cancelled && (
+          <span className="badge cancelled" data-testid="fd-cancelled">
+            Cancelada
+          </span>
+        )}
       </div>
       <div className="tc-sub" style={{ padding: '0 18px 4px' }}>
         {formatWhen(tournament.scheduled_at)}
       </div>
-      {scheduled && isAdmin && (
+      {scheduled && isAdmin && !cancelled && (
         <ScheduleEditor
           tournamentId={tournament.id}
           scheduledAt={tournament.scheduled_at}
           onSaved={patchSchedule}
+        />
+      )}
+      {scheduled && (
+        <div className="fd-buyin" data-testid="fd-buyin">
+          <span className="fd-buyin-k">Buy-in</span>
+          <span className="fd-buyin-v">₡{formatMiles(tournament.buy_in ?? 0)}</span>
+        </div>
+      )}
+      {isAdmin && (
+        <AdminFechaActions
+          status={tournament.status}
+          cancelled={cancelled}
+          busy={busy}
+          onCancel={doCancelFecha}
+          onDelete={doDeleteFecha}
         />
       )}
       {tournament.counts_for_league === false && (
@@ -361,7 +426,7 @@ export default function FechaDetail() {
         <ChipCount tone="none" n={counts.sinResp} label="Sin resp." />
       </div>
 
-      {scheduled && player && (
+      {scheduled && runnable && player && (
         <div className="btn-row">
           <RsvpActions status={myEntry?.status} busy={busy} onRsvp={doRsvp} onCancel={() => setCancelOpen(true)} />
         </div>
@@ -385,7 +450,7 @@ export default function FechaDetail() {
           </div>
         </>
       )}
-      {live && (
+      {live && runnable && (
         <div className="btn-row">
           {alreadyCheckedIn && (
             <button type="button" className="btn full" disabled>
@@ -500,11 +565,13 @@ function ScheduleEditor({
       <div className="fd-sched-edit">
         <button
           type="button"
-          className="btn ghost sm"
+          className="icon-btn"
           data-testid="sched-edit-open"
+          aria-label="Editar fecha y hora"
+          title="Editar fecha y hora"
           onClick={open}
         >
-          ✎ Editar fecha y hora
+          <CalendarIcon />
         </button>
       </div>
     )
@@ -548,14 +615,85 @@ function ScheduleEditor({
   )
 }
 
-// Collapsible "Cómo se juega" card — visible in every status. Explains the §5
-// points formula with a worked example built from THIS league's configured
-// values, lists the fecha's bonuses / no-show penalty, and its entry + chips.
+// Inline lucide-style "calendar" glyph. lucide-react is not a dependency, so the
+// icon buttons in this app stay self-contained (SVG / emoji); this is the same
+// Calendar path lucide ships. Decorative — the button carries the aria-label.
+function CalendarIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M8 2v4" />
+      <path d="M16 2v4" />
+      <rect width="18" height="18" x="3" y="4" rx="2" />
+      <path d="M3 10h18" />
+    </svg>
+  )
+}
+
+// Admin management for a fecha: soft-cancel a scheduled/live fecha (keeps the row
+// + history, just stops it being runnable) and hard-delete a fecha created by
+// mistake (delete_tournament RPC). Both confirm before acting (in the handlers).
+function AdminFechaActions({
+  status,
+  cancelled,
+  busy,
+  onCancel,
+  onDelete,
+}: {
+  status: TournamentStatus
+  cancelled: boolean
+  busy: boolean
+  onCancel: () => void
+  onDelete: () => void
+}) {
+  const canCancel = (status === 'scheduled' || status === 'live') && !cancelled
+  // Delete is only for mistakes: a scheduled fecha, or any already-cancelled one.
+  // A COMPLETED fecha holds real results + gallery, and a LIVE (uncancelled) fecha
+  // is in progress — neither may be deleted (cancel a live fecha first).
+  const canDelete = cancelled || status === 'scheduled'
+  return (
+    <div className="fd-admin-actions" data-testid="fd-admin-actions">
+      {canCancel && (
+        <button
+          type="button"
+          className="btn ghost sm"
+          disabled={busy}
+          onClick={onCancel}
+          data-testid="fd-cancel-fecha"
+        >
+          Cancelar fecha
+        </button>
+      )}
+      {canDelete && (
+        <button
+          type="button"
+          className="btn blood sm"
+          disabled={busy}
+          onClick={onDelete}
+          data-testid="fd-delete-fecha"
+        >
+          Eliminar fecha
+        </button>
+      )}
+    </div>
+  )
+}
+
+// Collapsible "Entrada y fichas" card — fecha-SPECIFIC entry info (buy-in, rebuy,
+// starting stack, early-bird chips). The general scoring explainer ("cómo se
+// ganan puntos") now lives on the Liga (leaderboard) view, not here.
 function FechaInfo({ tournament, config }: { tournament: TournamentRow; config: LeagueConfig }) {
   const [open, setOpen] = useState(false)
-  const ex = pointsExample(config)
-  const winnerBase = (ex.n - 1) * config.multiplier
-  const penalty = Math.abs(config.noShowPenalty)
   const rebuy =
     tournament.rebuy_amount != null ? `₡${formatMiles(tournament.rebuy_amount)}` : 'No aplica'
 
@@ -569,7 +707,7 @@ function FechaInfo({ tournament, config }: { tournament: TournamentRow; config: 
         data-testid="fd-info-toggle"
         onClick={() => setOpen((v) => !v)}
       >
-        <span>Cómo se juega</span>
+        <span>Entrada y fichas</span>
         <span className="chev" aria-hidden="true">
           ⌄
         </span>
@@ -577,30 +715,6 @@ function FechaInfo({ tournament, config }: { tournament: TournamentRow; config: 
       {open && (
         <div className="calc-rankings-body" id="fd-info-body">
           <div className="fd-info-block">
-            <h4>Cómo se calculan los puntos</h4>
-            <p>
-              Puntos = (N − P) × multiplicador + bonos − castigos. <b>N</b> = jugadores que
-              entraron, <b>P</b> = tu lugar (1 = campeón). Multiplicador actual:{' '}
-              <b>{config.multiplier}</b>.
-            </p>
-            <p className="fd-info-example">
-              Ejemplo con <b>{ex.n} jugadores</b>: el 1º gana ({ex.n}−1)×{config.multiplier} ={' '}
-              <b>{winnerBase} pts</b> de base. Quien queda <b>{ex.p}º</b> gana ({ex.n}−{ex.p})×
-              {config.multiplier} = {ex.base} + {ex.bonusTop3} (Top 3) + {ex.bonusFinalTable} (Mesa
-              Final) + {ex.bonusAttendance} (Asistencia) = <b>{ex.total} pts</b>.
-            </p>
-          </div>
-
-          <div className="fd-info-block">
-            <h4>Bonos de esta fecha</h4>
-            <InfoRow label="Bonus Mesa Final" value={`+${config.bonusFinalTable}`} />
-            <InfoRow label="Bonus Top 3" value={`+${config.bonusTop3}`} />
-            <InfoRow label="Bonus Asistencia" value={`+${config.bonusAttendance}`} />
-            <InfoRow label="Castigo no-show" value={`−${penalty}`} />
-          </div>
-
-          <div className="fd-info-block">
-            <h4>Entrada y fichas</h4>
             <InfoRow label="Buy-in" value={`₡${formatMiles(tournament.buy_in ?? 0)}`} />
             <InfoRow label="Recompra" value={rebuy} />
             <InfoRow

@@ -232,6 +232,7 @@ export type Database = {
           email: string
           id: string
           is_admin: boolean
+          is_guest: boolean
           name: string
         }
         Insert: {
@@ -241,6 +242,7 @@ export type Database = {
           email: string
           id?: string
           is_admin?: boolean
+          is_guest?: boolean
           name: string
         }
         Update: {
@@ -250,6 +252,7 @@ export type Database = {
           email?: string
           id?: string
           is_admin?: boolean
+          is_guest?: boolean
           name?: string
         }
         Relationships: []
@@ -269,6 +272,7 @@ export type Database = {
           payout_template: Json
           points_multiplier: number
           status: Database["public"]["Enums"]["season_status"]
+          top_finish_bonuses: Json
           year: number
         }
         Insert: {
@@ -285,6 +289,7 @@ export type Database = {
           payout_template?: Json
           points_multiplier?: number
           status?: Database["public"]["Enums"]["season_status"]
+          top_finish_bonuses?: Json
           year: number
         }
         Update: {
@@ -301,15 +306,55 @@ export type Database = {
           payout_template?: Json
           points_multiplier?: number
           status?: Database["public"]["Enums"]["season_status"]
+          top_finish_bonuses?: Json
           year?: number
         }
         Relationships: []
+      }
+      signup_request: {
+        Row: {
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          email: string
+          id: string
+          name: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          email: string
+          id?: string
+          name?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          email?: string
+          id?: string
+          name?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signup_request_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "player"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       tournament: {
         Row: {
           ante_enabled: boolean
           blind_structure_id: string | null
           buy_in: number
+          cancelled_at: string | null
           counts_for_league: boolean
           cover_url: string | null
           created_at: string
@@ -340,6 +385,7 @@ export type Database = {
           ante_enabled?: boolean
           blind_structure_id?: string | null
           buy_in?: number
+          cancelled_at?: string | null
           counts_for_league?: boolean
           cover_url?: string | null
           created_at?: string
@@ -370,6 +416,7 @@ export type Database = {
           ante_enabled?: boolean
           blind_structure_id?: string | null
           buy_in?: number
+          cancelled_at?: string | null
           counts_for_league?: boolean
           cover_url?: string | null
           created_at?: string
@@ -425,6 +472,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_guest_entry: {
+        Args: { p_name: string; p_tournament_id: string }
+        Returns: string
+      }
       add_rebuy: {
         Args: { p_entry_id: string }
         Returns: {
@@ -485,6 +536,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      approve_request: { Args: { p_id: string }; Returns: string }
       auth_is_admin: { Args: never; Returns: boolean }
       auth_player_id: { Args: never; Returns: string }
       cancel_rsvp: {
@@ -556,6 +608,7 @@ export type Database = {
           email: string
           id: string
           is_admin: boolean
+          is_guest: boolean
           name: string
         }[]
         SetofOptions: {
@@ -620,6 +673,7 @@ export type Database = {
           payout_template: Json
           points_multiplier: number
           status: Database["public"]["Enums"]["season_status"]
+          top_finish_bonuses: Json
           year: number
         }[]
         SetofOptions: {
@@ -707,6 +761,7 @@ export type Database = {
           email: string
           id: string
           is_admin: boolean
+          is_guest: boolean
           name: string
         }[]
         SetofOptions: {
@@ -755,6 +810,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      delete_tournament: { Args: { p_id: string }; Returns: undefined }
       eliminate: {
         Args: { p_entry_id: string }
         Returns: {
@@ -930,6 +986,8 @@ export type Database = {
         Args: { p_tournament_id: string }
         Returns: number
       }
+      reject_request: { Args: { p_id: string }; Returns: undefined }
+      request_access: { Args: { p_email: string }; Returns: string }
       rsvp: {
         Args: { p_choice: string; p_tournament_id: string }
         Returns: {
@@ -1034,6 +1092,7 @@ export type Database = {
           email: string
           id: string
           is_admin: boolean
+          is_guest: boolean
           name: string
         }[]
         SetofOptions: {
@@ -1059,6 +1118,7 @@ export type Database = {
           payout_template: Json
           points_multiplier: number
           status: Database["public"]["Enums"]["season_status"]
+          top_finish_bonuses: Json
           year: number
         }[]
         SetofOptions: {

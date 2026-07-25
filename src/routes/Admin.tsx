@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRole } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
+import {
+  approveRequest,
+  fetchPendingRequests,
+  rejectRequest,
+  sendApprovalLink,
+  type SignupRequest,
+} from '@/lib/access'
 import { deriveLiveSignal, useLiveEventCues } from '@/lib/notify'
 import Avatar from '@/components/Avatar'
 import Sheet from '@/components/Sheet'
@@ -23,6 +30,7 @@ import {
 import {
   chopPreview,
   isInPlay,
+  parseTopFinishBonuses,
   playerActions,
   tieSplitMoneyEach,
   type ClockAction,
@@ -42,7 +50,7 @@ import {
   type Prize,
 } from '@/lib/live'
 
-type AdminTab = 'consola' | 'crear' | 'liga'
+type AdminTab = 'consola' | 'crear' | 'jugadores' | 'solicitudes' | 'liga'
 
 // ---------------------------------------------------------------------------
 // Admin console (slice 12). Sub-nav: Consola (the live-game control surface,
@@ -52,6 +60,22 @@ type AdminTab = 'consola' | 'crear' | 'liga'
 // ---------------------------------------------------------------------------
 export default function Admin() {
   const [tab, setTab] = useState<AdminTab>('consola')
+  // Pending access requests power both the "Solicitudes" panel and its tab badge,
+  // so the queue is loaded here and shared down. loadPending refreshes after any
+  // approve/reject so the badge stays in sync.
+  const [pending, setPending] = useState<SignupRequest[]>([])
+  const [pendingLoading, setPendingLoading] = useState(true)
+
+  const loadPending = useCallback(async () => {
+    const { data } = await fetchPendingRequests()
+    setPending(data)
+    setPendingLoading(false)
+  }, [])
+
+  useEffect(() => {
+    void loadPending()
+  }, [loadPending])
+
   return (
     <>
       <div className="section-head">
@@ -83,6 +107,29 @@ export default function Admin() {
         <button
           type="button"
           role="tab"
+          aria-selected={tab === 'jugadores'}
+          className={tab === 'jugadores' ? 'on' : ''}
+          onClick={() => setTab('jugadores')}
+        >
+          Jugadores
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === 'solicitudes'}
+          className={tab === 'solicitudes' ? 'on' : ''}
+          onClick={() => setTab('solicitudes')}
+        >
+          Solicitudes
+          {pending.length > 0 && (
+            <span className="tab-count" data-testid="requests-badge">
+              {pending.length}
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          role="tab"
           aria-selected={tab === 'liga'}
           className={tab === 'liga' ? 'on' : ''}
           onClick={() => setTab('liga')}
@@ -97,10 +144,238 @@ export default function Admin() {
       <div className={`apanel${tab === 'crear' ? ' on' : ''}`}>
         {tab === 'crear' && <CreateFecha />}
       </div>
+      <div className={`apanel${tab === 'jugadores' ? ' on' : ''}`}>
+        {tab === 'jugadores' && <AddPlayerPanel />}
+      </div>
+      <div className={`apanel${tab === 'solicitudes' ? ' on' : ''}`}>
+        {tab === 'solicitudes' && (
+          <RequestsPanel requests={pending} loading={pendingLoading} onReload={loadPending} />
+        )}
+      </div>
       <div className={`apanel${tab === 'liga' ? ' on' : ''}`}>
         {tab === 'liga' && <LeagueSettings />}
       </div>
     </>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Agregar jugador (Phase 3). Whitelists a league member: name + email → the
+// admin-only create_player RPC (mig 0012). This is how the admin registers a
+// friend's email so they can log in via magic link. Duplicate-email and other
+// errors are surfaced verbatim.
+// ---------------------------------------------------------------------------
+function AddPlayerPanel() {
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [ok, setOk] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const canSubmit = name.trim() !== '' && email.trim() !== '' && !busy
+
+  const submit = async () => {
+    setBusy(true)
+    setOk(null)
+    setError(null)
+    const { data, error: err } = await supabase.rpc('create_player', {
+      p_name: name.trim(),
+      p_email: email.trim(),
+    })
+    setBusy(false)
+    if (err) {
+      // 23505 = unique_violation on player.email (already a member).
+      setError(
+        err.code === '23505'
+          ? 'Ese correo ya está registrado.'
+          : err.message || 'No se pudo agregar el jugador. Reintentá.',
+      )
+      return
+    }
+    const rows = (data ?? []) as { name: string }[]
+    setOk(`✓ ${rows[0]?.name ?? name.trim()} agregado`)
+    setName('')
+    setEmail('')
+  }
+
+  return (
+    <div data-testid="add-player">
+      <div className="field" style={{ paddingBottom: 2 }}>
+        <label>Agregar jugador</label>
+        <div className="hintline">
+          Registrá el correo de un amigo para que pueda entrar con su enlace mágico.
+        </div>
+      </div>
+      <div className="field">
+        <label htmlFor="ap-name">Nombre</label>
+        <input id="ap-name" value={name} onChange={(e) => setName(e.target.value)} />
+      </div>
+      <div className="field">
+        <label htmlFor="ap-email">Correo</label>
+        <input
+          id="ap-email"
+          type="email"
+          inputMode="email"
+          autoCapitalize="none"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+      </div>
+
+      {error && (
+        <div className="fd-note" role="alert" data-testid="add-player-error" style={{ color: 'var(--oxblood)' }}>
+          {error}
+        </div>
+      )}
+      {ok && (
+        <div className="fd-note" role="status" data-testid="add-player-ok">
+          {ok}
+        </div>
+      )}
+
+      <div className="btn-row" style={{ padding: '4px 18px 0' }}>
+        <button
+          type="button"
+          className="btn primary full"
+          disabled={!canSubmit}
+          onClick={() => void submit()}
+        >
+          {busy ? 'Agregando…' : 'Agregar jugador'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Solicitudes (Phase 3, migration 0022). The pending access-request queue: a
+// first-time login with an unknown email lands here. Aprobar → approve_request
+// (creates the player) → sendApprovalLink (magic link); Rechazar → reject_request.
+// The list + count are owned by Admin() so the tab badge stays in sync; onReload
+// refetches after each decision.
+// ---------------------------------------------------------------------------
+function formatRequestedAt(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleString('es-CR', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function RequestsPanel({
+  requests,
+  loading,
+  onReload,
+}: {
+  requests: SignupRequest[]
+  loading: boolean
+  onReload: () => Promise<void>
+}) {
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const approve = async (r: SignupRequest) => {
+    setBusyId(r.id)
+    setToast(null)
+    setError(null)
+    const { email, error: err } = await approveRequest(r.id)
+    if (err) {
+      setError('No se pudo aprobar la solicitud. Reintentá.')
+      setBusyId(null)
+      return
+    }
+    // Approval created the member; now dispatch the magic link to that email.
+    if (email) {
+      const { error: linkErr } = await sendApprovalLink(email)
+      setToast(
+        linkErr
+          ? `✓ ${email} aprobado. No se pudo enviar el enlace — puede reintentar desde el login.`
+          : `✓ ${email} aprobado · enlace enviado`,
+      )
+    } else {
+      setToast('✓ Solicitud aprobada')
+    }
+    setBusyId(null)
+    await onReload()
+  }
+
+  const reject = async (r: SignupRequest) => {
+    setBusyId(r.id)
+    setToast(null)
+    setError(null)
+    const { error: err } = await rejectRequest(r.id)
+    if (err) {
+      setError('No se pudo rechazar la solicitud. Reintentá.')
+      setBusyId(null)
+      return
+    }
+    setToast('Solicitud rechazada')
+    setBusyId(null)
+    await onReload()
+  }
+
+  return (
+    <div data-testid="requests-panel">
+      <div className="field" style={{ paddingBottom: 2 }}>
+        <label>Solicitudes de acceso</label>
+        <div className="hintline">
+          Amigos que intentaron entrar con un correo que aún no está en la liga. Aprobá para
+          crearles el jugador y enviarles el enlace mágico, o rechazá.
+        </div>
+      </div>
+
+      {error && (
+        <div className="fd-note" role="alert" data-testid="requests-error" style={{ color: 'var(--oxblood)' }}>
+          {error}
+        </div>
+      )}
+      {toast && (
+        <div className="fd-note" role="status" data-testid="requests-toast">
+          {toast}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="fd-note">Cargando solicitudes…</div>
+      ) : requests.length === 0 ? (
+        <div className="fd-note" data-testid="requests-empty">
+          No hay solicitudes pendientes.
+        </div>
+      ) : (
+        <div className="plist" data-testid="requests-list">
+          {requests.map((r) => (
+            <div className="prow" key={r.id} data-testid="request-row">
+              <div className="pinfo">
+                <b>{r.email}</b>
+                <div className="sub">{formatRequestedAt(r.created_at)}</div>
+              </div>
+              <div className="prow-actions">
+                <button
+                  type="button"
+                  className="btn sm blood"
+                  disabled={busyId === r.id}
+                  onClick={() => void approve(r)}
+                >
+                  Aprobar
+                </button>
+                <button
+                  type="button"
+                  className="btn sm ghost"
+                  disabled={busyId === r.id}
+                  onClick={() => void reject(r)}
+                >
+                  Rechazar
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -134,7 +409,7 @@ type ConsoleEntry = {
   rebuys_count: number
   early_bird: boolean
   final_position: number | null
-  player: { name: string; avatar_url: string | null } | null
+  player: { name: string; avatar_url: string | null; is_guest: boolean } | null
 }
 
 type Ready = {
@@ -159,6 +434,7 @@ async function fetchConsole(): Promise<State> {
     .from('tournament')
     .select(TOURNAMENT_COLUMNS)
     .eq('status', 'live')
+    .is('cancelled_at', null) // a soft-cancelled live fecha can't be run/completed
     .order('scheduled_at', { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -178,12 +454,12 @@ async function fetchConsole(): Promise<State> {
     supabase
       .from('entry')
       .select(
-        'id, player_id, status, paid, chips, rebuys_count, early_bird, final_position, player:player_id(name, avatar_url)',
+        'id, player_id, status, paid, chips, rebuys_count, early_bird, final_position, player:player_id(name, avatar_url, is_guest)',
       )
       .eq('tournament_id', tournament.id),
     supabase
       .from('season')
-      .select('points_multiplier, bonus_final_table, bonus_top3, bonus_attendance')
+      .select('points_multiplier, bonus_final_table, bonus_attendance, top_finish_bonuses')
       .eq('id', tournament.season_id)
       .maybeSingle(),
     supabase.rpc('fn_pot', { p_tournament_id: tournament.id }),
@@ -191,7 +467,15 @@ async function fetchConsole(): Promise<State> {
 
   if (levelsRes.error || entriesRes.error || seasonRes.error) return { phase: 'error' }
 
-  const s = (seasonRes.data ?? {}) as Partial<ScoringConfig>
+  // Scoring v2 (mig 0019): mult 5 · final-table 10 · attendance 15 · graduated
+  // top-4 [20,15,10,5]. Defaults mirror the season column defaults so the chop
+  // preview equals fn_tournament_points even if a column read comes back null.
+  const s = (seasonRes.data ?? {}) as {
+    points_multiplier?: number
+    bonus_final_table?: number
+    bonus_attendance?: number
+    top_finish_bonuses?: unknown
+  }
   return {
     phase: 'ready',
     tournament,
@@ -199,10 +483,10 @@ async function fetchConsole(): Promise<State> {
     entries: (entriesRes.data ?? []) as ConsoleEntry[],
     prizes: parsePrizes(tournament.prizes),
     scoring: {
-      points_multiplier: s.points_multiplier ?? 10,
-      bonus_final_table: s.bonus_final_table ?? 5,
-      bonus_top3: s.bonus_top3 ?? 8,
-      bonus_attendance: s.bonus_attendance ?? 2,
+      points_multiplier: s.points_multiplier ?? 5,
+      bonus_final_table: s.bonus_final_table ?? 10,
+      bonus_attendance: s.bonus_attendance ?? 15,
+      top_finish_bonuses: parseTopFinishBonuses(s.top_finish_bonuses),
     },
     pot: potRes.error ? 0 : Number(potRes.data ?? 0),
   }
@@ -219,6 +503,7 @@ function ConsolePanel() {
   const [prizesOpen, setPrizesOpen] = useState(false)
   const [multiBustOpen, setMultiBustOpen] = useState(false)
   const [completeOpen, setCompleteOpen] = useState(false)
+  const [guestOpen, setGuestOpen] = useState(false)
   const [whatsOpen, setWhatsOpen] = useState(false)
   // Realtime health → subtle reconnect banner (mirrors the En Vivo screen).
   const [conn, setConn] = useState<Conn>('connecting')
@@ -564,6 +849,15 @@ function ConsolePanel() {
         <div>
           <span className="overline">Jugadores · toca para ajustar</span>
         </div>
+        <button
+          type="button"
+          className="btn ghost sm"
+          data-testid="add-guest-btn"
+          disabled={busy}
+          onClick={() => setGuestOpen(true)}
+        >
+          + Agregar invitado
+        </button>
       </div>
       <div className="rule faint" />
 
@@ -747,6 +1041,22 @@ function ConsolePanel() {
         }}
       />
 
+      {/* Agregar invitado — a guest plays this fecha but earns 0 season points */}
+      <GuestSheet
+        open={guestOpen}
+        onClose={() => setGuestOpen(false)}
+        busy={busy}
+        onAdd={(guestName) => {
+          setGuestOpen(false)
+          void runAction(() =>
+            supabase.rpc('add_guest_entry', {
+              p_name: guestName,
+              p_tournament_id: tournament.id,
+            }),
+          )
+        }}
+      />
+
       {/* WhatsApp summary (copy-paste, stage 1) */}
       <WhatsSheet
         open={whatsOpen}
@@ -880,6 +1190,57 @@ function WhatsSheet({
   )
 }
 
+// ---------------------------------------------------------------------------
+// Agregar invitado (Phase 3). A guest plays THIS fecha only, counts toward the
+// field size + pot like any entry, but earns 0 season points and never appears
+// on the Tabla. Name only → add_guest_entry(name, tournamentId).
+// ---------------------------------------------------------------------------
+function GuestSheet({
+  open,
+  onClose,
+  busy,
+  onAdd,
+}: {
+  open: boolean
+  onClose: () => void
+  busy: boolean
+  onAdd: (name: string) => void
+}) {
+  const [name, setName] = useState('')
+
+  useEffect(() => {
+    if (open) setName('')
+  }, [open])
+
+  return (
+    <Sheet open={open} onClose={onClose} title="Agregar invitado">
+      <p>
+        Un invitado juega esta fecha y cuenta para el pozo, pero no suma puntos de temporada ni
+        aparece en la Tabla.
+      </p>
+      <div className="field">
+        <label htmlFor="guest-name">Nombre</label>
+        <input
+          id="guest-name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Nombre del invitado"
+        />
+      </div>
+      <div className="btn-row">
+        <button
+          type="button"
+          className="btn blood full"
+          disabled={busy || name.trim() === ''}
+          onClick={() => onAdd(name.trim())}
+        >
+          Agregar invitado
+        </button>
+      </div>
+    </Sheet>
+  )
+}
+
 function AdminPlayerRow({
   entry,
   busy,
@@ -896,6 +1257,7 @@ function AdminPlayerRow({
   onNoShow: (id: string) => void
 }) {
   const name = entry.player?.name ?? 'Jugador'
+  const isGuest = entry.player?.is_guest ?? false
   const actions = playerActions(entry.status, entry.paid)
   const fire = (kind: string) => {
     if (kind === 'pay') onPay(entry.id)
@@ -912,6 +1274,11 @@ function AdminPlayerRow({
           {entry.final_position != null ? ` · ${ordinal(entry.final_position)}` : ''}
         </b>
         <div className="sub">
+          {isGuest && (
+            <span className="guest-badge" data-testid="guest-tag">
+              Invitado
+            </span>
+          )}
           {entry.paid ? (
             <span className="paid-check">✓ Pagó</span>
           ) : (

@@ -26,6 +26,7 @@ type TournamentRow = {
   rebuy_amount: number | null
   prize_pool_override: number | null
   cover_url: string | null
+  cancelled_at: string | null
 }
 
 type EntryRow = {
@@ -53,6 +54,8 @@ type FechaCard = {
   winner: string | null
   /** History cover image (completed fechas); null → themed gradient fallback. */
   cover: string | null
+  /** Cancelled fecha (tournament.cancelled_at set) → muted + "Cancelada" label. */
+  cancelled: boolean
 }
 
 type State =
@@ -94,6 +97,7 @@ function buildCards(tournaments: TournamentRow[], entries: EntryRow[]): FechaCar
       played: playedCount(es),
       winner: champ?.player?.name ?? null,
       cover: t.cover_url,
+      cancelled: t.cancelled_at != null,
     }
   })
 
@@ -120,7 +124,9 @@ async function fetchState(): Promise<State> {
 
   const { data: tournaments, error: tErr } = await supabase
     .from('tournament')
-    .select('id, name, scheduled_at, status, buy_in, rebuy_amount, prize_pool_override, cover_url')
+    .select(
+      'id, name, scheduled_at, status, buy_in, rebuy_amount, prize_pool_override, cover_url, cancelled_at',
+    )
     .eq('season_id', season.id)
     .order('scheduled_at', { ascending: false })
 
@@ -148,8 +154,9 @@ export default function Fechas() {
 
   const open = (card: FechaCard) => {
     // Live fechas jump straight into the En Vivo screen; scheduled / completed
-    // open the detail (RSVP + attendance).
-    if (card.status === 'live') navigate('/vivo')
+    // open the detail (RSVP + attendance). A cancelled fecha never runs, so it
+    // always opens the detail (where the admin can delete it) — never /vivo.
+    if (card.status === 'live' && !card.cancelled) navigate('/vivo')
     else navigate(`/fechas/${card.id}`)
   }
 
@@ -218,7 +225,9 @@ const BADGE: Record<TournamentStatus, { cls: string; label: string }> = {
 }
 
 function TournamentCard({ card, onOpen }: { card: FechaCard; onOpen: () => void }) {
-  const badge = BADGE[card.status]
+  // A cancelled fecha keeps its underlying status but reads as "Cancelada" +
+  // muted, so the badge + card styling override the status-based look.
+  const badge = card.cancelled ? { cls: 'cancelled', label: 'Cancelada' } : BADGE[card.status]
 
   // Completed / history fechas render as full-bleed cover cards: the cover_url
   // image (or a themed gradient fallback when null — never a broken image)
@@ -227,7 +236,7 @@ function TournamentCard({ card, onOpen }: { card: FechaCard; onOpen: () => void 
     return (
       <button
         type="button"
-        className="tourn-card cover-card"
+        className={`tourn-card cover-card${card.cancelled ? ' cancelled' : ''}`}
         onClick={onOpen}
         data-testid="tourn-card"
       >
@@ -250,7 +259,12 @@ function TournamentCard({ card, onOpen }: { card: FechaCard; onOpen: () => void 
   }
 
   return (
-    <button type="button" className="tourn-card" onClick={onOpen} data-testid="tourn-card">
+    <button
+      type="button"
+      className={`tourn-card${card.cancelled ? ' cancelled' : ''}`}
+      onClick={onOpen}
+      data-testid="tourn-card"
+    >
       <div className="tc-top">
         <div>
           <div className="tc-title">{card.name}</div>

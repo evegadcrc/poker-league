@@ -73,14 +73,15 @@ function setTournament(status = 'scheduled', scheduledAt = NINE_HOURS) {
   }
 }
 
-// Season config used by the "cómo se juega" info card — mirrors the seed values
-// (mult 10, mesa final 5, top3 8, asistencia 2, no-show −15, early bird 2000).
+// Season config (scoring v2) — mult 5, mesa final 10, asistencia 15, graduated
+// top-4 [20,15,10,5], no-show −15, early bird 2000. The fecha card only reads
+// early_bird_bonus_chips now (the scoring explainer moved to the Liga view).
 const SEASON_CONFIG = {
   cancel_bands: DEFAULT_BANDS,
-  points_multiplier: 10,
-  bonus_final_table: 5,
-  bonus_top3: 8,
-  bonus_attendance: 2,
+  points_multiplier: 5,
+  bonus_final_table: 10,
+  bonus_attendance: 15,
+  top_finish_bonuses: [20, 15, 10, 5],
   no_show_penalty: -15,
   early_bird_bonus_chips: 2000,
 }
@@ -140,26 +141,22 @@ beforeEach(() => {
 })
 
 describe('FechaDetail', () => {
-  it('info card shows the §5 formula, a worked example, and bonus/entry numbers', async () => {
+  it('fecha card shows entry + chips (buy-in, stack, early bird), not the scoring formula', async () => {
     const user = userEvent.setup()
     renderDetail()
     await screen.findByRole('heading', { name: 'Fecha 9' })
 
     // Collapsible → expand it, then assert against the info section only.
-    await user.click(screen.getByRole('button', { name: /Cómo se juega/i }))
+    await user.click(screen.getByRole('button', { name: /Entrada y fichas/i }))
     const info = screen.getByTestId('fd-info-section')
 
-    // Formula in words + worked example total (10 players, 3rd = 70+8+5+2 = 85).
-    expect(info.textContent).toMatch(/\(N − P\) × multiplicador/)
-    expect(info.textContent).toContain('85 pts')
-    // Bonus values (mesa final 5, top3 8, asistencia 2) + no-show penalty (−15).
-    expect(info.textContent).toContain('+5')
-    expect(info.textContent).toContain('+8')
-    expect(info.textContent).toContain('−15')
     // Entry + chips: buy-in ₡20.000, stack 10.000 fichas, early bird 2.000 fichas.
     expect(info.textContent).toContain('₡20.000')
     expect(info.textContent).toContain('10.000 fichas')
     expect(info.textContent).toContain('2.000 fichas')
+    // The scoring explainer moved to the Liga view — it is NOT on the fecha card.
+    expect(info.textContent).not.toMatch(/\(N − P\)/)
+    expect(info.textContent).not.toContain('Bonus Top 3')
   })
 
   it('renders the header, attendance chips grouped by status with counts', async () => {

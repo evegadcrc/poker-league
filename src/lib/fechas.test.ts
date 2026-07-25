@@ -5,8 +5,10 @@ import {
   colonesCompact,
   computePot,
   parseBands,
+  parseLeagueConfig,
   pickBand,
   playedCount,
+  pointsExample,
   statusPill,
   type EntryStatus,
 } from '@/lib/fechas'
@@ -68,6 +70,26 @@ describe('fechas helpers', () => {
     expect(colonesCompact(20000)).toBe('₡20K')
     expect(colonesCompact(140000)).toBe('₡140K')
     expect(colonesCompact(500)).toBe('₡500')
+  })
+
+  it('pointsExample uses the scoring-v2 formula (graduated top-4, +MF, +att)', () => {
+    // Scoring v2: (N−P)×5 + graduatedTop4 + final-table(10) + attendance(15).
+    const cfg = parseLeagueConfig({
+      points_multiplier: 5,
+      bonus_final_table: 10,
+      bonus_attendance: 15,
+      top_finish_bonuses: [20, 15, 10, 5],
+    })
+    // Default (N=10, P=3): (10−3)×5=35 + 10 (3rd) + 10 (MF) + 15 (att) = 70.
+    const ex = pointsExample(cfg)
+    expect(ex.base).toBe(35)
+    expect(ex.graduatedTop4).toBe(10)
+    expect(ex.total).toBe(70)
+    // 1st in a 8-field: (8−1)×5=35 + 20 (1st) + 10 + 15 = 80.
+    expect(pointsExample(cfg, 8, 1).total).toBe(80)
+    // 5th (past top-4) drops the graduated bonus: (8−5)×5=15 + 0 + 10 + 15 = 40.
+    expect(pointsExample(cfg, 8, 5).graduatedTop4).toBe(0)
+    expect(pointsExample(cfg, 8, 5).total).toBe(40)
   })
 
   it('maps every entry status to a pill label + class (all 8 states)', () => {

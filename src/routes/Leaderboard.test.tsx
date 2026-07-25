@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 
 // Mutable, hoisted so the vi.mock factories can close over it. Tests set the
@@ -248,6 +249,33 @@ describe('Leaderboard (Tabla)', () => {
     expect(row.querySelector('.stat.pts .v')?.textContent).toBe('0')
     // No completed games → no form pills.
     expect(row.querySelectorAll('.pill')).toHaveLength(0)
+  })
+
+  it('renders the "Cómo se ganan puntos" explainer at the bottom, pulling season config numbers', async () => {
+    // Season carries scoring-v2 config; the explainer must reflect THESE numbers.
+    h.seasonResult = {
+      data: [
+        {
+          ...ACTIVE_SEASON,
+          points_multiplier: 7,
+          bonus_attendance: 15,
+          bonus_final_table: 10,
+          top_finish_bonuses: [30, 20, 10, 5],
+        },
+      ],
+      error: null,
+    }
+    renderLb()
+    await screen.findByText('Mauricio A.')
+
+    const section = screen.getByTestId('liga-howto')
+    await userEvent
+      .setup()
+      .click(within(section).getByRole('button', { name: /cómo se ganan puntos/i }))
+    // Multiplier + graduated top-4 come straight from the season config.
+    expect(section.textContent).toContain('× 7')
+    expect(section.textContent).toContain('1º +30')
+    expect(section.textContent).toContain('4º +5')
   })
 
   it('scoped to a seasonId, shows THAT season (by-id read), not the active one', async () => {

@@ -202,15 +202,18 @@ export function bandLabel(band: Band, bands: readonly Band[]): string {
 }
 
 // ---------------------------------------------------------------------------
-// League scoring config (season row) — read-only, for the "cómo se juega" info
-// card on the fecha detail. Mirrors the §5 columns in 0003_points.sql.
+// League scoring config (season row) — read-only, for the "cómo se ganan puntos"
+// explainer on the Liga (leaderboard) view. Mirrors the scoring-v2 columns in
+// 0019_scoring_v2.sql (multiplier 5 · attendance 15 · final-table 10 · graduated
+// top-4 [20,15,10,5] · no-show −15).
 // ---------------------------------------------------------------------------
 export type LeagueConfig = {
-  /** §5 points multiplier applied to (N − P). */
+  /** Scoring-v2 points multiplier applied to (N − P). */
   multiplier: number
   bonusFinalTable: number
-  bonusTop3: number
   bonusAttendance: number
+  /** Graduated top-4 finish bonuses, index 0 = 1st place (scoring v2). */
+  topFinishBonuses: number[]
   /** Stored already-signed negative (e.g. −15). */
   noShowPenalty: number
   /** Llegada-temprana stack bonus, in chips. */
@@ -218,12 +221,21 @@ export type LeagueConfig = {
 }
 
 const DEFAULT_CONFIG: LeagueConfig = {
-  multiplier: 10,
-  bonusFinalTable: 0,
-  bonusTop3: 0,
-  bonusAttendance: 0,
-  noShowPenalty: 0,
+  multiplier: 5,
+  bonusFinalTable: 10,
+  bonusAttendance: 15,
+  topFinishBonuses: [20, 15, 10, 5],
+  noShowPenalty: -15,
   earlyBirdChips: 0,
+}
+
+/** Coerce a season.top_finish_bonuses jsonb into a number[], falling back to the v2 default. */
+function parseTopFinish(raw: unknown): number[] {
+  if (!Array.isArray(raw)) return [...DEFAULT_CONFIG.topFinishBonuses]
+  const nums = raw.map((v) => Number(v))
+  return nums.length > 0 && nums.every((v) => Number.isFinite(v))
+    ? nums
+    : [...DEFAULT_CONFIG.topFinishBonuses]
 }
 
 /** Coerce a season row (or partial) into a typed LeagueConfig with safe defaults. */
@@ -234,8 +246,8 @@ export function parseLeagueConfig(raw: unknown): LeagueConfig {
   return {
     multiplier: num(r.points_multiplier, DEFAULT_CONFIG.multiplier),
     bonusFinalTable: num(r.bonus_final_table, DEFAULT_CONFIG.bonusFinalTable),
-    bonusTop3: num(r.bonus_top3, DEFAULT_CONFIG.bonusTop3),
     bonusAttendance: num(r.bonus_attendance, DEFAULT_CONFIG.bonusAttendance),
+    topFinishBonuses: parseTopFinish(r.top_finish_bonuses),
     noShowPenalty: num(r.no_show_penalty, DEFAULT_CONFIG.noShowPenalty),
     earlyBirdChips: num(r.early_bird_bonus_chips, DEFAULT_CONFIG.earlyBirdChips),
   }
@@ -245,28 +257,29 @@ export type PointsExample = {
   n: number
   p: number
   base: number
-  bonusTop3: number
+  graduatedTop4: number
   bonusFinalTable: number
   bonusAttendance: number
   total: number
 }
 
 /**
- * Worked §5 example for the info card: an N-player field, finishing place P,
- * assuming the player made the final table and paid so every bonus applies.
- * base = (N − P) × multiplier; total adds the eligible bonuses.
+ * Worked scoring-v2 example: an N-player field, finishing place P, assuming the
+ * player made the final table and paid so every bonus applies. base = (N − P) ×
+ * multiplier; graduatedTop4 = topFinishBonuses[P−1] for P in 1..4 else 0; total
+ * adds the final-table + attendance bonuses.
  */
 export function pointsExample(cfg: LeagueConfig, n = 10, p = 3): PointsExample {
   const base = (n - p) * cfg.multiplier
-  const bonusTop3 = p <= 3 ? cfg.bonusTop3 : 0
+  const graduatedTop4 = p >= 1 && p <= 4 ? cfg.topFinishBonuses[p - 1] ?? 0 : 0
   return {
     n,
     p,
     base,
-    bonusTop3,
+    graduatedTop4,
     bonusFinalTable: cfg.bonusFinalTable,
     bonusAttendance: cfg.bonusAttendance,
-    total: base + bonusTop3 + cfg.bonusFinalTable + cfg.bonusAttendance,
+    total: base + graduatedTop4 + cfg.bonusFinalTable + cfg.bonusAttendance,
   }
 }
 

@@ -80,6 +80,7 @@ export default function Calculadora() {
         .from('tournament')
         .select('id')
         .eq('status', 'live')
+        .is('cancelled_at', null) // a cancelled live fecha must not gate the calc
         .eq('odds_enabled', false)
         .limit(1)
         .maybeSingle()

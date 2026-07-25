@@ -18,24 +18,46 @@ export type ClockAction =
   | 'reset_level'
   | 'edit_blinds'
 
-/** Season scoring config needed to preview a chop's points split. */
+/** Season scoring config needed to preview a chop's points split (scoring v2). */
 export type ScoringConfig = {
   points_multiplier: number
   bonus_final_table: number
-  bonus_top3: number
   bonus_attendance: number
+  /** Graduated top-4 finish bonuses, index 0 = 1st place (season.top_finish_bonuses). */
+  top_finish_bonuses: number[]
+}
+
+/** Scoring-v2 default graduated top-4 bonuses (1º/2º/3º/4º). */
+const DEFAULT_TOP_FINISH_BONUSES = [20, 15, 10, 5]
+
+/**
+ * Coerce a season.top_finish_bonuses jsonb (or partial) into a number[] — the
+ * graduated top-4 finish bonuses, index 0 = 1st place. Non-array / malformed
+ * input falls back to the v2 default [20,15,10,5].
+ */
+export function parseTopFinishBonuses(raw: unknown): number[] {
+  if (!Array.isArray(raw)) return [...DEFAULT_TOP_FINISH_BONUSES]
+  const nums = raw.map((v) => Number(v))
+  return nums.length > 0 && nums.every((v) => Number.isFinite(v))
+    ? nums
+    : [...DEFAULT_TOP_FINISH_BONUSES]
 }
 
 /**
- * §5 point-value of a finishing position, assuming the finisher made the final
- * table and paid (true for the finalists a chop splits). Mirrors the SQL:
- *   (N − P)·mult + bonus_final_table + [P≤3]·bonus_top3 + bonus_attendance
+ * Scoring-v2 point value of a finishing position, assuming the finisher made the
+ * final table and paid (true for the finalists a chop splits). Mirrors the SQL
+ * (mig 0019 fn_tournament_points):
+ *   (N − P)·mult + bonus_final_table + graduatedTop4 + bonus_attendance
+ * where graduatedTop4 = top_finish_bonuses[P−1] for P in 1..4 (index 0 = 1st),
+ * else 0. The flat bonus_top3 is gone.
  */
 export function pointValueForPosition(position: number, n: number, cfg: ScoringConfig): number {
+  const graduatedTop4 =
+    position >= 1 && position <= 4 ? cfg.top_finish_bonuses[position - 1] ?? 0 : 0
   return (
     (n - position) * cfg.points_multiplier +
     cfg.bonus_final_table +
-    (position <= 3 ? cfg.bonus_top3 : 0) +
+    graduatedTop4 +
     cfg.bonus_attendance
   )
 }

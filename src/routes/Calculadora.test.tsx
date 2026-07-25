@@ -36,11 +36,26 @@ const sb = vi.hoisted(() => ({
 vi.mock('@/lib/supabase', () => ({
   supabase: {
     from: () => {
+      // Record `.is(col, null)` so maybeSingle honors the cancelled-fecha exclusion
+      // (`.is('cancelled_at', null)`): a gate row carrying cancelled_at is dropped.
+      const isFilters: Array<[string, unknown]> = []
       const b: Record<string, unknown> = {
         select: () => b,
         eq: () => b,
+        is: (col: string, val: unknown) => {
+          isFilters.push([col, val])
+          return b
+        },
         limit: () => b,
-        maybeSingle: () => Promise.resolve(sb.gate),
+        maybeSingle: () => {
+          const row = sb.gate.data as Record<string, unknown> | null
+          if (row) {
+            for (const [col, val] of isFilters) {
+              if (val === null && row[col] != null) return Promise.resolve({ data: null, error: sb.gate.error })
+            }
+          }
+          return Promise.resolve(sb.gate)
+        },
       }
       return b
     },
@@ -175,5 +190,14 @@ describe('Calculadora', () => {
     expect(screen.queryByRole('button', { name: 'A de picas' })).not.toBeInTheDocument()
     // … but the hand-rankings reference stays available.
     expect(screen.getByTestId('rankings-toggle')).toBeInTheDocument()
+  })
+
+  it('stays enabled when the only odds-disabled live fecha is soft-cancelled', async () => {
+    // status 'live' + odds_enabled=false but cancelled_at set → `.is('cancelled_at',
+    // null)` drops it, so the gate must NOT disable the calculator.
+    sb.gate = { data: { id: 't-live', cancelled_at: '2026-07-25T00:00:00Z' }, error: null }
+    render(<Calculadora />)
+    await waitFor(() => expect(screen.getByTestId('calc-reset')).toBeInTheDocument())
+    expect(screen.queryByTestId('calc-disabled')).not.toBeInTheDocument()
   })
 })
