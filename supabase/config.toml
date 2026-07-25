@@ -238,6 +238,15 @@ otp_expiry = 3600
 # subject = "You have been invited"
 # content_path = "./supabase/templates/invite.html"
 
+# Poker Friends — Spanish branded magic-link / signup email
+[auth.email.template.magic_link]
+subject = "Tu enlace para entrar a Poker Friends 🃏"
+content_path = "./supabase/templates/magic_link.html"
+
+[auth.email.template.confirmation]
+subject = "Tu enlace para entrar a Poker Friends 🃏"
+content_path = "./supabase/templates/magic_link.html"
+
 # Uncomment to customize notification email template
 # [auth.email.notification.password_changed]
 # enabled = true
