@@ -373,6 +373,15 @@ export default function FechaDetail() {
   const runnable = !cancelled
   const canCheckIn = live && runnable && myEntry?.status === 'confirmed'
   const alreadyCheckedIn = live && myEntry != null && CHECKED_IN_STATUSES.has(myEntry.status)
+  // A late arrival can still confirm ("Voy") after the fecha is opened: show it
+  // to a live, runnable player who has NOT confirmed and has NOT taken a seat
+  // (absent / invited / declined). Once confirmed, canCheckIn takes over. Decline
+  // stays scheduled-only (see the RsvpActions block below).
+  const canConfirmLive =
+    live &&
+    runnable &&
+    player != null &&
+    (myEntry == null || myEntry.status === 'invited' || myEntry.status === 'declined')
   const locating = checkIn.kind === 'locating' || checkIn.kind === 'submitting'
   // Completed fecha: the ACTUAL payout per place — the materialized
   // tournament.prizes, chop-adjusted (a chopped top splits its pooled slots
@@ -462,6 +471,18 @@ export default function FechaDetail() {
       {scheduled && runnable && player && (
         <div className="btn-row">
           <RsvpActions status={myEntry?.status} busy={busy} onRsvp={doRsvp} onCancel={() => setCancelOpen(true)} />
+        </div>
+      )}
+      {canConfirmLive && (
+        <div className="btn-row">
+          <button
+            type="button"
+            className="btn blood full"
+            disabled={busy}
+            onClick={() => doRsvp('confirm')}
+          >
+            Voy — confirmar asistencia
+          </button>
         </div>
       )}
       {canCheckIn && (
