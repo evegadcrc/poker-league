@@ -61,9 +61,11 @@ describe.skipIf(!canRun)('guest players (0021, local integration)', () => {
 
   async function mkPlayer() {
     const email = `gst-${RUN}-${crypto.randomUUID().slice(0, 8)}@test.local`
+    // auth_user_id set → counts as "logged in" so a real player shows on the
+    // leaderboard roster (mig 0027 lists only members with auth_user_id bound).
     const { data, error } = await admin
       .from('player')
-      .insert({ name: `GST ${RUN}`, email })
+      .insert({ name: `GST ${RUN}`, email, auth_user_id: crypto.randomUUID() })
       .select('id')
       .single()
     if (error) throw error
@@ -178,12 +180,13 @@ describe.skipIf(!canRun)('guest players (0021, local integration)', () => {
   })
 
   // ------------------------------------------------------------------------
-  // Roster-at-0 (0014) still lists real players with no entries, but never a
-  // guest — even one who exists via a fecha in ANOTHER (empty-for-this) season.
+  // Roster (mig 0027) lists every LOGGED-IN member (auth_user_id bound) with no
+  // entries at 0, but never a guest — even one who exists via a fecha in ANOTHER
+  // (empty-for-this) season.
   it('a real player at 0 appears; a guest never does', async () => {
-    // Fresh season with NO entries → roster-at-0 lists the full real roster.
+    // Fresh season with NO entries → the logged-in roster still lists the member.
     const emptySeason = await mkSeason()
-    const real = await mkPlayer()
+    const real = await mkPlayer() // auth_user_id bound → logged-in member
 
     // A guest exists globally (created against the main season's fecha above).
     const t = await mkTournament()
@@ -198,6 +201,87 @@ describe.skipIf(!canRun)('guest players (0021, local integration)', () => {
     expect(realRow).toBeTruthy()
     expect(realRow!.total_points).toBe(0)
     expect(rows.some((r) => r.player_id === (guestId as string))).toBe(false)
+  })
+
+  // ------------------------------------------------------------------------
+  // NEW RULE (mig 0027): a LOGGED-IN member (auth_user_id bound) with NO entries
+  // appears at 0 EVEN when the season has a completed fecha — the old roster-at-0
+  // gate ("only when the season has no entries") is gone. Members who played keep
+  // their real numbers, and ordering still sorts points desc (the 0-pt bystander
+  // sits below the winner).
+  it('a logged-in member with no entries shows at 0 even when the season has a completed fecha', async () => {
+    const season = await mkSeason()
+    const t = await mkTournament({ season_id: season })
+    const a = await mkPlayer()
+    const b = await mkPlayer()
+    const ea = await mkEntry(t, a)
+    await mkEntry(t, b)
+    await admin.rpc('eliminate', { p_entry_id: ea }) // 2 alive → a=2nd, b winner
+    expect((await admin.rpc('complete_tournament', { p_tournament_id: t })).error).toBeNull()
+
+    // A logged-in member who did NOT play this (or any) fecha.
+    const bystander = await mkPlayer()
+
+    const { data: lb, error } = await admin.rpc('leaderboard', { p_season_id: season })
+    expect(error).toBeNull()
+    const rows = (lb ?? []) as {
+      player_id: string
+      total_points: number
+      games_played: number
+      wins: number
+      form: string[]
+    }[]
+
+    // Bystander shows at a clean 0 despite the season having a completed fecha.
+    const byRow = rows.find((r) => r.player_id === bystander)
+    expect(byRow).toBeTruthy()
+    expect(byRow!.total_points).toBe(0)
+    expect(byRow!.games_played).toBe(0)
+    expect(byRow!.wins).toBe(0)
+    expect(byRow!.form).toEqual([])
+
+    // The winner keeps real numbers.
+    const bRow = rows.find((r) => r.player_id === b)!
+    expect(bRow.wins).toBe(1)
+    expect(bRow.total_points).toBeGreaterThan(0)
+
+    // Ordering: the member with points sorts above the 0-point bystander.
+    expect(rows.findIndex((r) => r.player_id === b)).toBeLessThan(
+      rows.findIndex((r) => r.player_id === bystander),
+    )
+  })
+
+  // ------------------------------------------------------------------------
+  // NEW RULE (mig 0027): an approved member the admin added but who has NOT
+  // logged in yet (auth_user_id NULL) does NOT appear — inserted raw, NOT via
+  // mkPlayer (which binds auth_user_id to fake a login).
+  it('an approved member who has not logged in (auth_user_id NULL) does not appear', async () => {
+    const season = await mkSeason()
+    const email = `gst-${RUN}-${crypto.randomUUID().slice(0, 8)}@test.local`
+    const { data: p, error: pErr } = await admin
+      .from('player')
+      .insert({ name: `GST ${RUN}`, email }) // no auth_user_id → never logged in
+      .select('id')
+      .single()
+    if (pErr) throw pErr
+    playerIds.push(p.id)
+
+    const { data: lb } = await admin.rpc('leaderboard', { p_season_id: season })
+    const rows = (lb ?? []) as { player_id: string }[]
+    expect(rows.some((r) => r.player_id === p.id)).toBe(false)
+  })
+
+  // ------------------------------------------------------------------------
+  // A BLOCKED member (even one who logged in) is excluded from the leaderboard.
+  it('a blocked member is excluded even when logged in', async () => {
+    const season = await mkSeason()
+    const blocked = await mkPlayer() // auth_user_id bound (logged in)
+    const { error: bErr } = await admin.from('player').update({ blocked: true }).eq('id', blocked)
+    expect(bErr).toBeNull()
+
+    const { data: lb } = await admin.rpc('leaderboard', { p_season_id: season })
+    const rows = (lb ?? []) as { player_id: string }[]
+    expect(rows.some((r) => r.player_id === blocked)).toBe(false)
   })
 
   // ------------------------------------------------------------------------

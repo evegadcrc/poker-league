@@ -58,9 +58,11 @@ describe.skipIf(!canRun)('admin CRUD + season rollover (slice 13, local integrat
 
   async function mkPlayer() {
     const email = `crud-${RUN}-${crypto.randomUUID().slice(0, 8)}@test.local`
+    // auth_user_id set → counts as "logged in" so the player shows on the
+    // leaderboard roster (mig 0027 lists only members with auth_user_id bound).
     const { data, error } = await admin
       .from('player')
-      .insert({ name: `CRUD ${RUN}`, email })
+      .insert({ name: `CRUD ${RUN}`, email, auth_user_id: crypto.randomUUID() })
       .select('id')
       .single()
     if (error) throw error
