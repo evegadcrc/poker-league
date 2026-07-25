@@ -1,10 +1,10 @@
 ---
-goal: Build "Poker Friends" PWA (React+Vite+TS+Tailwind / Supabase) — Phase 2 (refinements + odds calc, sound, gallery/learning)
-task: poker-league-phase2
+goal: Poker Friends PWA — LIVE in prod (Supabase evbbsvwglspdzzqdvrcf + Vercel poker-friends-xi.vercel.app). Phase 3 shipped.
+task: poker-league-phase3
 step: shipped
 progress: 100%
 blockers: none
-updated: 2026-07-24T08:00:00Z
+updated: 2026-07-25T16:00:00Z
 ---
 
 ## What we're doing
