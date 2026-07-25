@@ -204,17 +204,46 @@ function LigaScoring({ config }: { config: LeagueConfig }) {
       {open && (
         <div className="calc-rankings-body" id="liga-howto-body">
           <div className="fd-info-block">
-            <p>
-              Puntos por fecha: <b>(N − posición) × {config.multiplier}</b>. N = jugadores que
-              entraron, posición = tu lugar (1 = campeón).
+            <ul className="scoring-list">
+              <li>
+                <span className="sc-k">Base</span>
+                <b>(N − posición) × {config.multiplier}</b>
+              </li>
+              <li>
+                <span className="sc-k">Asistencia</span>
+                <b>+{config.bonusAttendance}</b>
+                <em>a todos los que juegan</em>
+              </li>
+              <li>
+                <span className="sc-k">Mesa final</span>
+                <b>+{config.bonusFinalTable}</b>
+                <em>Top 5 si hay 10 o menos · Top 10 si hay más</em>
+              </li>
+              <li>
+                <span className="sc-k">Top 4</span>
+                <b>
+                  1º +{top(0)} · 2º +{top(1)} · 3º +{top(2)} · 4º +{top(3)}
+                </b>
+              </li>
+              <li>
+                <span className="sc-k">No-show</span>
+                <b>−{Math.abs(config.noShowPenalty)}</b>
+                <em>confirmaste y no llegaste</em>
+              </li>
+            </ul>
+            <p className="scoring-note">
+              N = jugadores en la fecha · posición = tu lugar (1 = campeón).
             </p>
-            <p>
-              <b>+{config.bonusAttendance}</b> por jugar · <b>+{config.bonusFinalTable}</b> si llegás
-              a la mesa final.
-            </p>
-            <p className="fd-info-example">
-              Top 4: 1º +{top(0)} · 2º +{top(1)} · 3º +{top(2)} · 4º +{top(3)}
-            </p>
+            <div className="scoring-example">
+              <p className="sc-ex-head">Ejemplo · 20 jugadores, 3er lugar</p>
+              <p>(20 − 3) × {config.multiplier} = {(20 - 3) * config.multiplier}</p>
+              <p>+ {config.bonusAttendance} asistencia</p>
+              <p>+ {config.bonusFinalTable} mesa final</p>
+              <p>+ {top(2)} (3º)</p>
+              <p className="sc-ex-total">
+                <b>= {(20 - 3) * config.multiplier + config.bonusAttendance + config.bonusFinalTable + top(2)} puntos</b>
+              </p>
+            </div>
           </div>
         </div>
       )}
