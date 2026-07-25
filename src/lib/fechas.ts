@@ -226,7 +226,7 @@ const DEFAULT_CONFIG: LeagueConfig = {
   bonusAttendance: 15,
   topFinishBonuses: [20, 15, 10, 5],
   noShowPenalty: -15,
-  earlyBirdChips: 0,
+  earlyBirdChips: 5000,
 }
 
 /** Coerce a season.top_finish_bonuses jsonb into a number[], falling back to the v2 default. */

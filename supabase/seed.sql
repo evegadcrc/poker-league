@@ -20,7 +20,7 @@ insert into season (
   cancel_bands, payout_template, final_table_size_override
 ) values (
   'a5000000-0000-4000-8000-000000000001', 'Liga 2026', 2026, 'active',
-  5, 10, 8, 15, -15, 2000, '[20,15,10,5]'::jsonb,
+  5, 10, 8, 15, -15, 5000, '[20,15,10,5]'::jsonb,
   '[{"hours_before":24,"penalty":0},{"hours_before":12,"penalty":-5},{"hours_before":6,"penalty":-10},{"hours_before":0,"penalty":-15}]'::jsonb,
   '[0.60,0.28,0.12]'::jsonb,
   null
