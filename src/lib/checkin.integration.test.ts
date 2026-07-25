@@ -18,7 +18,7 @@ const canRun = Boolean(url && serviceKey && anonKey)
 
 const HOUR_MS = 3_600_000
 const STACK = 10_000
-const BONUS = 2_000 // season default early_bird_bonus_chips
+const BONUS = 5_000 // season default early_bird_bonus_chips (mig 0025)
 // San José-ish venue; a same-point fix is 0 m (inside), +0.01° lat ≈ 1.1 km (outside).
 const VENUE = { lat: 9.9333, lng: -84.0833 }
 const OUTSIDE = { lat: 9.9433, lng: -84.0833 }
