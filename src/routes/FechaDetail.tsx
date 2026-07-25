@@ -20,7 +20,6 @@ import {
   parseBands,
   parseLeagueConfig,
   pickBand,
-  pointsExample,
   statusPill,
   statusRank,
   toDatetimeLocal,
@@ -124,7 +123,7 @@ async function fetchDetail(id: string): Promise<State> {
     supabase
       .from('season')
       .select(
-        'cancel_bands, points_multiplier, bonus_final_table, bonus_top3, bonus_attendance, no_show_penalty, early_bird_bonus_chips',
+        'cancel_bands, points_multiplier, bonus_final_table, bonus_attendance, no_show_penalty, early_bird_bonus_chips, top_finish_bonuses',
       )
       .eq('id', tournament.season_id)
       .maybeSingle(),
@@ -548,14 +547,11 @@ function ScheduleEditor({
   )
 }
 
-// Collapsible "Cómo se juega" card — visible in every status. Explains the §5
-// points formula with a worked example built from THIS league's configured
-// values, lists the fecha's bonuses / no-show penalty, and its entry + chips.
+// Collapsible "Entrada y fichas" card — fecha-SPECIFIC entry info (buy-in, rebuy,
+// starting stack, early-bird chips). The general scoring explainer ("cómo se
+// ganan puntos") now lives on the Liga (leaderboard) view, not here.
 function FechaInfo({ tournament, config }: { tournament: TournamentRow; config: LeagueConfig }) {
   const [open, setOpen] = useState(false)
-  const ex = pointsExample(config)
-  const winnerBase = (ex.n - 1) * config.multiplier
-  const penalty = Math.abs(config.noShowPenalty)
   const rebuy =
     tournament.rebuy_amount != null ? `₡${formatMiles(tournament.rebuy_amount)}` : 'No aplica'
 
@@ -569,7 +565,7 @@ function FechaInfo({ tournament, config }: { tournament: TournamentRow; config: 
         data-testid="fd-info-toggle"
         onClick={() => setOpen((v) => !v)}
       >
-        <span>Cómo se juega</span>
+        <span>Entrada y fichas</span>
         <span className="chev" aria-hidden="true">
           ⌄
         </span>
@@ -577,30 +573,6 @@ function FechaInfo({ tournament, config }: { tournament: TournamentRow; config: 
       {open && (
         <div className="calc-rankings-body" id="fd-info-body">
           <div className="fd-info-block">
-            <h4>Cómo se calculan los puntos</h4>
-            <p>
-              Puntos = (N − P) × multiplicador + bonos − castigos. <b>N</b> = jugadores que
-              entraron, <b>P</b> = tu lugar (1 = campeón). Multiplicador actual:{' '}
-              <b>{config.multiplier}</b>.
-            </p>
-            <p className="fd-info-example">
-              Ejemplo con <b>{ex.n} jugadores</b>: el 1º gana ({ex.n}−1)×{config.multiplier} ={' '}
-              <b>{winnerBase} pts</b> de base. Quien queda <b>{ex.p}º</b> gana ({ex.n}−{ex.p})×
-              {config.multiplier} = {ex.base} + {ex.bonusTop3} (Top 3) + {ex.bonusFinalTable} (Mesa
-              Final) + {ex.bonusAttendance} (Asistencia) = <b>{ex.total} pts</b>.
-            </p>
-          </div>
-
-          <div className="fd-info-block">
-            <h4>Bonos de esta fecha</h4>
-            <InfoRow label="Bonus Mesa Final" value={`+${config.bonusFinalTable}`} />
-            <InfoRow label="Bonus Top 3" value={`+${config.bonusTop3}`} />
-            <InfoRow label="Bonus Asistencia" value={`+${config.bonusAttendance}`} />
-            <InfoRow label="Castigo no-show" value={`−${penalty}`} />
-          </div>
-
-          <div className="fd-info-block">
-            <h4>Entrada y fichas</h4>
             <InfoRow label="Buy-in" value={`₡${formatMiles(tournament.buy_in ?? 0)}`} />
             <InfoRow label="Recompra" value={rebuy} />
             <InfoRow

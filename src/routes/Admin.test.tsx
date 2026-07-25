@@ -103,7 +103,13 @@ function setLive() {
     error: null,
   }
   h.single.season = {
-    data: { name: 'Liga 2026', points_multiplier: 10, bonus_final_table: 5, bonus_top3: 8, bonus_attendance: 2 },
+    data: {
+      name: 'Liga 2026',
+      points_multiplier: 5,
+      bonus_final_table: 10,
+      bonus_attendance: 15,
+      top_finish_bonuses: [20, 15, 10, 5],
+    },
     error: null,
   }
   h.list.blind_level = { data: LEVELS, error: null }
@@ -198,9 +204,10 @@ describe('Admin console (slice 12)', () => {
     // Preview appears with equal money + points. (Normalize locale spaces.)
     const preview = await within(dialog).findByTestId('chop-preview')
     const txt = preview.textContent!.replace(/[  ]/g, ' ')
-    // N = 2 placed + 2 choppers = 4 → money (85k+40k)/2 = ₡62 500 ; points (45+35)/2 = 40
+    // N = 2 placed + 2 choppers = 4 → money (85k+40k)/2 = ₡62 500 ; points (scoring
+    // v2): pv(1)=(4−1)×5+10+20+15=60 ; pv(2)=(4−2)×5+10+15+15=50 ; avg = 55.
     expect(txt.replace(/[\s.,]/g, '')).toContain('62500')
-    expect(txt).toContain('40 pts')
+    expect(txt).toContain('55 pts')
 
     await user.click(within(dialog).getByRole('button', { name: /Chop y completar/ }))
     const call = h.rpcCalls.find((c) => c.name === 'complete_tournament')

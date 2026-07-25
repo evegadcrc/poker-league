@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
+import { parseLeagueConfig, type LeagueConfig } from '@/lib/fechas'
 import { useLoadable } from '@/lib/useLoadable'
 import Legend from '@/components/Legend'
 import PlayerRow, { type LeaderboardRow } from '@/components/PlayerRow'
@@ -9,9 +11,19 @@ type State =
   | { status: 'loading' }
   | { status: 'error' }
   | { status: 'no-season' }
-  | { status: 'ready'; rows: LeaderboardRow[]; fechas: number; seasonName: string }
+  | {
+      status: 'ready'
+      rows: LeaderboardRow[]
+      fechas: number
+      seasonName: string
+      config: LeagueConfig
+    }
 
 type SeasonRow = { id: string; name: string; year: number }
+
+/** Season columns the Tabla reads: identity + the scoring-v2 config for the explainer. */
+const SEASON_COLUMNS =
+  'id, name, year, points_multiplier, bonus_final_table, bonus_attendance, no_show_penalty, early_bird_bonus_chips, top_finish_bonuses'
 
 const SKELETON_ROWS = 6
 
@@ -29,31 +41,32 @@ const SKELETON_ROWS = 6
  * read that never throws on 0 / >1 active rows.
  */
 async function fetchState(seasonId: string | undefined): Promise<State> {
-  let season: SeasonRow | null = null
+  let seasonRaw: unknown = null
 
   if (seasonId) {
     // Scoped read: a specific (possibly archived) season by id.
     const { data, error } = await supabase
       .from('season')
-      .select('id, name, year')
+      .select(SEASON_COLUMNS)
       .eq('id', seasonId)
       .maybeSingle()
     if (error) return { status: 'error' }
-    season = (data as SeasonRow | null) ?? null
+    seasonRaw = data ?? null
   } else {
     // Resilient active-season read: never throws on 0 OR >1 active rows. The DB
     // enforces single-active (mig 0014), but a defensive ordered read keeps the
     // Tabla from erroring if that invariant is ever violated — pick the newest.
     const { data: seasons, error: seasonError } = await supabase
       .from('season')
-      .select('id, name, year')
+      .select(SEASON_COLUMNS)
       .eq('status', 'active')
       .order('year', { ascending: false })
       .limit(1)
     if (seasonError) return { status: 'error' }
-    season = (seasons?.[0] as SeasonRow | undefined) ?? null
+    seasonRaw = seasons?.[0] ?? null
   }
 
+  const season = seasonRaw as SeasonRow | null
   if (!season) return { status: 'no-season' }
 
   const { data, error } = await supabase.rpc('leaderboard', {
@@ -63,7 +76,13 @@ async function fetchState(seasonId: string | undefined): Promise<State> {
 
   const rows = (data ?? []) as LeaderboardRow[]
   const fechas = rows.reduce((max, r) => Math.max(max, r.games_played), 0)
-  return { status: 'ready', rows, fechas, seasonName: season.name }
+  return {
+    status: 'ready',
+    rows,
+    fechas,
+    seasonName: season.name,
+    config: parseLeagueConfig(seasonRaw),
+  }
 }
 
 export default function Leaderboard() {
@@ -154,7 +173,52 @@ export default function Leaderboard() {
       )}
 
       <Legend />
+
+      {state.status === 'ready' && <LigaScoring config={state.config} />}
     </>
+  )
+}
+
+/**
+ * "Cómo se ganan puntos" — the season's scoring rules, collapsible, at the very
+ * bottom of the Liga view. Pulls the live numbers from the active season config
+ * (scoring v2) so it never drifts from fn_tournament_points.
+ */
+function LigaScoring({ config }: { config: LeagueConfig }) {
+  const [open, setOpen] = useState(false)
+  const top = (i: number) => config.topFinishBonuses[i] ?? 0
+  return (
+    <section className="fd-info" data-testid="liga-howto">
+      <button
+        type="button"
+        className="calc-rankings-toggle"
+        aria-expanded={open}
+        aria-controls="liga-howto-body"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span>Cómo se ganan puntos</span>
+        <span className="chev" aria-hidden="true">
+          ⌄
+        </span>
+      </button>
+      {open && (
+        <div className="calc-rankings-body" id="liga-howto-body">
+          <div className="fd-info-block">
+            <p>
+              Puntos por fecha: <b>(N − posición) × {config.multiplier}</b>. N = jugadores que
+              entraron, posición = tu lugar (1 = campeón).
+            </p>
+            <p>
+              <b>+{config.bonusAttendance}</b> por jugar · <b>+{config.bonusFinalTable}</b> si llegás
+              a la mesa final.
+            </p>
+            <p className="fd-info-example">
+              Top 4: 1º +{top(0)} · 2º +{top(1)} · 3º +{top(2)} · 4º +{top(3)}
+            </p>
+          </div>
+        </div>
+      )}
+    </section>
   )
 }
 

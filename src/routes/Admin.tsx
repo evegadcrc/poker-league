@@ -23,6 +23,7 @@ import {
 import {
   chopPreview,
   isInPlay,
+  parseTopFinishBonuses,
   playerActions,
   tieSplitMoneyEach,
   type ClockAction,
@@ -183,7 +184,7 @@ async function fetchConsole(): Promise<State> {
       .eq('tournament_id', tournament.id),
     supabase
       .from('season')
-      .select('points_multiplier, bonus_final_table, bonus_top3, bonus_attendance')
+      .select('points_multiplier, bonus_final_table, bonus_attendance, top_finish_bonuses')
       .eq('id', tournament.season_id)
       .maybeSingle(),
     supabase.rpc('fn_pot', { p_tournament_id: tournament.id }),
@@ -191,7 +192,15 @@ async function fetchConsole(): Promise<State> {
 
   if (levelsRes.error || entriesRes.error || seasonRes.error) return { phase: 'error' }
 
-  const s = (seasonRes.data ?? {}) as Partial<ScoringConfig>
+  // Scoring v2 (mig 0019): mult 5 · final-table 10 · attendance 15 · graduated
+  // top-4 [20,15,10,5]. Defaults mirror the season column defaults so the chop
+  // preview equals fn_tournament_points even if a column read comes back null.
+  const s = (seasonRes.data ?? {}) as {
+    points_multiplier?: number
+    bonus_final_table?: number
+    bonus_attendance?: number
+    top_finish_bonuses?: unknown
+  }
   return {
     phase: 'ready',
     tournament,
@@ -199,10 +208,10 @@ async function fetchConsole(): Promise<State> {
     entries: (entriesRes.data ?? []) as ConsoleEntry[],
     prizes: parsePrizes(tournament.prizes),
     scoring: {
-      points_multiplier: s.points_multiplier ?? 10,
-      bonus_final_table: s.bonus_final_table ?? 5,
-      bonus_top3: s.bonus_top3 ?? 8,
-      bonus_attendance: s.bonus_attendance ?? 2,
+      points_multiplier: s.points_multiplier ?? 5,
+      bonus_final_table: s.bonus_final_table ?? 10,
+      bonus_attendance: s.bonus_attendance ?? 15,
+      top_finish_bonuses: parseTopFinishBonuses(s.top_finish_bonuses),
     },
     pot: potRes.error ? 0 : Number(potRes.data ?? 0),
   }

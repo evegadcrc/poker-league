@@ -229,10 +229,10 @@ describe.skipIf(!canRun)('auto-materialize prizes (verify-ui tier 4, local integ
     expect(prizes.length).toBeGreaterThan(0)
 
     const cfg: ScoringConfig = {
-      points_multiplier: 10,
-      bonus_final_table: 5,
-      bonus_top3: 5,
-      bonus_attendance: 2,
+      points_multiplier: 5,
+      bonus_final_table: 10,
+      bonus_attendance: 15,
+      top_finish_bonuses: [20, 15, 10, 5],
     }
     const preview = chopPreview(2, prizes, 3, cfg) // 2 choppers split top-2 amounts
     expect(preview.moneyEach).toBeGreaterThan(0)

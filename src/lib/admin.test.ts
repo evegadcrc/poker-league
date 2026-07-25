@@ -11,20 +11,22 @@ import {
 import type { Prize } from '@/lib/live'
 
 const CFG: ScoringConfig = {
-  points_multiplier: 10,
-  bonus_final_table: 5,
-  bonus_top3: 8,
-  bonus_attendance: 2,
+  points_multiplier: 5,
+  bonus_final_table: 10,
+  bonus_attendance: 15,
+  top_finish_bonuses: [20, 15, 10, 5],
 }
 
-describe('pointValueForPosition (§5, finalist assumptions)', () => {
-  it('scores position 1 in a field of 4', () => {
-    // (4−1)×10 + 5 + 8 + 2 = 45
-    expect(pointValueForPosition(1, 4, CFG)).toBe(45)
+describe('pointValueForPosition (scoring v2, finalist assumptions)', () => {
+  it('scores position 1 in a field of 4 with the graduated 1st bonus', () => {
+    // (4−1)×5 + 10 (MF) + 20 (1st) + 15 (att) = 60
+    expect(pointValueForPosition(1, 4, CFG)).toBe(60)
   })
-  it('drops the top-3 bonus past 3rd', () => {
-    // (6−4)×10 + 5 + 0 + 2 = 27
-    expect(pointValueForPosition(4, 6, CFG)).toBe(27)
+  it('applies the graduated top-4 bonus at 4th and drops it past 4th', () => {
+    // 4th: (6−4)×5 + 10 + 5 (top4[3]) + 15 = 40
+    expect(pointValueForPosition(4, 6, CFG)).toBe(40)
+    // 5th: (6−5)×5 + 10 + 0 (past top-4) + 15 = 30
+    expect(pointValueForPosition(5, 6, CFG)).toBe(30)
   })
 })
 
@@ -37,12 +39,12 @@ describe('chopPreview', () => {
 
   it('splits money + points equally for a final-2 chop (N=4)', () => {
     // finishers already placed = 2 (positions 3,4) → N = 2 + 2 = 4
-    // money = (85k + 40k)/2 = 62.5k → 62500 ; points = (45 + 35)/2 = 40
+    // money = (85k + 40k)/2 = 62.5k → 62500 ; points = (60 + 50)/2 = 55
     const p = chopPreview(2, prizes, 2, CFG)
     expect(p.k).toBe(2)
     expect(p.n).toBe(4)
     expect(p.moneyEach).toBe(62_500)
-    expect(p.pointsEach).toBe(40)
+    expect(p.pointsEach).toBe(55)
   })
 
   it('handles a 3-way chop', () => {
@@ -50,9 +52,9 @@ describe('chopPreview', () => {
     const p = chopPreview(3, prizes, 0, CFG)
     expect(p.n).toBe(3)
     expect(p.moneyEach).toBe(46_667)
-    // points = (pv1 + pv2 + pv3)/3 with N=3 → ((2)+(1)+(0))×10 + per-slot bonuses
-    // pv1=20+5+8+2=35 ; pv2=10+5+8+2=25 ; pv3=0+5+8+2=15 ; avg=25
-    expect(p.pointsEach).toBe(25)
+    // points = (pv1 + pv2 + pv3)/3 with N=3, graduated top-4 [20,15,10,5]:
+    // pv1=(2)×5+10+20+15=55 ; pv2=(1)×5+10+15+15=45 ; pv3=(0)×5+10+10+15=35 ; avg=45
+    expect(p.pointsEach).toBe(45)
   })
 
   it('is safe with fewer prize slices than choppers', () => {
