@@ -14,6 +14,8 @@ const h = vi.hoisted(() => ({
   isAdmin: true,
   // signup_request rows returned by the pending-queue fetch.
   requests: [] as unknown[],
+  // active season's auto_approve_signups → the Solicitudes switch state.
+  autoApprove: false,
   // rpc results keyed by name (approve returns the approved email).
   rpc: {} as Record<string, { data: unknown; error: unknown }>,
   // Ordered log across rpc + otp so we can assert approve → signInWithOtp order.
@@ -34,7 +36,13 @@ vi.mock('@/lib/supabase', () => ({
         is: () => b, // `.is('cancelled_at', null)` on the console query — passthrough
         order: () => b,
         limit: () => b,
-        maybeSingle: () => Promise.resolve({ data: null, error: null }),
+        // season → the auto-approve flag; other tables (tournament console) → null.
+        maybeSingle: () =>
+          Promise.resolve(
+            table === 'season'
+              ? { data: { auto_approve_signups: h.autoApprove }, error: null }
+              : { data: null, error: null },
+          ),
         // Awaiting the builder resolves the list. signup_request → pending rows.
         then: (resolve: (v: unknown) => void) =>
           resolve(
@@ -69,6 +77,7 @@ const renderAdmin = () => render(<Admin />, { wrapper: MemoryRouter })
 
 beforeEach(() => {
   h.isAdmin = true
+  h.autoApprove = false
   h.requests = [
     { id: 'req-1', email: 'nuevo@amigo.com', name: null, created_at: '2026-07-20T18:30:00Z' },
     { id: 'req-2', email: 'otro@amigo.com', name: 'Otro', created_at: '2026-07-21T12:00:00Z' },
@@ -76,6 +85,7 @@ beforeEach(() => {
   h.rpc = {
     approve_request: { data: 'nuevo@amigo.com', error: null },
     reject_request: { data: null, error: null },
+    set_auto_approve: { data: null, error: null },
   }
   h.calls = []
 })
@@ -124,5 +134,31 @@ describe('Admin — Solicitudes (access requests, 0022)', () => {
     expect(call.args).toMatchObject({ p_id: 'req-1' })
     // No magic link on rejection.
     expect(h.calls.some((c) => c.type === 'otp')).toBe(false)
+  })
+
+  it('the auto-approve switch reflects the active season flag', async () => {
+    h.autoApprove = true
+    const user = userEvent.setup()
+    renderAdmin()
+    await user.click(screen.getByRole('tab', { name: /Solicitudes/ }))
+    const toggle = await screen.findByTestId('auto-approve-toggle')
+    await waitFor(() => expect(toggle).toHaveAttribute('aria-checked', 'true'))
+  })
+
+  it('toggling the switch calls set_auto_approve with the new value', async () => {
+    h.autoApprove = false
+    const user = userEvent.setup()
+    renderAdmin()
+    await user.click(screen.getByRole('tab', { name: /Solicitudes/ }))
+    const toggle = await screen.findByTestId('auto-approve-toggle')
+    await waitFor(() => expect(toggle).toHaveAttribute('aria-checked', 'false'))
+
+    await user.click(toggle)
+
+    await waitFor(() => expect(h.calls.some((c) => c.name === 'set_auto_approve')).toBe(true))
+    const call = h.calls.find((c) => c.name === 'set_auto_approve')!
+    expect(call.args).toMatchObject({ p_on: true })
+    // Optimistic flip in the UI.
+    expect(toggle).toHaveAttribute('aria-checked', 'true')
   })
 })
