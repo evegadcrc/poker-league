@@ -21,6 +21,7 @@ id_ed25519
 credentials.json
 service-account*.json
 secrets.y*ml
+HANDOFF.md
 
 # --- node / vite (applies once scaffolded) ---
 node_modules/
@@ -28,6 +29,9 @@ dist/
 dist-ssr/
 *.local
 .vite/
+
+# --- vercel ---
+.vercel
 
 # --- supabase ---
 .branches/
