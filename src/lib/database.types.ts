@@ -232,6 +232,7 @@ export type Database = {
           email: string
           id: string
           is_admin: boolean
+          is_guest: boolean
           name: string
         }
         Insert: {
@@ -241,6 +242,7 @@ export type Database = {
           email: string
           id?: string
           is_admin?: boolean
+          is_guest?: boolean
           name: string
         }
         Update: {
@@ -250,6 +252,7 @@ export type Database = {
           email?: string
           id?: string
           is_admin?: boolean
+          is_guest?: boolean
           name?: string
         }
         Relationships: []
@@ -431,6 +434,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_guest_entry: {
+        Args: { p_name: string; p_tournament_id: string }
+        Returns: string
+      }
       add_rebuy: {
         Args: { p_entry_id: string }
         Returns: {
@@ -562,6 +569,7 @@ export type Database = {
           email: string
           id: string
           is_admin: boolean
+          is_guest: boolean
           name: string
         }[]
         SetofOptions: {
@@ -714,6 +722,7 @@ export type Database = {
           email: string
           id: string
           is_admin: boolean
+          is_guest: boolean
           name: string
         }[]
         SetofOptions: {
@@ -1042,6 +1051,7 @@ export type Database = {
           email: string
           id: string
           is_admin: boolean
+          is_guest: boolean
           name: string
         }[]
         SetofOptions: {

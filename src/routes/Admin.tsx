@@ -43,7 +43,7 @@ import {
   type Prize,
 } from '@/lib/live'
 
-type AdminTab = 'consola' | 'crear' | 'liga'
+type AdminTab = 'consola' | 'crear' | 'jugadores' | 'liga'
 
 // ---------------------------------------------------------------------------
 // Admin console (slice 12). Sub-nav: Consola (the live-game control surface,
@@ -84,6 +84,15 @@ export default function Admin() {
         <button
           type="button"
           role="tab"
+          aria-selected={tab === 'jugadores'}
+          className={tab === 'jugadores' ? 'on' : ''}
+          onClick={() => setTab('jugadores')}
+        >
+          Jugadores
+        </button>
+        <button
+          type="button"
+          role="tab"
           aria-selected={tab === 'liga'}
           className={tab === 'liga' ? 'on' : ''}
           onClick={() => setTab('liga')}
@@ -98,10 +107,101 @@ export default function Admin() {
       <div className={`apanel${tab === 'crear' ? ' on' : ''}`}>
         {tab === 'crear' && <CreateFecha />}
       </div>
+      <div className={`apanel${tab === 'jugadores' ? ' on' : ''}`}>
+        {tab === 'jugadores' && <AddPlayerPanel />}
+      </div>
       <div className={`apanel${tab === 'liga' ? ' on' : ''}`}>
         {tab === 'liga' && <LeagueSettings />}
       </div>
     </>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Agregar jugador (Phase 3). Whitelists a league member: name + email → the
+// admin-only create_player RPC (mig 0012). This is how the admin registers a
+// friend's email so they can log in via magic link. Duplicate-email and other
+// errors are surfaced verbatim.
+// ---------------------------------------------------------------------------
+function AddPlayerPanel() {
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [ok, setOk] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const canSubmit = name.trim() !== '' && email.trim() !== '' && !busy
+
+  const submit = async () => {
+    setBusy(true)
+    setOk(null)
+    setError(null)
+    const { data, error: err } = await supabase.rpc('create_player', {
+      p_name: name.trim(),
+      p_email: email.trim(),
+    })
+    setBusy(false)
+    if (err) {
+      // 23505 = unique_violation on player.email (already a member).
+      setError(
+        err.code === '23505'
+          ? 'Ese correo ya está registrado.'
+          : err.message || 'No se pudo agregar el jugador. Reintentá.',
+      )
+      return
+    }
+    const rows = (data ?? []) as { name: string }[]
+    setOk(`✓ ${rows[0]?.name ?? name.trim()} agregado`)
+    setName('')
+    setEmail('')
+  }
+
+  return (
+    <div data-testid="add-player">
+      <div className="field" style={{ paddingBottom: 2 }}>
+        <label>Agregar jugador</label>
+        <div className="hintline">
+          Registrá el correo de un amigo para que pueda entrar con su enlace mágico.
+        </div>
+      </div>
+      <div className="field">
+        <label htmlFor="ap-name">Nombre</label>
+        <input id="ap-name" value={name} onChange={(e) => setName(e.target.value)} />
+      </div>
+      <div className="field">
+        <label htmlFor="ap-email">Correo</label>
+        <input
+          id="ap-email"
+          type="email"
+          inputMode="email"
+          autoCapitalize="none"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+      </div>
+
+      {error && (
+        <div className="fd-note" role="alert" data-testid="add-player-error" style={{ color: 'var(--oxblood)' }}>
+          {error}
+        </div>
+      )}
+      {ok && (
+        <div className="fd-note" role="status" data-testid="add-player-ok">
+          {ok}
+        </div>
+      )}
+
+      <div className="btn-row" style={{ padding: '4px 18px 0' }}>
+        <button
+          type="button"
+          className="btn primary full"
+          disabled={!canSubmit}
+          onClick={() => void submit()}
+        >
+          {busy ? 'Agregando…' : 'Agregar jugador'}
+        </button>
+      </div>
+    </div>
   )
 }
 
@@ -135,7 +235,7 @@ type ConsoleEntry = {
   rebuys_count: number
   early_bird: boolean
   final_position: number | null
-  player: { name: string; avatar_url: string | null } | null
+  player: { name: string; avatar_url: string | null; is_guest: boolean } | null
 }
 
 type Ready = {
@@ -179,7 +279,7 @@ async function fetchConsole(): Promise<State> {
     supabase
       .from('entry')
       .select(
-        'id, player_id, status, paid, chips, rebuys_count, early_bird, final_position, player:player_id(name, avatar_url)',
+        'id, player_id, status, paid, chips, rebuys_count, early_bird, final_position, player:player_id(name, avatar_url, is_guest)',
       )
       .eq('tournament_id', tournament.id),
     supabase
@@ -228,6 +328,7 @@ function ConsolePanel() {
   const [prizesOpen, setPrizesOpen] = useState(false)
   const [multiBustOpen, setMultiBustOpen] = useState(false)
   const [completeOpen, setCompleteOpen] = useState(false)
+  const [guestOpen, setGuestOpen] = useState(false)
   const [whatsOpen, setWhatsOpen] = useState(false)
   // Realtime health → subtle reconnect banner (mirrors the En Vivo screen).
   const [conn, setConn] = useState<Conn>('connecting')
@@ -573,6 +674,15 @@ function ConsolePanel() {
         <div>
           <span className="overline">Jugadores · toca para ajustar</span>
         </div>
+        <button
+          type="button"
+          className="btn ghost sm"
+          data-testid="add-guest-btn"
+          disabled={busy}
+          onClick={() => setGuestOpen(true)}
+        >
+          + Agregar invitado
+        </button>
       </div>
       <div className="rule faint" />
 
@@ -756,6 +866,22 @@ function ConsolePanel() {
         }}
       />
 
+      {/* Agregar invitado — a guest plays this fecha but earns 0 season points */}
+      <GuestSheet
+        open={guestOpen}
+        onClose={() => setGuestOpen(false)}
+        busy={busy}
+        onAdd={(guestName) => {
+          setGuestOpen(false)
+          void runAction(() =>
+            supabase.rpc('add_guest_entry', {
+              p_name: guestName,
+              p_tournament_id: tournament.id,
+            }),
+          )
+        }}
+      />
+
       {/* WhatsApp summary (copy-paste, stage 1) */}
       <WhatsSheet
         open={whatsOpen}
@@ -889,6 +1015,57 @@ function WhatsSheet({
   )
 }
 
+// ---------------------------------------------------------------------------
+// Agregar invitado (Phase 3). A guest plays THIS fecha only, counts toward the
+// field size + pot like any entry, but earns 0 season points and never appears
+// on the Tabla. Name only → add_guest_entry(name, tournamentId).
+// ---------------------------------------------------------------------------
+function GuestSheet({
+  open,
+  onClose,
+  busy,
+  onAdd,
+}: {
+  open: boolean
+  onClose: () => void
+  busy: boolean
+  onAdd: (name: string) => void
+}) {
+  const [name, setName] = useState('')
+
+  useEffect(() => {
+    if (open) setName('')
+  }, [open])
+
+  return (
+    <Sheet open={open} onClose={onClose} title="Agregar invitado">
+      <p>
+        Un invitado juega esta fecha y cuenta para el pozo, pero no suma puntos de temporada ni
+        aparece en la Tabla.
+      </p>
+      <div className="field">
+        <label htmlFor="guest-name">Nombre</label>
+        <input
+          id="guest-name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Nombre del invitado"
+        />
+      </div>
+      <div className="btn-row">
+        <button
+          type="button"
+          className="btn blood full"
+          disabled={busy || name.trim() === ''}
+          onClick={() => onAdd(name.trim())}
+        >
+          Agregar invitado
+        </button>
+      </div>
+    </Sheet>
+  )
+}
+
 function AdminPlayerRow({
   entry,
   busy,
@@ -905,6 +1082,7 @@ function AdminPlayerRow({
   onNoShow: (id: string) => void
 }) {
   const name = entry.player?.name ?? 'Jugador'
+  const isGuest = entry.player?.is_guest ?? false
   const actions = playerActions(entry.status, entry.paid)
   const fire = (kind: string) => {
     if (kind === 'pay') onPay(entry.id)
@@ -921,6 +1099,11 @@ function AdminPlayerRow({
           {entry.final_position != null ? ` · ${ordinal(entry.final_position)}` : ''}
         </b>
         <div className="sub">
+          {isGuest && (
+            <span className="guest-badge" data-testid="guest-tag">
+              Invitado
+            </span>
+          )}
           {entry.paid ? (
             <span className="paid-check">✓ Pagó</span>
           ) : (

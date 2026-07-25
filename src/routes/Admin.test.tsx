@@ -503,3 +503,95 @@ describe('Admin — WhatsApp summary (slice 15)', () => {
     expect(await within(dialog).findByTestId('wa-status')).toHaveTextContent('Resumen copiado')
   })
 })
+
+// ---------------------------------------------------------------------------
+// Phase 3 — Agregar jugador (whitelist a league member via create_player).
+// ---------------------------------------------------------------------------
+describe('Admin — Agregar jugador (Phase 3)', () => {
+  it('submits name + email and calls create_player', async () => {
+    const user = userEvent.setup()
+    renderAdmin()
+    await user.click(screen.getByRole('tab', { name: 'Jugadores' }))
+    await screen.findByTestId('add-player')
+
+    await user.type(screen.getByLabelText('Nombre'), 'Nuevo Amigo')
+    await user.type(screen.getByLabelText('Correo'), 'amigo@example.com')
+    await user.click(screen.getByRole('button', { name: 'Agregar jugador' }))
+
+    const call = h.rpcCalls.find((c) => c.name === 'create_player')
+    expect(call).toBeTruthy()
+    expect(call!.args).toMatchObject({ p_name: 'Nuevo Amigo', p_email: 'amigo@example.com' })
+    // Success note shown; form cleared.
+    expect(await screen.findByTestId('add-player-ok')).toBeInTheDocument()
+  })
+
+  it('surfaces a duplicate-email error (23505) without clearing the form', async () => {
+    const user = userEvent.setup()
+    h.rpc.create_player = { data: null, error: { code: '23505', message: 'duplicate key' } }
+    renderAdmin()
+    await user.click(screen.getByRole('tab', { name: 'Jugadores' }))
+    await screen.findByTestId('add-player')
+
+    await user.type(screen.getByLabelText('Nombre'), 'Repetido')
+    await user.type(screen.getByLabelText('Correo'), 'dup@example.com')
+    await user.click(screen.getByRole('button', { name: 'Agregar jugador' }))
+
+    expect(await screen.findByTestId('add-player-error')).toHaveTextContent(/ya está registrado/i)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Phase 3 — Agregar invitado (guest on a fecha) + the "Invitado" tag.
+// ---------------------------------------------------------------------------
+describe('Admin — Agregar invitado (guest, Phase 3)', () => {
+  it('opens the sheet and calls add_guest_entry with the name + live tournament id', async () => {
+    const user = userEvent.setup()
+    renderAdmin()
+    await screen.findAllByTestId('admin-prow')
+
+    await user.click(screen.getByTestId('add-guest-btn'))
+    const dialog = await screen.findByRole('dialog', { name: 'Agregar invitado' })
+    await user.type(within(dialog).getByLabelText('Nombre'), 'Fulano')
+    await user.click(within(dialog).getByRole('button', { name: 'Agregar invitado' }))
+
+    const call = h.rpcCalls.find((c) => c.name === 'add_guest_entry')
+    expect(call).toBeTruthy()
+    expect(call!.args).toMatchObject({ p_name: 'Fulano', p_tournament_id: 't-live' })
+  })
+
+  it('tags a guest entry with an "Invitado" badge in the player list', async () => {
+    h.list.entry = {
+      data: [
+        {
+          id: 'e-guest',
+          player_id: 'p-guest',
+          status: 'checked_in',
+          paid: false,
+          chips: 10_000,
+          rebuys_count: 0,
+          early_bird: false,
+          final_position: null,
+          player: { name: 'Invitado X', avatar_url: null, is_guest: true },
+        },
+        {
+          id: 'e-real',
+          player_id: 'p-real',
+          status: 'playing',
+          paid: true,
+          chips: 20_000,
+          rebuys_count: 0,
+          early_bird: false,
+          final_position: null,
+          player: { name: 'Real Y', avatar_url: null, is_guest: false },
+        },
+      ],
+      error: null,
+    }
+    renderAdmin()
+    await screen.findAllByTestId('admin-prow')
+
+    const tags = screen.getAllByTestId('guest-tag')
+    expect(tags).toHaveLength(1)
+    expect(tags[0]).toHaveTextContent('Invitado')
+  })
+})
