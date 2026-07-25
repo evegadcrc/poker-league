@@ -452,4 +452,90 @@ describe('FechaDetail', () => {
     expect(premios.textContent).toContain('₡90.000')
     expect(premios.textContent).toContain('₡60.000')
   })
+
+  // ---- CHANGE 1: reorder — players list first, chips/actions below it. -------
+  it('renders the players list BEFORE the RSVP summary chips (reordered)', async () => {
+    renderDetail() // default scheduled fixture (5 entries)
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    const firstRow = screen.getAllByTestId('prow')[0]
+    const head = screen.getByTestId('att-head')
+    // The summary chips now sit AFTER the players list in the DOM.
+    expect(firstRow.compareDocumentPosition(head) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  // ---- CHANGE 2: real-time per-player v2 points breakdown. -------------------
+  it('shows the v2 points breakdown for a ranked finisher (20-player, 3rd → 120)', async () => {
+    setTournament('completed')
+    const base = {
+      rsvp_at: null,
+      cancelled_at: null,
+      checked_in_at: null,
+      early_bird: false,
+      rebuys_count: 0,
+      chop_group: null,
+      chopped: false,
+      points_earned: 0,
+    }
+    // 20 seated finishers (positions 1..20), all paid; final-table size for a
+    // 20-field is 10, so positions 1..10 made the final table. 3rd place is the
+    // assertion target: (20−3)×5 = 85 · +15 asist · +10 mesa · +10 (3º) = 120.
+    const data = Array.from({ length: 20 }, (_, i) => {
+      const pos = i + 1
+      return {
+        id: `e${pos}`,
+        player_id: `p${pos}`,
+        status: pos === 1 ? 'winner' : 'eliminated',
+        final_position: pos,
+        paid: true,
+        made_final_table: pos <= 10,
+        ...base,
+        player: { name: pos === 3 ? 'Carlos T.' : `Jugador ${pos}`, avatar_url: null },
+      }
+    })
+    h.list.entry = { data, error: null }
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    const target = screen.getAllByTestId('prow').find((r) => within(r).queryByText('Carlos T.'))!
+    const bd = within(target).getByTestId('fd-breakdown')
+    expect(bd.textContent).toContain('Base 85')
+    expect(bd.textContent).toContain('+15 asist')
+    expect(bd.textContent).toContain('+10 mesa')
+    expect(bd.textContent).toContain('+10 (3º)')
+    expect(bd.textContent).toContain('= 120')
+  })
+
+  it('live fecha: an eliminated player gets a breakdown, a still-playing one does not', async () => {
+    setTournament('live')
+    const base = {
+      rsvp_at: null,
+      cancelled_at: null,
+      checked_in_at: null,
+      early_bird: false,
+      rebuys_count: 0,
+      chop_group: null,
+      chopped: false,
+      points_earned: 0,
+    }
+    h.list.entry = {
+      data: [
+        { id: 'a', player_id: 'pa', status: 'playing', final_position: null, paid: true, made_final_table: true, ...base, player: { name: 'Alicia P.', avatar_url: null } },
+        { id: 'b', player_id: 'pb', status: 'playing', final_position: null, paid: true, made_final_table: true, ...base, player: { name: 'Bruno Q.', avatar_url: null } },
+        { id: 'c', player_id: 'pc', status: 'eliminated', final_position: 3, paid: true, made_final_table: true, ...base, player: { name: 'Carla R.', avatar_url: null } },
+      ],
+      error: null,
+    }
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    const rows = screen.getAllByTestId('prow')
+    const byName = (n: string) => rows.find((r) => within(r).queryByText(new RegExp(n)))!
+    // Eliminated → real-time breakdown. N = 3 seated → (3−3)×5 = 0 base.
+    const elim = within(byName('Carla')).getByTestId('fd-breakdown')
+    expect(elim.textContent).toContain('Base 0')
+    expect(elim.textContent).toContain('= 35') // 0 + 15 asist + 10 mesa + 10 (3º)
+    // Still en juego → no breakdown.
+    expect(within(byName('Alicia')).queryByTestId('fd-breakdown')).toBeNull()
+  })
 })

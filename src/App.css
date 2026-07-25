@@ -978,6 +978,22 @@
   align-items: center;
   flex-wrap: wrap;
 }
+/* Real-time per-player points breakdown (Base · +asist · +mesa · +top4 = total).
+   Tabular figures so the numbers stay column-aligned down the list. */
+.prow .pinfo .fd-breakdown {
+  font: 700 11px 'Archivo';
+  color: var(--ink-3);
+  margin-top: 3px;
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  font-variant-numeric: tabular-nums;
+}
+.prow .pinfo .fd-breakdown .bd-total {
+  color: var(--ink);
+  font-weight: 800;
+}
 .status {
   font: 800 9.5px 'Archivo';
   letter-spacing: 0.09em;
