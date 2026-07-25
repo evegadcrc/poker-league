@@ -269,6 +269,7 @@ export type Database = {
           payout_template: Json
           points_multiplier: number
           status: Database["public"]["Enums"]["season_status"]
+          top_finish_bonuses: Json
           year: number
         }
         Insert: {
@@ -285,6 +286,7 @@ export type Database = {
           payout_template?: Json
           points_multiplier?: number
           status?: Database["public"]["Enums"]["season_status"]
+          top_finish_bonuses?: Json
           year: number
         }
         Update: {
@@ -301,6 +303,7 @@ export type Database = {
           payout_template?: Json
           points_multiplier?: number
           status?: Database["public"]["Enums"]["season_status"]
+          top_finish_bonuses?: Json
           year?: number
         }
         Relationships: []
@@ -620,6 +623,7 @@ export type Database = {
           payout_template: Json
           points_multiplier: number
           status: Database["public"]["Enums"]["season_status"]
+          top_finish_bonuses: Json
           year: number
         }[]
         SetofOptions: {
@@ -1059,6 +1063,7 @@ export type Database = {
           payout_template: Json
           points_multiplier: number
           status: Database["public"]["Enums"]["season_status"]
+          top_finish_bonuses: Json
           year: number
         }[]
         SetofOptions: {

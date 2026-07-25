@@ -15,15 +15,17 @@ const url = import.meta.env.VITE_SUPABASE_URL
 const serviceKey = import.meta.env.SUPABASE_SERVICE_ROLE_KEY as string | undefined
 const canRun = Boolean(url && serviceKey)
 
-// Pinned season config (be-contract §6 / plan Approach): ×10 · MF +5 · Top3 +8 ·
-// Asist +2 · no-show −15 · cancel bands 0/−5/−10/−15.
+// Scoring v2 (mig 0019): (N−P)×5 · MF +10 · Asist +15 · graduated top-4
+// [20,15,10,5] (index 0 = 1st) · no-show −15 · cancel bands 0/−5/−10/−15.
+// bonus_top3 is a retained-but-unused column (the engine no longer reads it).
 const CONFIG = {
-  points_multiplier: 10,
-  bonus_final_table: 5,
+  points_multiplier: 5,
+  bonus_final_table: 10,
   bonus_top3: 8,
-  bonus_attendance: 2,
+  bonus_attendance: 15,
   no_show_penalty: -15,
   early_bird_bonus_chips: 2000,
+  top_finish_bonuses: [20, 15, 10, 5] as Json,
   cancel_bands: [
     { hours_before: 24, penalty: 0 },
     { hours_before: 12, penalty: -5 },
@@ -41,12 +43,15 @@ describe.skipIf(!canRun)('points engine + leaderboard (slice 5, local integratio
   const seasonIds: string[] = []
   const playerIds: string[] = []
   const RUN = crypto.randomUUID().slice(0, 8) // namespace throwaway player emails
+  let playerSeq = 0 // monotonic so repeated mkPlayers() calls never collide on email
 
   // ---- fixture helpers ----------------------------------------------------
   async function mkPlayers(count: number): Promise<string[]> {
+    const start = playerSeq
+    playerSeq += count
     const rows = Array.from({ length: count }, (_, i) => ({
-      name: `PtsTest ${RUN}-${i}`,
-      email: `pts-${RUN}-${i}@test.local`,
+      name: `PtsTest ${RUN}-${start + i}`,
+      email: `pts-${RUN}-${start + i}@test.local`,
       is_admin: false,
     }))
     const { data, error } = await admin.from('player').insert(rows).select('id')
@@ -150,6 +155,54 @@ describe.skipIf(!canRun)('points engine + leaderboard (slice 5, local integratio
   })
 
   // ------------------------------------------------------------------------
+  // Scoring v2 (mig 0019) — the canonical fixture values, asserted EXACTLY via
+  // fn_tournament_points on isolated tournaments. paid=true and made_final_table
+  // is set per (final_position ≤ final_table_size) for every seat.
+  it('scoring v2 canonical fixtures: 140/100/60 (20p) · 90/60 (10p) · −15 no-show', async () => {
+    const s = await mkSeason()
+
+    // 20-player field → final-table SIZE 10 (>10 → top 10).
+    const t20 = await mkTournament(s, { finalTableSize: 10 })
+    const ps20 = await mkPlayers(20)
+    for (let pos = 1; pos <= 20; pos++) {
+      await mkEntry(t20, ps20[pos - 1]!, {
+        status: pos === 1 ? 'winner' : 'eliminated',
+        final_position: pos,
+        made_final_table: pos <= 10,
+        paid: true,
+      })
+    }
+    await runPoints(t20)
+    const p20 = await pointsByPlayer(t20)
+    expect(p20.get(ps20[0]!)).toBe(140) // 1st : (20−1)×5=95 +15 att +10 FT +20 (1st)
+    expect(p20.get(ps20[4]!)).toBe(100) // 5th : (20−5)×5=75 +15 +10 (in top10) +0
+    expect(p20.get(ps20[10]!)).toBe(60) // 11th: (20−11)×5=45 +15 +0 (>top10) +0
+
+    // 10-player field → final-table SIZE 5 (≤10 → top 5).
+    const t10 = await mkTournament(s, { finalTableSize: 5 })
+    const ps10 = await mkPlayers(10)
+    for (let pos = 1; pos <= 10; pos++) {
+      await mkEntry(t10, ps10[pos - 1]!, {
+        status: pos === 1 ? 'winner' : 'eliminated',
+        final_position: pos,
+        made_final_table: pos <= 5,
+        paid: true,
+      })
+    }
+    await runPoints(t10)
+    const p10 = await pointsByPlayer(t10)
+    expect(p10.get(ps10[0]!)).toBe(90) // 1st: (10−1)×5=45 +15 +10 (in top5) +20 (1st)
+    expect(p10.get(ps10[3]!)).toBe(60) // 4th: (10−4)×5=30 +15 +10 (4≤5) +5 (4th)
+
+    // no-show → −15 (penalty unchanged).
+    const tns = await mkTournament(s)
+    const [pns] = await mkPlayers(1)
+    await mkEntry(tns, pns!, { status: 'no_show', final_position: null })
+    await runPoints(tns)
+    expect((await pointsByPlayer(tns)).get(pns!)).toBe(-15)
+  })
+
+  // ------------------------------------------------------------------------
   it('scores a full field: solo win, podium, final-table, out, attendance gate, no-show', async () => {
     const s = await mkSeason()
     const t = await mkTournament(s, { finalTableSize: 5 })
@@ -167,15 +220,15 @@ describe.skipIf(!canRun)('points engine + leaderboard (slice 5, local integratio
 
     await runPoints(t)
     const pts = await pointsByPlayer(t)
-    // (N−P)×10 + MF(5 if final table) + Top3(8 if P≤3) + Asist(2 if paid)
-    expect(pts.get(p1)).toBe(85) // 70+5+8+2  solo win
-    expect(pts.get(p2)).toBe(75) // 60+5+8+2
-    expect(pts.get(p3)).toBe(65) // 50+5+8+2  podium
-    expect(pts.get(p4)).toBe(47) // 40+5+0+2  final table, not top3
-    expect(pts.get(p5)).toBe(37) // 30+5+0+2
-    expect(pts.get(p6)).toBe(22) // 20+0+0+2  out
-    expect(pts.get(p7)).toBe(12) // 10+0+0+2
-    expect(pts.get(p8)).toBe(0) //  0+0+0+0  unpaid → no attendance bonus
+    // (N−P)×5 + MF(10 if final table) + graduated top-4 [20,15,10,5] + Asist(15 if paid)
+    expect(pts.get(p1)).toBe(80) // 35+10+20+15  solo win (1st)
+    expect(pts.get(p2)).toBe(70) // 30+10+15+15  (2nd)
+    expect(pts.get(p3)).toBe(60) // 25+10+10+15  podium (3rd)
+    expect(pts.get(p4)).toBe(50) // 20+10+5+15   final table, 4th
+    expect(pts.get(p5)).toBe(40) // 15+10+0+15   final table, 5th (no top-4)
+    expect(pts.get(p6)).toBe(25) // 10+0+0+15    out
+    expect(pts.get(p7)).toBe(20) //  5+0+0+15
+    expect(pts.get(p8)).toBe(0) //   0+0+0+0     unpaid → no attendance bonus
     expect(pts.get(p9)).toBe(-15) // no-show penalty
 
     // Leaderboard form tiers for this single-tournament season.
@@ -192,7 +245,7 @@ describe.skipIf(!canRun)('points engine + leaderboard (slice 5, local integratio
     expect(row(p6).form_positions).toEqual([6])
     // form and form_positions are the SAME length / order for every row.
     for (const r of lb) expect(r.form_positions.length).toBe(r.form.length)
-    expect(row(p1).total_points).toBe(85)
+    expect(row(p1).total_points).toBe(80)
     expect(row(p1).wins).toBe(1)
     expect(row(p1).games_played).toBe(1)
     // no-show: counts in points total but not games/form
@@ -219,13 +272,13 @@ describe.skipIf(!canRun)('points engine + leaderboard (slice 5, local integratio
 
     await runPoints(t)
     const pts = await pointsByPlayer(t)
-    // pos1 value = (5−1)×10+5+8+2 = 55; pos2 value = (5−2)×10+5+8+2 = 45;
-    // chop = round((55+45)/2) = 50 for BOTH.
-    expect(pts.get(p1)).toBe(50)
-    expect(pts.get(p2)).toBe(50)
-    expect(pts.get(p3)).toBe(35) // 20+5+8+2
-    expect(pts.get(p4)).toBe(17) // 10+5+0+2
-    expect(pts.get(p5)).toBe(7) //  0+5+0+2
+    // pos1 value = (5−1)×5+10+20+15 = 65; pos2 value = (5−2)×5+10+15+15 = 55;
+    // chop = round((65+55)/2) = 60 for BOTH.
+    expect(pts.get(p1)).toBe(60)
+    expect(pts.get(p2)).toBe(60)
+    expect(pts.get(p3)).toBe(45) // 10+10+10+15
+    expect(pts.get(p4)).toBe(35) //  5+10+5+15
+    expect(pts.get(p5)).toBe(25) //  0+10+0+15
 
     // Both choppers are co-champions on the leaderboard: win + champion form pill.
     const lb = await fetchLeaderboard(s)
@@ -236,8 +289,8 @@ describe.skipIf(!canRun)('points engine + leaderboard (slice 5, local integratio
     expect(row(p2).podiums).toBe(1)
     expect(row(p1).form).toEqual(['champion'])
     expect(row(p2).form).toEqual(['champion'])
-    expect(row(p1).total_points).toBe(50)
-    expect(row(p2).total_points).toBe(50)
+    expect(row(p1).total_points).toBe(60)
+    expect(row(p2).total_points).toBe(60)
   })
 
   // ------------------------------------------------------------------------
@@ -289,11 +342,11 @@ describe.skipIf(!canRun)('points engine + leaderboard (slice 5, local integratio
     const scheduled = await mkTournament(s, { status: 'scheduled', scheduledAt: '2099-05-01T20:00:00Z' })
     const [pa, pb, pc, , , , , , , , , pz] = playerIds
 
-    // EARLY (N=3): A pos1(35), B pos2(25), C pos3(15)
+    // EARLY (N=3): A pos1(55), B pos2(45), C pos3(35)
     await mkEntry(early, pa, { final_position: 1, made_final_table: true, paid: true })
     await mkEntry(early, pb, { final_position: 2, made_final_table: true, paid: true })
     await mkEntry(early, pc, { final_position: 3, made_final_table: true, paid: true })
-    // LATE (N=3): A pos3(15), B pos1(35), C pos2(25)
+    // LATE (N=3): A pos3(35), B pos1(55), C pos2(45)
     await mkEntry(late, pa, { final_position: 3, made_final_table: true, paid: true })
     await mkEntry(late, pb, { final_position: 1, made_final_table: true, paid: true })
     await mkEntry(late, pc, { final_position: 2, made_final_table: true, paid: true })
@@ -305,10 +358,10 @@ describe.skipIf(!canRun)('points engine + leaderboard (slice 5, local integratio
 
     const lb = await fetchLeaderboard(s)
     const row = (pid: string) => lb.find((r) => r.player_id === pid)!
-    // totals: A=50, B=60, C=40, Z=0
-    expect(row(pa).total_points).toBe(50)
-    expect(row(pb).total_points).toBe(60)
-    expect(row(pc).total_points).toBe(40)
+    // totals: A=90, B=100, C=80, Z=0
+    expect(row(pa).total_points).toBe(90)
+    expect(row(pb).total_points).toBe(100)
+    expect(row(pc).total_points).toBe(80)
     expect(row(pz).total_points).toBe(0)
     expect(row(pz).games_played).toBe(0)
     expect(row(pz).form).toEqual([])
@@ -338,23 +391,24 @@ describe.skipIf(!canRun)('points engine + leaderboard (slice 5, local integratio
     const t2 = await mkTournament(s, { scheduledAt: '2099-08-01T20:00:00Z', finalTableSize: 5 })
     const [pa, pb, , pc, pd, pe, pf] = playerIds
 
-    // A: T1 pos1 in N=3 → (3−1)×10+15 = 35, ONE win.
+    // A: T1 pos1 in N=3 → (3−1)×5+10 FT+20 (1st)+15 att = 55, ONE win.
     await mkEntry(t1, pa, { final_position: 1, made_final_table: true, paid: true })
     await mkEntry(t1, pc, { final_position: 2, made_final_table: true, paid: true })
     await mkEntry(t1, pd, { final_position: 3, made_final_table: true, paid: true })
-    // B: T2 pos2 in N=4 → (4−2)×10+15 = 35, ZERO wins (same points as A).
+    // B: T2 pos2 in N=5 → (5−2)×5+10 FT+15 (2nd)+15 att = 55, ZERO wins (ties A).
     await mkEntry(t2, pe, { final_position: 1, made_final_table: true, paid: true })
     await mkEntry(t2, pb, { final_position: 2, made_final_table: true, paid: true })
     await mkEntry(t2, pf, { final_position: 3, made_final_table: true, paid: true })
     await mkEntry(t2, pc, { final_position: 4, made_final_table: true, paid: true })
+    await mkEntry(t2, pd, { final_position: 5, made_final_table: true, paid: true })
 
     await runPoints(t1)
     await runPoints(t2)
 
     const lb = await fetchLeaderboard(s)
     const row = (pid: string) => lb.find((r) => r.player_id === pid)!
-    expect(row(pa).total_points).toBe(35)
-    expect(row(pb).total_points).toBe(35)
+    expect(row(pa).total_points).toBe(55)
+    expect(row(pb).total_points).toBe(55)
     expect(row(pa).wins).toBe(1)
     expect(row(pb).wins).toBe(0)
     const order = lb.map((r) => r.player_id)

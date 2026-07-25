@@ -308,8 +308,8 @@ describe.skipIf(!canRun)('admin console RPCs (slice 12, local integration)', () 
     expect(g.status).toBe('no_show')
     expect(g.points_earned).toBe(-15)
 
-    // winner points: N=3 finishers → (3−1)×10 + bmf 5 + top3 8 + attendance 2 = 35.
-    expect((await readEntry(p3)).points_earned).toBe(35)
+    // winner points (scoring v2): N=3 → (3−1)×5 + bmf 10 + top-4[0]=20 (1st) + attendance 15 = 55.
+    expect((await readEntry(p3)).points_earned).toBe(55)
   })
 
   // ------------------------------------------------------------------------
@@ -332,9 +332,9 @@ describe.skipIf(!canRun)('admin console RPCs (slice 12, local integration)', () 
 
     const a = await readEntry(chopA)
     const b = await readEntry(chopB)
-    // N=4. point-value(1)=(4−1)×10+5+8+2=45 ; point-value(2)=(4−2)×10+5+8+2=35 ; avg=40.
-    expect(a.points_earned).toBe(40)
-    expect(b.points_earned).toBe(40)
+    // N=4 (scoring v2). pv(1)=(4−1)×5+10+20+15=60 ; pv(2)=(4−2)×5+10+15+15=50 ; avg=55.
+    expect(a.points_earned).toBe(55)
+    expect(b.points_earned).toBe(55)
     expect(a.chopped).toBe(true)
     expect(b.chopped).toBe(true)
     expect(a.chop_group).toBe(b.chop_group)
@@ -350,7 +350,7 @@ describe.skipIf(!canRun)('admin console RPCs (slice 12, local integration)', () 
     const rowB = rows.find((r) => r.player_id === pb.player_id)!
     expect(rowA.wins).toBe(1)
     expect(rowB.wins).toBe(1)
-    expect(rowA.total_points).toBe(40)
+    expect(rowA.total_points).toBe(55)
     expect(rowA.form[0]).toBe('champion')
     expect(rowB.form[0]).toBe('champion')
   })
@@ -556,11 +556,11 @@ describe.skipIf(!canRun)('admin console RPCs (slice 12, local integration)', () 
     for (const id of [r1!, r2!, r3!, r4!, r5!]) await admin.rpc('eliminate', { p_entry_id: id })
     expect((await admin.rpc('complete_tournament', { p_tournament_id: t })).error).toBeNull()
 
-    // POINTS: N=8. pv(7)=(8−7)×10+2=12 ; pv(8)=0+2=2 ; avg=7 — equal for both.
+    // POINTS: N=8 (scoring v2). pv(7)=(8−7)×5+att 15=20 ; pv(8)=0+15=15 ; avg=round(17.5)=18.
     const aDone = await readEntry(tieA!)
     const bDone = await readEntry(tieB!)
-    expect(aDone.points_earned).toBe(7)
-    expect(bDone.points_earned).toBe(7)
+    expect(aDone.points_earned).toBe(18)
+    expect(bDone.points_earned).toBe(18)
     expect(aDone.chopped).toBe(false)
     expect(aDone.made_final_table).toBe(false)
 
@@ -601,12 +601,13 @@ describe.skipIf(!canRun)('admin console RPCs (slice 12, local integration)', () 
     const a = await readEntry(tieA!)
     const b = await readEntry(tieB!)
 
-    // Final chop → champions (chopped, winner, top points 80 = avg(pv1,pv2)).
+    // Final chop → champions (chopped, winner). Points v2: pv1=(8−1)×5+10+20+15=80 ;
+    // pv2=(8−2)×5+10+15+15=70 ; avg=75.
     expect(fa.chopped).toBe(true)
     expect(fb.chopped).toBe(true)
     expect(fa.status).toBe('winner')
-    expect(fa.points_earned).toBe(80)
-    expect(fb.points_earned).toBe(80)
+    expect(fa.points_earned).toBe(75)
+    expect(fb.points_earned).toBe(75)
     // The two chop cohorts are DISTINCT groups.
     expect(fa.chop_group).toBe(fb.chop_group)
     expect(a.chop_group).toBe(b.chop_group)
@@ -614,7 +615,7 @@ describe.skipIf(!canRun)('admin console RPCs (slice 12, local integration)', () 
     // Tie group stays NON-champion (chopped false, mid-field points).
     expect(a.chopped).toBe(false)
     expect(b.chopped).toBe(false)
-    expect(a.points_earned).toBe(7)
+    expect(a.points_earned).toBe(18)
 
     // Leaderboard: finalists are wins/champions; the tie group is not.
     const { data: lb } = await admin.rpc('leaderboard', { p_season_id: seasonId })
@@ -704,10 +705,10 @@ describe.skipIf(!canRun)('admin console RPCs (slice 12, local integration)', () 
     expect((await readEntry(solo.e1)).final_position).toBe(1)
     expect(parsePrizes((await readTournament(solo.t)).prizes).length).toBeGreaterThan(0)
 
-    // Per-fecha points are identical in both (winner pos 1, N=2):
-    //   (2−1)×10 + bmf 5 + top3 8 + attendance 2 = 25.
-    expect((await readEntry(league.e1)).points_earned).toBe(25)
-    expect((await readEntry(solo.e1)).points_earned).toBe(25)
+    // Per-fecha points identical in both (winner pos 1, N=2, scoring v2):
+    //   (2−1)×5 + bmf 10 + top-4[0]=20 (1st) + attendance 15 = 50.
+    expect((await readEntry(league.e1)).points_earned).toBe(50)
+    expect((await readEntry(solo.e1)).points_earned).toBe(50)
 
     // SEASON standings: only the LEAGUE fecha moves the leaderboard — the
     // standalone one adds 0 (points, games, wins all reflect one fecha).
@@ -721,10 +722,10 @@ describe.skipIf(!canRun)('admin console RPCs (slice 12, local integration)', () 
     }[]
     const row1 = rows.find((r) => r.player_id === p1)!
     const row2 = rows.find((r) => r.player_id === p2)!
-    expect(row1.total_points).toBe(25) // league 25 only, NOT 50 (would be both)
+    expect(row1.total_points).toBe(50) // league 50 only, NOT 100 (would be both)
     expect(row1.games_played).toBe(1) // one counting fecha, not two
     expect(row1.wins).toBe(1)
-    expect(row2.total_points).toBe(15) // pos 2: (2−2)×10 + 5 + 8 + 2 = 15
+    expect(row2.total_points).toBe(40) // pos 2 (v2): (2−2)×5 + bmf 10 + top-4[1]=15 (2nd) + att 15 = 40
     expect(row2.games_played).toBe(1)
   })
 })

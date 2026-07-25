@@ -12,13 +12,15 @@
 -- ---------------------------------------------------------------------------
 -- Season (locked default config)
 -- ---------------------------------------------------------------------------
+-- Scoring v2 (mig 0019): multiplier 5, mesa final +10, asistencia +15, graduated
+-- top-4 bonuses [20,15,10,5]. bonus_top3 (8) is a retained-but-unused column.
 insert into season (
   id, name, year, status, points_multiplier, bonus_final_table, bonus_top3,
-  bonus_attendance, no_show_penalty, early_bird_bonus_chips, cancel_bands,
-  payout_template, final_table_size_override
+  bonus_attendance, no_show_penalty, early_bird_bonus_chips, top_finish_bonuses,
+  cancel_bands, payout_template, final_table_size_override
 ) values (
   'a5000000-0000-4000-8000-000000000001', 'Liga 2026', 2026, 'active',
-  10, 5, 8, 2, -15, 2000,
+  5, 10, 8, 15, -15, 2000, '[20,15,10,5]'::jsonb,
   '[{"hours_before":24,"penalty":0},{"hours_before":12,"penalty":-5},{"hours_before":6,"penalty":-10},{"hours_before":0,"penalty":-15}]'::jsonb,
   '[0.60,0.28,0.12]'::jsonb,
   null
@@ -86,24 +88,26 @@ insert into tournament (
 
 -- ---------------------------------------------------------------------------
 -- Entries — Fecha 1 (completed): 10 finishers (positions 1..10) + 1 no-show.
--- Points per §5: (N-P)*10 + FT(+5 if pos<=5) + Top3(+8 if pos<=3) + Att(+2 if paid).
+-- Points per scoring v2 (mig 0019): (N-P)*5 + FT(+10 if pos<=5)
+--   + graduated top-4 [20,15,10,5] (pos 1..4) + Att(+15 if paid).
 -- N = 10 finishers; no-show = season no_show_penalty (-15).
+-- pos: 1→90  2→80  3→70  4→60  5→50  6→35  7→30  8→25  9→20  10→15  no-show→-15
 -- ---------------------------------------------------------------------------
 insert into entry (
   tournament_id, player_id, status, rsvp_at, checked_in_at, check_in_geo_ok,
   early_bird, chips, paid, rebuys_count, final_position, made_final_table,
   eliminated_at, points_earned
 ) values
-  ('d3000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000001', 'winner',     now() - interval '31 days', now() - interval '30 days', true, true,  0, true, 0, 1,  true,  now() - interval '29 days 20 hours', 105),
-  ('d3000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000002', 'eliminated', now() - interval '31 days', now() - interval '30 days', true, false, 0, true, 0, 2,  true,  now() - interval '29 days 20 hours', 95),
-  ('d3000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000003', 'eliminated', now() - interval '31 days', now() - interval '30 days', true, false, 0, true, 0, 3,  true,  now() - interval '29 days 20 hours', 85),
-  ('d3000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000004', 'eliminated', now() - interval '31 days', now() - interval '30 days', true, false, 0, true, 0, 4,  true,  now() - interval '29 days 20 hours', 67),
-  ('d3000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000005', 'eliminated', now() - interval '31 days', now() - interval '30 days', true, false, 0, true, 1, 5,  true,  now() - interval '29 days 20 hours', 57),
-  ('d3000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000006', 'eliminated', now() - interval '31 days', now() - interval '30 days', true, false, 0, true, 0, 6,  false, now() - interval '29 days 21 hours', 42),
-  ('d3000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000007', 'eliminated', now() - interval '31 days', now() - interval '30 days', true, false, 0, true, 0, 7,  false, now() - interval '29 days 21 hours', 32),
-  ('d3000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000008', 'eliminated', now() - interval '31 days', now() - interval '30 days', true, false, 0, true, 0, 8,  false, now() - interval '29 days 21 hours', 22),
-  ('d3000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000009', 'eliminated', now() - interval '31 days', now() - interval '30 days', true, false, 0, true, 0, 9,  false, now() - interval '29 days 22 hours', 12),
-  ('d3000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-00000000000a', 'eliminated', now() - interval '31 days', now() - interval '30 days', true, false, 0, true, 0, 10, false, now() - interval '29 days 22 hours', 2),
+  ('d3000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000001', 'winner',     now() - interval '31 days', now() - interval '30 days', true, true,  0, true, 0, 1,  true,  now() - interval '29 days 20 hours', 90),
+  ('d3000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000002', 'eliminated', now() - interval '31 days', now() - interval '30 days', true, false, 0, true, 0, 2,  true,  now() - interval '29 days 20 hours', 80),
+  ('d3000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000003', 'eliminated', now() - interval '31 days', now() - interval '30 days', true, false, 0, true, 0, 3,  true,  now() - interval '29 days 20 hours', 70),
+  ('d3000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000004', 'eliminated', now() - interval '31 days', now() - interval '30 days', true, false, 0, true, 0, 4,  true,  now() - interval '29 days 20 hours', 60),
+  ('d3000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000005', 'eliminated', now() - interval '31 days', now() - interval '30 days', true, false, 0, true, 1, 5,  true,  now() - interval '29 days 20 hours', 50),
+  ('d3000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000006', 'eliminated', now() - interval '31 days', now() - interval '30 days', true, false, 0, true, 0, 6,  false, now() - interval '29 days 21 hours', 35),
+  ('d3000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000007', 'eliminated', now() - interval '31 days', now() - interval '30 days', true, false, 0, true, 0, 7,  false, now() - interval '29 days 21 hours', 30),
+  ('d3000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000008', 'eliminated', now() - interval '31 days', now() - interval '30 days', true, false, 0, true, 0, 8,  false, now() - interval '29 days 21 hours', 25),
+  ('d3000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-000000000009', 'eliminated', now() - interval '31 days', now() - interval '30 days', true, false, 0, true, 0, 9,  false, now() - interval '29 days 22 hours', 20),
+  ('d3000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-00000000000a', 'eliminated', now() - interval '31 days', now() - interval '30 days', true, false, 0, true, 0, 10, false, now() - interval '29 days 22 hours', 15),
   -- Ricardo confirmed but never checked in → no-show penalty
   ('d3000000-0000-4000-8000-000000000001', 'b1000000-0000-4000-8000-00000000000b', 'no_show',    now() - interval '31 days', null, null, false, null, false, 0, null, false, null, -15);
 
