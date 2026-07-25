@@ -26,8 +26,31 @@ extraction (191b670 deriveLiveSignal). Review-loop PER-TRACK (full diff 7451 lin
 Test gate GREEN 317 passed / 1 skipped from clean db reset. 18 commits on branch. Record:
 .harness/notes/poker-league-phase2/review-loop.md; residuals in followups.md.
 
+## Phase 2.1 UI refinements (build-only batch, 2026-07-24 — user "go with changes")
+9 UI changes across 4 slices, all FE-only, test-gate green 326/1skip at HEAD (no reset — local seed
+season restored to 2026-active + edwin.vega admin kept for user testing). Commits: 3d9c797 (tabla
+cols centered + login email centered + calc rivales max 10); 57775f0 + 5c81547 (fecha money inputs
+thousand-sep "." + defaults 10k/10k/20k/5k + "Guardar ajustes" via localStorage pf-fecha-defaults +
+removed bonus-llegada from Liga); 289dba8 (En Vivo: Pendiente Pago tag on entry.paid=false, blind
+thousand-sep, Premios moved to bottom); 81a3d0d (completed fecha: place + points_earned instead of
+CAMPEÓN/FUERA, no-show + penalty, co-champs share 1º). Dropped push notif (#10, needs go-live infra).
+NOT reviewed/verify-ui'd yet (build-only batch). #10 push dropped per user.
+OPEN CONFIRMS: (1) separator "." vs "," (user wrote ","); (2) bonus-stack has no per-fecha column →
+form-default only; (3) "recompra 8" → mapped to existing "hasta Nivel 8".
+
+## Phase 2.1b UI batch (2026-07-24) — DONE + verify-ui PASSED
+10-item batch + máx-recompras, commits: 14669bb (2nd/3rd medals + Premios on completed fecha),
+ea009a4 (icon upload buttons + centered rsvp/legend + máx-recompras), e9f653a (fecha info card:
+points formula+example+bonuses+entry/stacks + editable date/time on scheduled), c864ad4 (mig 0018:
+leaderboard form_positions → form-pill NUMBERS + tournament.odds_enabled column), 9799ad9 (per-fecha
+odds calculator enable/disable toggle + Calculadora live gate). Full suite 349/1skip green.
+VERIFY-UI (Playwright, admin login via Mailpit, mobile viewport): all priority screens OK in 3 themes,
+console clean, 20 shots in .harness/notes/poker-league-phase2/ui-verify/20260724-180103/. Data-gated:
+Premios not shown on legacy seed Fecha 1 (no prizes) — not a bug. Followups updated.
+NOT review-loop'd (build-only batch). Dropped push (#10). Separator "." confirmed. edwin.vega admin
+re-seeded post-0018 reset.
+
 ## Next step
-VERIFY-UI then SHIP. Track B is net-new UX (design was skipped) → /dh:verify-ui the new screens
-(Calculadora `%`, Aprende `?`, sound settings in Perfil, gallery/cover in FechaDetail, Seasons) in all
-3 themes before ship. Then ship as STACKED PRs: Track A (PR #2) then Track B (PR #3) off main. Local
-Supabase up; dev server :5173. Followups: gallery mobile-upload pass (HEIC+downscale), private bucket.
+The 2.1 + 2.1b commits are verify-ui'd but NOT code-reviewed. Options: /dh:review-loop the 2.1 batch,
+OR ship everything (Track A + B + 2.1) as stacked PRs. Local Supabase up; dev server :5173. Followups:
+profile-racha numbers, gallery mobile-upload (HEIC+downscale), private bucket, wire máx-recompras/bonus-stack.
