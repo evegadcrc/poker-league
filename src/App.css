@@ -2301,7 +2301,18 @@
   color: var(--ink-3) !important;
   font-feature-settings: 'tnum' 1;
 }
-/* Liga "cómo se ganan puntos" — one row per scoring component + a worked example. */
+/* Liga "cómo se ganan puntos" — the formula, then one row per component + example. */
+.scoring-formula {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--paper-2, transparent);
+  font: 700 13px 'Archivo';
+  color: var(--ink);
+  line-height: 1.5;
+  font-feature-settings: 'tnum' 1;
+}
 .scoring-list {
   list-style: none;
   margin: 0 0 10px;
