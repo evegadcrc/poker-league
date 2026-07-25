@@ -1460,6 +1460,25 @@
   background: var(--ink);
   color: var(--paper);
 }
+/* Pending-count pill on the "Solicitudes" tab (access-request queue). */
+.subnav button .tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  margin-left: 5px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--oxblood);
+  color: var(--on-oxblood);
+  font: 800 9px 'Archivo';
+  vertical-align: middle;
+}
+.subnav button.on .tab-count {
+  background: var(--paper);
+  color: var(--ink);
+}
 
 .apanel {
   display: none;

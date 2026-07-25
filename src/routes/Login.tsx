@@ -4,15 +4,20 @@ import logo from '@/assets/poker-friends.jpg'
 import { useAuth } from '@/lib/auth'
 import { THEME_ICONS, THEME_LABELS, useTheme } from '@/lib/theme'
 
-type Status = 'idle' | 'sending' | 'sent' | 'error'
+type Status = 'idle' | 'sending' | 'sent' | 'error' | 'pending' | 'rejected'
 
 /**
  * Reproduces the prototype's #screen-login: emblem hero, POKER FRIENDS mark,
  * email input, "Enviar enlace" (magic link) → signInWithOtp. Also the terminal
  * state for an authenticated-but-unbound session (email not pre-created).
+ *
+ * First-login gate (migration 0022): submit calls request_access FIRST. A KNOWN
+ * member email sends the link as before; an UNKNOWN email is queued as a pending
+ * admin request ('pending') and no link is sent; a previously rejected email
+ * gets a neutral message ('rejected').
  */
 export default function Login() {
-  const { session, player, loading, bindError, signInWithOtp, signOut } = useAuth()
+  const { session, player, loading, bindError, requestAccess, signInWithOtp, signOut } = useAuth()
   const { theme, cycleTheme } = useTheme()
   const [email, setEmail] = useState('')
   const [status, setStatus] = useState<Status>('idle')
@@ -21,6 +26,7 @@ export default function Login() {
   // Already signed in AND bound → nothing to do here; go home.
   if (session && player) return <Navigate to="/" replace />
 
+  // Send the magic link (member path + the resend affordance).
   async function sendLink(target: string) {
     setStatus('sending')
     setError(null)
@@ -37,7 +43,23 @@ export default function Login() {
     e.preventDefault()
     const target = email.trim()
     if (!target) return
-    await sendLink(target)
+    setStatus('sending')
+    setError(null)
+    // Gate on membership before sending any link.
+    const { result, error: reqErr } = await requestAccess(target)
+    if (reqErr) {
+      setError(reqErr)
+      setStatus('error')
+      return
+    }
+    if (result === 'member') {
+      await sendLink(target)
+    } else if (result === 'rejected') {
+      setStatus('rejected')
+    } else {
+      // 'pending' (new or already queued) — no link is sent.
+      setStatus('pending')
+    }
   }
 
   // Signed in, but the email matched no pre-created player (or an RPC error).
@@ -93,16 +115,32 @@ export default function Login() {
             aria-label="Correo electrónico"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            disabled={status === 'sending' || status === 'sent'}
+            disabled={status === 'sending' || status === 'sent' || status === 'pending'}
           />
           <button
             type="submit"
             className="btn blood full"
             style={{ marginTop: 14 }}
-            disabled={status === 'sending' || status === 'sent' || !email.trim()}
+            disabled={
+              status === 'sending' || status === 'sent' || status === 'pending' || !email.trim()
+            }
           >
             {status === 'sending' ? 'Enviando…' : 'Enviar enlace'}
           </button>
+
+          {status === 'pending' && (
+            <p className="login-note ok" role="status">
+              📨 Tu solicitud fue enviada al admin. Te avisaremos cuando puedas ingresar.
+            </p>
+          )}
+          {status === 'rejected' && (
+            <p className="login-note err" role="status">
+              No pudimos procesar tu solicitud. Hablá con el admin.{' '}
+              <button type="button" className="link-btn" onClick={() => setStatus('idle')}>
+                Reintentar
+              </button>
+            </p>
+          )}
 
           {status === 'sent' && (
             <p className="login-note ok">

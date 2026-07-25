@@ -10,6 +10,7 @@ import {
 } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
+import { requestAccess as requestAccessRpc, type AccessResult } from '@/lib/access'
 import type { Database } from '@/lib/database.types'
 
 export type PlayerRow = Database['public']['Tables']['player']['Row']
@@ -31,6 +32,12 @@ type AuthContextValue = {
   /** True while the initial session resolves or a bind RPC is in flight. */
   loading: boolean
   bindError: BindError
+  /**
+   * First-login membership gate (migration 0022). 'member' → the caller sends
+   * the magic link; 'pending'/'rejected' → the caller shows the matching message
+   * and sends NO link. Wraps the anon-callable request_access RPC.
+   */
+  requestAccess: (email: string) => Promise<{ result: AccessResult | null; error: string | null }>
   signInWithOtp: (email: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
   /**
@@ -115,6 +122,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [userId])
 
+  const requestAccess = useCallback((email: string) => requestAccessRpc(email), [])
+
   const signInWithOtp = useCallback(async (email: string) => {
     const { error } = await supabase.auth.signInWithOtp({
       email,
@@ -138,11 +147,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       player,
       loading,
       bindError,
+      requestAccess,
       signInWithOtp,
       signOut,
       updatePlayer,
     }),
-    [session, player, loading, bindError, signInWithOtp, signOut, updatePlayer],
+    [session, player, loading, bindError, requestAccess, signInWithOtp, signOut, updatePlayer],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

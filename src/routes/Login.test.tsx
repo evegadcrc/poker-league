@@ -14,6 +14,10 @@ const h = vi.hoisted(() => ({
   player: null as unknown,
   loading: false,
   bindError: null as 'no-player' | 'other' | null,
+  // request_access gate result: default 'member' so the legacy send/error tests
+  // exercise the magic-link path unchanged.
+  requestResult: { result: 'member' as 'member' | 'pending' | 'rejected' | null, error: null as string | null },
+  requestCalls: [] as string[],
   signInResult: { error: null as string | null },
   signInCalls: [] as string[],
   signOut: vi.fn(),
@@ -25,6 +29,10 @@ vi.mock('@/lib/auth', () => ({
     player: h.player,
     loading: h.loading,
     bindError: h.bindError,
+    requestAccess: (email: string) => {
+      h.requestCalls.push(email)
+      return Promise.resolve(h.requestResult)
+    },
     signInWithOtp: (email: string) => {
       h.signInCalls.push(email)
       return Promise.resolve(h.signInResult)
@@ -48,6 +56,8 @@ beforeEach(() => {
   h.player = null
   h.loading = false
   h.bindError = null
+  h.requestResult = { result: 'member', error: null }
+  h.requestCalls = []
   h.signInResult = { error: null }
   h.signInCalls = []
   h.signOut = vi.fn()
@@ -101,6 +111,49 @@ describe('Login — magic link', () => {
     expect(document.querySelector('.login-note.err')).toBeNull()
     expect(screen.getByLabelText('Correo electrónico')).not.toBeDisabled()
     expect(screen.getByRole('button', { name: 'Enviar enlace' })).toBeInTheDocument()
+  })
+
+  it('member: request_access→member sends the magic link (link path unchanged)', async () => {
+    const user = userEvent.setup()
+    renderLogin()
+
+    await user.type(screen.getByLabelText('Correo electrónico'), 'socio@test.com')
+    await user.click(screen.getByRole('button', { name: 'Enviar enlace' }))
+
+    // Gate is consulted first, then the OTP link is dispatched to the member.
+    await waitFor(() => expect(h.requestCalls).toEqual(['socio@test.com']))
+    expect(h.signInCalls).toEqual(['socio@test.com'])
+    await waitFor(() => {
+      expect(document.querySelector('.login-note.ok')?.textContent).toContain(
+        'Enlace enviado a socio@test.com',
+      )
+    })
+  })
+
+  it('pending: an unknown email shows the "solicitud enviada" message and sends NO link', async () => {
+    h.requestResult = { result: 'pending', error: null }
+    const user = userEvent.setup()
+    renderLogin()
+
+    await user.type(screen.getByLabelText('Correo electrónico'), 'desconocido@test.com')
+    await user.click(screen.getByRole('button', { name: 'Enviar enlace' }))
+
+    await waitFor(() => expect(h.requestCalls).toEqual(['desconocido@test.com']))
+    expect(await screen.findByText(/Tu solicitud fue enviada al admin/i)).toBeInTheDocument()
+    // Crucially, no magic link is sent for a pending request.
+    expect(h.signInCalls).toEqual([])
+  })
+
+  it('rejected: a rejected email shows a neutral message and sends NO link', async () => {
+    h.requestResult = { result: 'rejected', error: null }
+    const user = userEvent.setup()
+    renderLogin()
+
+    await user.type(screen.getByLabelText('Correo electrónico'), 'rechazado@test.com')
+    await user.click(screen.getByRole('button', { name: 'Enviar enlace' }))
+
+    expect(await screen.findByText(/No pudimos procesar tu solicitud/i)).toBeInTheDocument()
+    expect(h.signInCalls).toEqual([])
   })
 
   it('unbound (no-player): a session with no league player shows the "pedile al admin" message + sign out', () => {

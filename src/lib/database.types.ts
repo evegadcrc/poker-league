@@ -311,6 +311,44 @@ export type Database = {
         }
         Relationships: []
       }
+      signup_request: {
+        Row: {
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          email: string
+          id: string
+          name: string | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          email: string
+          id?: string
+          name?: string | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          email?: string
+          id?: string
+          name?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signup_request_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "player"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tournament: {
         Row: {
           ante_enabled: boolean
@@ -498,6 +536,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      approve_request: { Args: { p_id: string }; Returns: string }
       auth_is_admin: { Args: never; Returns: boolean }
       auth_player_id: { Args: never; Returns: string }
       cancel_rsvp: {
@@ -947,6 +986,8 @@ export type Database = {
         Args: { p_tournament_id: string }
         Returns: number
       }
+      reject_request: { Args: { p_id: string }; Returns: undefined }
+      request_access: { Args: { p_email: string }; Returns: string }
       rsvp: {
         Args: { p_choice: string; p_tournament_id: string }
         Returns: {

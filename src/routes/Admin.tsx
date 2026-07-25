@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRole } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
+import {
+  approveRequest,
+  fetchPendingRequests,
+  rejectRequest,
+  sendApprovalLink,
+  type SignupRequest,
+} from '@/lib/access'
 import { deriveLiveSignal, useLiveEventCues } from '@/lib/notify'
 import Avatar from '@/components/Avatar'
 import Sheet from '@/components/Sheet'
@@ -43,7 +50,7 @@ import {
   type Prize,
 } from '@/lib/live'
 
-type AdminTab = 'consola' | 'crear' | 'jugadores' | 'liga'
+type AdminTab = 'consola' | 'crear' | 'jugadores' | 'solicitudes' | 'liga'
 
 // ---------------------------------------------------------------------------
 // Admin console (slice 12). Sub-nav: Consola (the live-game control surface,
@@ -53,6 +60,22 @@ type AdminTab = 'consola' | 'crear' | 'jugadores' | 'liga'
 // ---------------------------------------------------------------------------
 export default function Admin() {
   const [tab, setTab] = useState<AdminTab>('consola')
+  // Pending access requests power both the "Solicitudes" panel and its tab badge,
+  // so the queue is loaded here and shared down. loadPending refreshes after any
+  // approve/reject so the badge stays in sync.
+  const [pending, setPending] = useState<SignupRequest[]>([])
+  const [pendingLoading, setPendingLoading] = useState(true)
+
+  const loadPending = useCallback(async () => {
+    const { data } = await fetchPendingRequests()
+    setPending(data)
+    setPendingLoading(false)
+  }, [])
+
+  useEffect(() => {
+    void loadPending()
+  }, [loadPending])
+
   return (
     <>
       <div className="section-head">
@@ -93,6 +116,20 @@ export default function Admin() {
         <button
           type="button"
           role="tab"
+          aria-selected={tab === 'solicitudes'}
+          className={tab === 'solicitudes' ? 'on' : ''}
+          onClick={() => setTab('solicitudes')}
+        >
+          Solicitudes
+          {pending.length > 0 && (
+            <span className="tab-count" data-testid="requests-badge">
+              {pending.length}
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          role="tab"
           aria-selected={tab === 'liga'}
           className={tab === 'liga' ? 'on' : ''}
           onClick={() => setTab('liga')}
@@ -109,6 +146,11 @@ export default function Admin() {
       </div>
       <div className={`apanel${tab === 'jugadores' ? ' on' : ''}`}>
         {tab === 'jugadores' && <AddPlayerPanel />}
+      </div>
+      <div className={`apanel${tab === 'solicitudes' ? ' on' : ''}`}>
+        {tab === 'solicitudes' && (
+          <RequestsPanel requests={pending} loading={pendingLoading} onReload={loadPending} />
+        )}
       </div>
       <div className={`apanel${tab === 'liga' ? ' on' : ''}`}>
         {tab === 'liga' && <LeagueSettings />}
@@ -201,6 +243,138 @@ function AddPlayerPanel() {
           {busy ? 'Agregando…' : 'Agregar jugador'}
         </button>
       </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Solicitudes (Phase 3, migration 0022). The pending access-request queue: a
+// first-time login with an unknown email lands here. Aprobar → approve_request
+// (creates the player) → sendApprovalLink (magic link); Rechazar → reject_request.
+// The list + count are owned by Admin() so the tab badge stays in sync; onReload
+// refetches after each decision.
+// ---------------------------------------------------------------------------
+function formatRequestedAt(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleString('es-CR', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function RequestsPanel({
+  requests,
+  loading,
+  onReload,
+}: {
+  requests: SignupRequest[]
+  loading: boolean
+  onReload: () => Promise<void>
+}) {
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [toast, setToast] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const approve = async (r: SignupRequest) => {
+    setBusyId(r.id)
+    setToast(null)
+    setError(null)
+    const { email, error: err } = await approveRequest(r.id)
+    if (err) {
+      setError('No se pudo aprobar la solicitud. Reintentá.')
+      setBusyId(null)
+      return
+    }
+    // Approval created the member; now dispatch the magic link to that email.
+    if (email) {
+      const { error: linkErr } = await sendApprovalLink(email)
+      setToast(
+        linkErr
+          ? `✓ ${email} aprobado. No se pudo enviar el enlace — puede reintentar desde el login.`
+          : `✓ ${email} aprobado · enlace enviado`,
+      )
+    } else {
+      setToast('✓ Solicitud aprobada')
+    }
+    setBusyId(null)
+    await onReload()
+  }
+
+  const reject = async (r: SignupRequest) => {
+    setBusyId(r.id)
+    setToast(null)
+    setError(null)
+    const { error: err } = await rejectRequest(r.id)
+    if (err) {
+      setError('No se pudo rechazar la solicitud. Reintentá.')
+      setBusyId(null)
+      return
+    }
+    setToast('Solicitud rechazada')
+    setBusyId(null)
+    await onReload()
+  }
+
+  return (
+    <div data-testid="requests-panel">
+      <div className="field" style={{ paddingBottom: 2 }}>
+        <label>Solicitudes de acceso</label>
+        <div className="hintline">
+          Amigos que intentaron entrar con un correo que aún no está en la liga. Aprobá para
+          crearles el jugador y enviarles el enlace mágico, o rechazá.
+        </div>
+      </div>
+
+      {error && (
+        <div className="fd-note" role="alert" data-testid="requests-error" style={{ color: 'var(--oxblood)' }}>
+          {error}
+        </div>
+      )}
+      {toast && (
+        <div className="fd-note" role="status" data-testid="requests-toast">
+          {toast}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="fd-note">Cargando solicitudes…</div>
+      ) : requests.length === 0 ? (
+        <div className="fd-note" data-testid="requests-empty">
+          No hay solicitudes pendientes.
+        </div>
+      ) : (
+        <div className="plist" data-testid="requests-list">
+          {requests.map((r) => (
+            <div className="prow" key={r.id} data-testid="request-row">
+              <div className="pinfo">
+                <b>{r.email}</b>
+                <div className="sub">{formatRequestedAt(r.created_at)}</div>
+              </div>
+              <div className="prow-actions">
+                <button
+                  type="button"
+                  className="btn sm blood"
+                  disabled={busyId === r.id}
+                  onClick={() => void approve(r)}
+                >
+                  Aprobar
+                </button>
+                <button
+                  type="button"
+                  className="btn sm ghost"
+                  disabled={busyId === r.id}
+                  onClick={() => void reject(r)}
+                >
+                  Rechazar
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
