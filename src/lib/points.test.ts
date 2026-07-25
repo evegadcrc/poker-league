@@ -53,6 +53,9 @@ describe.skipIf(!canRun)('points engine + leaderboard (slice 5, local integratio
       name: `PtsTest ${RUN}-${start + i}`,
       email: `pts-${RUN}-${start + i}@test.local`,
       is_admin: false,
+      // auth_user_id set → "logged in", so the player shows on the leaderboard
+      // roster (mig 0027 lists only members with auth_user_id bound).
+      auth_user_id: crypto.randomUUID(),
     }))
     const { data, error } = await admin.from('player').insert(rows).select('id')
     if (error) throw error

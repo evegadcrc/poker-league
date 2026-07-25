@@ -245,6 +245,23 @@ describe('FechaDetail — admin cancel/delete + PRÓXIMA buy-in + calendar trigg
     expect(buyin).toHaveTextContent('₡20.000')
   })
 
+  it('admin check-in button fires its own handler WITHOUT opening the stats popup', async () => {
+    const user = userEvent.setup()
+    setTournament({ status: 'live' })
+    setMyEntry('confirmed') // isAdmin + live + confirmed → the "Registrar" button
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    await user.click(screen.getByRole('button', { name: 'Registrar' }))
+
+    // The admin_check_in RPC fired for this entry…
+    expect(h.rpcCalls).toContainEqual(['admin_check_in', { p_entry_id: 'e-me' }])
+    // …and the row's stats popup did NOT open (no player_profile fetch, no sheet).
+    expect(h.rpcCalls.some(([n]) => n === 'player_profile')).toBe(false)
+    expect(screen.queryByTestId('ps-stats')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('ps-loading')).not.toBeInTheDocument()
+  })
+
   it('the date-edit trigger is a calendar icon button with the aria-label', async () => {
     renderDetail()
     await screen.findByRole('heading', { name: 'Fecha 9' })

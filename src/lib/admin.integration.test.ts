@@ -94,9 +94,13 @@ describe.skipIf(!canRun)('admin console RPCs (slice 12, local integration)', () 
 
   async function mkPlayer() {
     const email = `adm-${RUN}-${crypto.randomUUID().slice(0, 8)}@test.local`
+    // auth_user_id is set so the player counts as "logged in" — the leaderboard
+    // roster (mig 0027) lists only members with auth_user_id bound. Members who
+    // play a fecha have, by construction, logged in; a random UUID stands in for
+    // that bind (auth_user_id is unique but has no FK to auth.users).
     const { data, error } = await admin
       .from('player')
-      .insert({ name: `ADM ${RUN}`, email })
+      .insert({ name: `ADM ${RUN}`, email, auth_user_id: crypto.randomUUID() })
       .select('id')
       .single()
     if (error) throw error

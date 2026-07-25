@@ -5,6 +5,8 @@ import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 import { useLoadable } from '@/lib/useLoadable'
 import Avatar from '@/components/Avatar'
+import AvatarLightbox from '@/components/AvatarLightbox'
+import PlayerStatsSheet from '@/components/PlayerStatsSheet'
 import Galeria, { galleryUrl } from '@/components/Galeria'
 import PrizeList from '@/components/PrizeList'
 import Sheet from '@/components/Sheet'
@@ -863,6 +865,7 @@ function PlayerAttendanceRow({
 }) {
   const pill = statusPill(entry.status)
   const name = entry.player?.name ?? 'Jugador'
+  const avatarUrl = entry.player?.avatar_url ?? null
   // On a COMPLETED fecha, finishers and no-shows swap their CAMPEÓN / FUERA /
   // no-show status badge for their finishing PLACE + the POINTS they earned that
   // fecha (entry.points_earned = the fn_tournament_points engine value).
@@ -878,31 +881,91 @@ function PlayerAttendanceRow({
           madeFinalTable: entry.made_final_table,
         })
       : null
+
+  // Two tap targets (parity with the Tabla row): the avatar opens a full-screen
+  // photo lightbox, the rest of the row opens the season-stats popup. The avatar
+  // is a nested `<button>` whose click/keydown stopPropagation so it never also
+  // triggers the row's popup; the admin "Registrar" button does the same.
+  const [lightboxOpen, setLightboxOpen] = useState(false)
+  const [statsOpen, setStatsOpen] = useState(false)
+
   return (
-    <div className="prow" data-testid="prow">
-      <Avatar name={name} url={entry.player?.avatar_url} size={36} />
-      <div className="pinfo">
-        <b>
-          {name}
-          {isMe ? ' · tú' : ''}
-        </b>
-        {!result && <div className="sub">{noteFor(entry)}</div>}
-        {breakdown && <PointsBreakdownLine breakdown={breakdown} position={entry.final_position!} />}
-      </div>
-      {canAdminCheckIn ? (
+    <>
+      <div
+        className="prow"
+        data-testid="prow"
+        role="button"
+        tabIndex={0}
+        aria-label={`Ver perfil de ${name}`}
+        onClick={() => setStatsOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            setStatsOpen(true)
+          }
+        }}
+      >
         <button
           type="button"
-          className="btn sm blood admin-checkin"
-          onClick={() => onAdminCheckIn(entry.id)}
+          className="avatar-btn"
+          aria-label={`Ver foto de ${name}`}
+          onClick={(e) => {
+            // Keep the row's stats popup from also firing.
+            e.stopPropagation()
+            setLightboxOpen(true)
+          }}
+          onKeyDown={(e) => {
+            // The button activates on Enter/Space natively; stop the keydown so
+            // the row's Enter/Space handler doesn't ALSO open the stats popup.
+            if (e.key === 'Enter' || e.key === ' ') e.stopPropagation()
+          }}
         >
-          Registrar
+          <Avatar name={name} url={avatarUrl} size={36} />
         </button>
-      ) : result ? (
-        <FechaResult result={result} />
-      ) : (
-        <span className={`status ${pill.cls}`}>{pill.label}</span>
+        <div className="pinfo">
+          <b>
+            {name}
+            {isMe ? ' · tú' : ''}
+          </b>
+          {!result && <div className="sub">{noteFor(entry)}</div>}
+          {breakdown && <PointsBreakdownLine breakdown={breakdown} position={entry.final_position!} />}
+        </div>
+        {canAdminCheckIn ? (
+          <button
+            type="button"
+            className="btn sm blood admin-checkin"
+            onClick={(e) => {
+              // Don't let the admin action also open the stats popup.
+              e.stopPropagation()
+              onAdminCheckIn(entry.id)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') e.stopPropagation()
+            }}
+          >
+            Registrar
+          </button>
+        ) : result ? (
+          <FechaResult result={result} />
+        ) : (
+          <span className={`status ${pill.cls}`}>{pill.label}</span>
+        )}
+      </div>
+
+      {lightboxOpen && (
+        <AvatarLightbox name={name} url={avatarUrl} onClose={() => setLightboxOpen(false)} />
       )}
-    </div>
+
+      {statsOpen && (
+        <PlayerStatsSheet
+          playerId={entry.player_id}
+          playerName={name}
+          form={[]}
+          formPositions={[]}
+          onClose={() => setStatsOpen(false)}
+        />
+      )}
+    </>
   )
 }
 
