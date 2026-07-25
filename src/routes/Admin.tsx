@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRole } from '@/lib/auth'
+import { useAuth, useRole } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import {
   approveRequest,
@@ -145,7 +145,7 @@ export default function Admin() {
         {tab === 'crear' && <CreateFecha />}
       </div>
       <div className={`apanel${tab === 'jugadores' ? ' on' : ''}`}>
-        {tab === 'jugadores' && <AddPlayerPanel />}
+        {tab === 'jugadores' && <PlayersPanel />}
       </div>
       <div className={`apanel${tab === 'solicitudes' ? ' on' : ''}`}>
         {tab === 'solicitudes' && (
@@ -160,12 +160,163 @@ export default function Admin() {
 }
 
 // ---------------------------------------------------------------------------
-// Agregar jugador (Phase 3). Whitelists a league member: name + email → the
-// admin-only create_player RPC (mig 0012). This is how the admin registers a
-// friend's email so they can log in via magic link. Duplicate-email and other
-// errors are surfaced verbatim.
+// Jugadores tab (Phase 3). ALWAYS shows the full league roster (name + email +
+// Admin/Invitado/Bloqueado tags) plus the Agregar-jugador form. Each non-admin,
+// non-self, non-guest row carries a Bloquear/Desbloquear toggle
+// (set_player_blocked RPC, mig 0023). Roster is read directly from `player`
+// (the 0001 "read player" RLS lets an authenticated admin SELECT it) and
+// refreshed after an add or a block/unblock.
 // ---------------------------------------------------------------------------
-function AddPlayerPanel() {
+type RosterPlayer = {
+  id: string
+  name: string
+  email: string
+  is_admin: boolean
+  is_guest: boolean
+  blocked: boolean
+}
+
+function PlayersPanel() {
+  const { player } = useAuth()
+  const [players, setPlayers] = useState<RosterPlayer[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
+
+  const loadRoster = useCallback(async () => {
+    setLoading(true)
+    const { data, error: err } = await supabase
+      .from('player')
+      .select('id, name, email, is_admin, is_guest, blocked')
+      .order('name', { ascending: true })
+    setLoading(false)
+    if (err) {
+      setError('No se pudo cargar la lista de jugadores.')
+      return
+    }
+    setError(null)
+    setPlayers((data ?? []) as RosterPlayer[])
+  }, [])
+
+  useEffect(() => {
+    void loadRoster()
+  }, [loadRoster])
+
+  const toggleBlock = async (p: RosterPlayer) => {
+    // Confirm only when BLOCKING (locking someone out); unblocking is safe.
+    if (!p.blocked) {
+      const ok = window.confirm(
+        `¿Bloquear a ${p.name}? No podrá iniciar sesión hasta que lo desbloqueés.`,
+      )
+      if (!ok) return
+    }
+    setBusyId(p.id)
+    const { error: err } = await supabase.rpc('set_player_blocked', {
+      p_player_id: p.id,
+      p_blocked: !p.blocked,
+    })
+    setBusyId(null)
+    if (err) {
+      setError('No se pudo actualizar el estado del jugador. Reintentá.')
+      return
+    }
+    setError(null)
+    await loadRoster()
+  }
+
+  return (
+    <div data-testid="players-panel">
+      <AddPlayerPanel onAdded={loadRoster} />
+
+      <div className="rule faint" />
+
+      <div className="section-head" style={{ paddingBottom: 6 }}>
+        <div>
+          <span className="overline">Jugadores de la liga</span>
+        </div>
+      </div>
+
+      {error && (
+        <div className="fd-note" role="alert" data-testid="roster-error" style={{ color: 'var(--oxblood)' }}>
+          {error}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="fd-note">Cargando jugadores…</div>
+      ) : players.length === 0 ? (
+        <div className="fd-note" data-testid="players-empty">
+          No hay jugadores todavía.
+        </div>
+      ) : (
+        <div className="plist" data-testid="players-roster">
+          {players.map((p) => (
+            <RosterRow
+              key={p.id}
+              player={p}
+              isSelf={p.id === player?.id}
+              busy={busyId === p.id}
+              onToggle={() => void toggleBlock(p)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function RosterRow({
+  player: p,
+  isSelf,
+  busy,
+  onToggle,
+}: {
+  player: RosterPlayer
+  isSelf: boolean
+  busy: boolean
+  onToggle: () => void
+}) {
+  // Admins are peers and you can't block yourself → no toggle. Guests are
+  // throwaway per-fecha players that never log in → blocking is meaningless.
+  const canBlock = !p.is_admin && !isSelf && !p.is_guest
+  return (
+    <div className="prow" data-testid="roster-row">
+      <Avatar name={p.name} size={36} />
+      <div className="pinfo">
+        <b>{p.name}</b>
+        <div className="sub">
+          {!p.is_guest && <span className="roster-email">{p.email}</span>}
+          {p.is_admin && <span className="mini-badge" data-testid="admin-tag">Admin</span>}
+          {p.is_guest && (
+            <span className="guest-badge" data-testid="invitado-tag">
+              Invitado
+            </span>
+          )}
+          {p.blocked && (
+            <span className="block-badge" data-testid="blocked-tag">
+              Bloqueado
+            </span>
+          )}
+        </div>
+      </div>
+      {canBlock && (
+        <div className="prow-actions">
+          <button
+            type="button"
+            className={`btn sm ${p.blocked ? 'ghost' : 'blood'}`}
+            data-testid="block-toggle"
+            disabled={busy}
+            onClick={onToggle}
+          >
+            {p.blocked ? 'Desbloquear' : 'Bloquear'}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AddPlayerPanel({ onAdded }: { onAdded?: () => void }) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [busy, setBusy] = useState(false)
@@ -196,6 +347,7 @@ function AddPlayerPanel() {
     setOk(`✓ ${rows[0]?.name ?? name.trim()} agregado`)
     setName('')
     setEmail('')
+    onAdded?.()
   }
 
   return (

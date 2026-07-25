@@ -228,6 +228,7 @@ export type Database = {
         Row: {
           auth_user_id: string | null
           avatar_url: string | null
+          blocked: boolean
           created_at: string
           email: string
           id: string
@@ -238,6 +239,7 @@ export type Database = {
         Insert: {
           auth_user_id?: string | null
           avatar_url?: string | null
+          blocked?: boolean
           created_at?: string
           email: string
           id?: string
@@ -248,6 +250,7 @@ export type Database = {
         Update: {
           auth_user_id?: string | null
           avatar_url?: string | null
+          blocked?: boolean
           created_at?: string
           email?: string
           id?: string
@@ -604,6 +607,7 @@ export type Database = {
         Returns: {
           auth_user_id: string | null
           avatar_url: string | null
+          blocked: boolean
           created_at: string
           email: string
           id: string
@@ -757,6 +761,7 @@ export type Database = {
         Returns: {
           auth_user_id: string | null
           avatar_url: string | null
+          blocked: boolean
           created_at: string
           email: string
           id: string
@@ -1048,6 +1053,10 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      set_player_blocked: {
+        Args: { p_blocked: boolean; p_player_id: string }
+        Returns: undefined
+      }
       set_prizes: { Args: { p_tournament_id: string }; Returns: Json }
       set_prizes_manual: {
         Args: { p_amounts: Json; p_tournament_id: string }
@@ -1088,6 +1097,7 @@ export type Database = {
         Returns: {
           auth_user_id: string | null
           avatar_url: string | null
+          blocked: boolean
           created_at: string
           email: string
           id: string

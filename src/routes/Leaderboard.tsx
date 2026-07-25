@@ -204,6 +204,10 @@ function LigaScoring({ config }: { config: LeagueConfig }) {
       {open && (
         <div className="calc-rankings-body" id="liga-howto-body">
           <div className="fd-info-block">
+            <p className="scoring-formula">
+              Puntos = (N − P) × {config.multiplier} + Asistencia + Mesa Final + Bono Top 4 −
+              Penalización
+            </p>
             <ul className="scoring-list">
               <li>
                 <span className="sc-k">Base</span>
