@@ -167,7 +167,9 @@ declare
   v_player_id uuid;
   v_stack     int;
 begin
-  if not (public.auth_is_admin() or auth.role() = 'service_role') then
+  -- coalesce guards the NULL-role fail-open: `auth.role() = 'service_role'` is
+  -- NULL when the JWT lacks a role claim, and `if not (… or NULL)` skips the raise.
+  if not (public.auth_is_admin() or coalesce(auth.role(), '') = 'service_role') then
     raise exception 'invitado: solo un admin puede agregar invitados';
   end if;
 

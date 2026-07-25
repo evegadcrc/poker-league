@@ -51,10 +51,15 @@ alter table public.signup_request enable row level security;
 -- ---------------------------------------------------------------------------
 revoke all on table public.signup_request from anon;
 
+-- drop-if-exists guards (Postgres has no CREATE POLICY IF NOT EXISTS): without
+-- them, a mid-file failure after the policies are created wedges a re-`db push`
+-- with "policy already exists". Matches the 0016 / 0017 idiom.
+drop policy if exists "admin read signup_request" on public.signup_request;
 create policy "admin read signup_request" on public.signup_request
   for select to authenticated
   using (public.auth_is_admin());
 
+drop policy if exists "admin update signup_request" on public.signup_request;
 create policy "admin update signup_request" on public.signup_request
   for update to authenticated
   using (public.auth_is_admin())
@@ -128,7 +133,9 @@ declare
   v_email text;
   v_name  text;
 begin
-  if not (public.auth_is_admin() or auth.role() = 'service_role') then
+  -- coalesce guards the NULL-role fail-open: `auth.role() = 'service_role'` is
+  -- NULL when the JWT lacks a role claim, and `if not (… or NULL)` skips the raise.
+  if not (public.auth_is_admin() or coalesce(auth.role(), '') = 'service_role') then
     raise exception 'solicitud: solo un admin puede aprobar solicitudes';
   end if;
 
@@ -171,7 +178,9 @@ security definer
 set search_path = public, pg_temp
 as $$
 begin
-  if not (public.auth_is_admin() or auth.role() = 'service_role') then
+  -- coalesce guards the NULL-role fail-open: `auth.role() = 'service_role'` is
+  -- NULL when the JWT lacks a role claim, and `if not (… or NULL)` skips the raise.
+  if not (public.auth_is_admin() or coalesce(auth.role(), '') = 'service_role') then
     raise exception 'solicitud: solo un admin puede rechazar solicitudes';
   end if;
 

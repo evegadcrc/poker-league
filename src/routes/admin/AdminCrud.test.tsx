@@ -25,6 +25,7 @@ vi.mock('@/lib/supabase', () => ({
       const b: Record<string, unknown> = {
         select: () => b,
         eq: () => b,
+        is: () => b, // `.is('cancelled_at', null)` on the console query — passthrough
         in: () => b,
         order: () => b,
         limit: () => b,

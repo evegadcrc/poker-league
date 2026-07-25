@@ -180,6 +180,24 @@ $$;
 -- ---------------------------------------------------------------------------
 -- Grants. CREATE OR REPLACE preserves existing privileges; re-asserted here to
 -- mirror 0003 / 0009 — fn_tournament_points WRITES scores, so service_role only.
+--
+-- SECURITY: `revoke ... from public` alone does NOT strip the implicit
+-- anon/authenticated grants Supabase attaches at first CREATE (0003) and that
+-- CREATE OR REPLACE preserves — so anon/authenticated remained EXECUTE-able and
+-- could clobber admin point overrides. fn_tournament_points is an INTERNAL writer
+-- (called only by complete_tournament and friends, which run as their own
+-- definer), so revoke anon+authenticated explicitly. service_role only.
 -- ---------------------------------------------------------------------------
-revoke all on function public.fn_tournament_points(uuid) from public;
+revoke all on function public.fn_tournament_points(uuid) from public, anon, authenticated;
 grant execute on function public.fn_tournament_points(uuid) to service_role;
+
+-- ---------------------------------------------------------------------------
+-- Forward-fix for 0005: recompute_final_table_size (SECURITY DEFINER, writes
+-- tournament.final_table_size, NO internal auth guard) is the SAME class of bug —
+-- its 0005 grant used `revoke ... from public` only, so anon/authenticated kept
+-- their implicit EXECUTE and could force-recompute the final-table size. It is an
+-- INTERNAL helper (called only by open_tournament / check_in / complete_tournament
+-- as their own definer), so strip anon+authenticated here (0005 is shipped — cannot
+-- edit in place). service_role grant from 0005 is retained.
+-- ---------------------------------------------------------------------------
+revoke execute on function public.recompute_final_table_size(uuid) from public, anon, authenticated;

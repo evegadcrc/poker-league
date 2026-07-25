@@ -30,12 +30,28 @@ vi.mock('@/lib/auth', () => ({
 vi.mock('@/lib/supabase', () => ({
   supabase: {
     from: (table: string) => {
+      // Record `.is(col, null)` filters so maybeSingle can honor them — this is
+      // how the cancelled-fecha exclusion (`.is('cancelled_at', null)`) is tested.
+      const isFilters: Array<[string, unknown]> = []
       const b: Record<string, unknown> = {
         select: () => b,
         eq: () => b,
+        is: (col: string, val: unknown) => {
+          isFilters.push([col, val])
+          return b
+        },
         order: () => b,
         limit: () => b,
-        maybeSingle: () => Promise.resolve(h.single[table] ?? { data: null, error: null }),
+        maybeSingle: () => {
+          const res = h.single[table] ?? { data: null, error: null }
+          const row = res.data as Record<string, unknown> | null
+          if (row) {
+            for (const [col, val] of isFilters) {
+              if (val === null && row[col] != null) return Promise.resolve({ data: null, error: res.error })
+            }
+          }
+          return Promise.resolve(res)
+        },
         then: (resolve: (v: unknown) => void) =>
           resolve(h.list[table] ?? { data: [], error: null }),
       }
@@ -77,6 +93,7 @@ type TournamentOverrides = Partial<{
   paused_remaining_seconds: number | null
   prizes: unknown
   payout_distribution: unknown
+  cancelled_at: string | null
 }>
 
 const LEVELS = [
@@ -300,6 +317,15 @@ describe('Live — empty / admin', () => {
     h.single.tournament = { data: null, error: null }
     renderLive()
     expect(await screen.findByText(/No hay ningún torneo en vivo/i)).toBeInTheDocument()
+  })
+
+  it('excludes a soft-cancelled live fecha (empty state, not a running game)', async () => {
+    // status is still 'live' but cancelled_at is set → the `.is('cancelled_at', null)`
+    // filter must drop it so the En Vivo screen never renders a cancelled game.
+    setTournament({ cancelled_at: '2026-07-25T00:00:00Z' })
+    renderLive()
+    expect(await screen.findByText(/No hay ningún torneo en vivo/i)).toBeInTheDocument()
+    expect(screen.queryByTestId('timer')).not.toBeInTheDocument()
   })
 
   it('offers the admin console link only to admins', async () => {

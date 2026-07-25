@@ -31,16 +31,32 @@ vi.mock('@/lib/auth', () => ({
 vi.mock('@/lib/supabase', () => ({
   supabase: {
     from: (table: string) => {
+      // Record `.is(col, null)` filters so maybeSingle honors them (the cancelled-
+      // fecha exclusion `.is('cancelled_at', null)` on the live console query).
+      const isFilters: Array<[string, unknown]> = []
       const b: Record<string, unknown> = {
         select: () => b,
         eq: () => b,
+        is: (col: string, val: unknown) => {
+          isFilters.push([col, val])
+          return b
+        },
         order: () => b,
         limit: () => b,
         update: (payload: unknown) => {
           h.updates.push({ table, payload })
           return b
         },
-        maybeSingle: () => Promise.resolve(h.single[table] ?? { data: null, error: null }),
+        maybeSingle: () => {
+          const res = h.single[table] ?? { data: null, error: null }
+          const row = res.data as Record<string, unknown> | null
+          if (row) {
+            for (const [col, val] of isFilters) {
+              if (val === null && row[col] != null) return Promise.resolve({ data: null, error: res.error })
+            }
+          }
+          return Promise.resolve(res)
+        },
         then: (resolve: (v: unknown) => void) => resolve(h.list[table] ?? { data: [], error: null }),
       }
       return b
@@ -140,6 +156,16 @@ beforeEach(() => {
 })
 
 describe('Admin console (slice 12)', () => {
+  it('does not load a soft-cancelled live fecha into the console (no complete path)', async () => {
+    // status still 'live' but cancelled_at set → `.is('cancelled_at', null)` drops
+    // it, so the console shows the empty state and complete_tournament is unreachable.
+    setLive()
+    ;(h.single.tournament!.data as Record<string, unknown>).cancelled_at = '2026-07-25T00:00:00Z'
+    renderAdmin()
+    expect(await screen.findByText(/No hay ninguna fecha en vivo/i)).toBeInTheDocument()
+    expect(screen.queryByTestId('clock-grid')).not.toBeInTheDocument()
+  })
+
   it('renders the live console: sub-nav, clock grid, and the player list', async () => {
     renderAdmin()
     expect(screen.getByRole('tab', { name: 'Consola' })).toHaveAttribute('aria-selected', 'true')

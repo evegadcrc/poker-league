@@ -434,6 +434,7 @@ async function fetchConsole(): Promise<State> {
     .from('tournament')
     .select(TOURNAMENT_COLUMNS)
     .eq('status', 'live')
+    .is('cancelled_at', null) // a soft-cancelled live fecha can't be run/completed
     .order('scheduled_at', { ascending: false })
     .limit(1)
     .maybeSingle()

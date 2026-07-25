@@ -657,6 +657,10 @@ function AdminFechaActions({
   onDelete: () => void
 }) {
   const canCancel = (status === 'scheduled' || status === 'live') && !cancelled
+  // Delete is only for mistakes: a scheduled fecha, or any already-cancelled one.
+  // A COMPLETED fecha holds real results + gallery, and a LIVE (uncancelled) fecha
+  // is in progress — neither may be deleted (cancel a live fecha first).
+  const canDelete = cancelled || status === 'scheduled'
   return (
     <div className="fd-admin-actions" data-testid="fd-admin-actions">
       {canCancel && (
@@ -670,15 +674,17 @@ function AdminFechaActions({
           Cancelar fecha
         </button>
       )}
-      <button
-        type="button"
-        className="btn blood sm"
-        disabled={busy}
-        onClick={onDelete}
-        data-testid="fd-delete-fecha"
-      >
-        Eliminar fecha
-      </button>
+      {canDelete && (
+        <button
+          type="button"
+          className="btn blood sm"
+          disabled={busy}
+          onClick={onDelete}
+          data-testid="fd-delete-fecha"
+        >
+          Eliminar fecha
+        </button>
+      )}
     </div>
   )
 }

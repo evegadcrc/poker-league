@@ -196,6 +196,24 @@ describe('FechaDetail — admin cancel/delete + PRÓXIMA buy-in + calendar trigg
     expect(screen.queryByTestId('fd-cancel-fecha')).not.toBeInTheDocument()
   })
 
+  it('does NOT offer Eliminar (nor Cancelar) on a COMPLETED fecha (real results + gallery)', async () => {
+    setTournament({ status: 'completed' })
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+    // The admin-actions container still renders, but delete is gated off.
+    expect(screen.queryByTestId('fd-delete-fecha')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('fd-cancel-fecha')).not.toBeInTheDocument()
+  })
+
+  it('does NOT offer Eliminar on a LIVE (uncancelled) fecha — cancel it first', async () => {
+    setTournament({ status: 'live' })
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+    // A live fecha can be cancelled but not hard-deleted while running.
+    expect(screen.queryByTestId('fd-delete-fecha')).not.toBeInTheDocument()
+    expect(screen.getByTestId('fd-cancel-fecha')).toBeInTheDocument()
+  })
+
   it('Eliminar fecha confirms, calls the delete_tournament RPC, and navigates to the fechas list', async () => {
     const user = userEvent.setup()
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)

@@ -195,6 +195,33 @@ describe.skipIf(!canRun)('RLS / authz hardening (0012, local integration)', () =
   })
 
   // ------------------------------------------------------------------------
+  // CRITICAL (Phase-3, migration 0019) — anon cannot execute the INTERNAL DEFINER
+  // WRITERS. `revoke ... from public` alone left the implicit anon/authenticated
+  // EXECUTE grants intact, so an unauthenticated caller could force score/size
+  // recomputation (clobbering admin point overrides). 0019 revokes anon+authenticated
+  // on both; only complete_tournament/open_tournament (as their own definer) call them.
+  it('rejects anon + authenticated execution of fn_tournament_points and recompute_final_table_size', async () => {
+    const anon = createClient<Database>(url, anonKey as string, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+    // A tournament id that entering the DEFINER body would raise on — so if we
+    // still see a "not found"/domain error the guard LEAKED; a permission error
+    // (or any error before the body) is the fix working. Either way error != null.
+    const anonFn = await anon.rpc('fn_tournament_points', { p_tournament_id: tournamentId })
+    expect(anonFn.error).not.toBeNull()
+    const anonSize = await anon.rpc('recompute_final_table_size', { p_tournament_id: tournamentId })
+    expect(anonSize.error).not.toBeNull()
+
+    // A signed-in NON-admin authenticated member is ALSO blocked (these are
+    // internal writers, not player-callable).
+    const { client } = await mkSignedInMember({ isAdmin: false })
+    const authFn = await client.rpc('fn_tournament_points', { p_tournament_id: tournamentId })
+    expect(authFn.error).not.toBeNull()
+    const authSize = await client.rpc('recompute_final_table_size', { p_tournament_id: tournamentId })
+    expect(authSize.error).not.toBeNull()
+  })
+
+  // ------------------------------------------------------------------------
   // REQUIRED #3 — update_own_profile updates ONLY name + avatar_url.
   it('update_own_profile changes name/avatar but never is_admin or email', async () => {
     const { client, playerId, email } = await mkSignedInMember()

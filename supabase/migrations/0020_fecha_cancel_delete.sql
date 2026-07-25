@@ -39,7 +39,9 @@ security definer
 set search_path = public, pg_temp
 as $$
 begin
-  if not (public.auth_is_admin() or auth.role() = 'service_role') then
+  -- coalesce guards the NULL-role fail-open: `auth.role() = 'service_role'` is
+  -- NULL when the JWT lacks a role claim, and `if not (… or NULL)` skips the raise.
+  if not (public.auth_is_admin() or coalesce(auth.role(), '') = 'service_role') then
     raise exception 'eliminar fecha: solo un admin puede eliminar una fecha';
   end if;
 
