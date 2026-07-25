@@ -21,11 +21,13 @@ const h = vi.hoisted(() => ({
   // When set, the channel mock invokes subscribe's status callback with it
   // (e.g. 'CHANNEL_ERROR') so the reconnect banner can be exercised.
   channelStatus: undefined as string | undefined,
+  // Bound player for useAuth (the PlayersPanel reads it to flag the "self" row).
+  authPlayer: null as { id: string; is_admin?: boolean } | null,
 }))
 
 vi.mock('@/lib/auth', () => ({
   useRole: () => ({ isAdmin: h.isAdmin }),
-  useAuth: () => ({ player: null }),
+  useAuth: () => ({ player: h.authPlayer }),
 }))
 
 vi.mock('@/lib/supabase', () => ({
@@ -152,6 +154,7 @@ beforeEach(() => {
   h.rpcCalls = []
   h.updates = []
   h.channelStatus = undefined
+  h.authPlayer = null
   setLive()
 })
 
@@ -563,6 +566,105 @@ describe('Admin — Agregar jugador (Phase 3)', () => {
     await user.click(screen.getByRole('button', { name: 'Agregar jugador' }))
 
     expect(await screen.findByTestId('add-player-error')).toHaveTextContent(/ya está registrado/i)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Phase 3 — Jugadores roster (always visible) + block/unblock toggle (mig 0023).
+// ---------------------------------------------------------------------------
+describe('Admin — Jugadores roster + block toggle (mig 0023)', () => {
+  function setRoster() {
+    h.authPlayer = { id: 'p-self', is_admin: true }
+    h.list.player = {
+      data: [
+        { id: 'p-self', name: 'Yo Admin', email: 'self@ex.com', is_admin: true, is_guest: false, blocked: false },
+        { id: 'p-nor', name: 'Normal Norm', email: 'norm@ex.com', is_admin: false, is_guest: false, blocked: false },
+        { id: 'p-blk', name: 'Bloqueado Bob', email: 'bob@ex.com', is_admin: false, is_guest: false, blocked: true },
+        { id: 'p-gst', name: 'Invitado Ivy', email: 'guest+x@local', is_admin: false, is_guest: true, blocked: false },
+      ],
+      error: null,
+    }
+  }
+
+  it('always shows the roster with name + tags alongside the add form', async () => {
+    const user = userEvent.setup()
+    setRoster()
+    renderAdmin()
+    await user.click(screen.getByRole('tab', { name: 'Jugadores' }))
+
+    // Add form + roster both present.
+    expect(await screen.findByTestId('add-player')).toBeInTheDocument()
+    const roster = await screen.findByTestId('players-roster')
+    expect(within(roster).getAllByTestId('roster-row')).toHaveLength(4)
+
+    expect(within(roster).getByText('Yo Admin')).toBeInTheDocument()
+    expect(within(roster).getByText('norm@ex.com')).toBeInTheDocument()
+    // Tags: Admin / Invitado / Bloqueado.
+    expect(within(roster).getByTestId('admin-tag')).toHaveTextContent('Admin')
+    expect(within(roster).getByTestId('invitado-tag')).toHaveTextContent('Invitado')
+    expect(within(roster).getByTestId('blocked-tag')).toHaveTextContent('Bloqueado')
+  })
+
+  it('offers a Bloquear/Desbloquear toggle only for non-admin, non-self, non-guest rows', async () => {
+    const user = userEvent.setup()
+    setRoster()
+    renderAdmin()
+    await user.click(screen.getByRole('tab', { name: 'Jugadores' }))
+    await screen.findByTestId('players-roster')
+
+    // Exactly two toggles: Normal Norm (Bloquear) + Bloqueado Bob (Desbloquear).
+    const toggles = screen.getAllByTestId('block-toggle')
+    expect(toggles).toHaveLength(2)
+    expect(screen.getByRole('button', { name: 'Bloquear' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Desbloquear' })).toBeInTheDocument()
+  })
+
+  it('confirms then calls set_player_blocked when blocking a player', async () => {
+    const user = userEvent.setup()
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    setRoster()
+    renderAdmin()
+    await user.click(screen.getByRole('tab', { name: 'Jugadores' }))
+    await screen.findByTestId('players-roster')
+
+    await user.click(screen.getByRole('button', { name: 'Bloquear' }))
+
+    expect(confirmSpy).toHaveBeenCalledTimes(1)
+    const call = h.rpcCalls.find((c) => c.name === 'set_player_blocked')
+    expect(call).toBeTruthy()
+    expect(call!.args).toMatchObject({ p_player_id: 'p-nor', p_blocked: true })
+    confirmSpy.mockRestore()
+  })
+
+  it('does not call set_player_blocked when the block confirm is cancelled', async () => {
+    const user = userEvent.setup()
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    setRoster()
+    renderAdmin()
+    await user.click(screen.getByRole('tab', { name: 'Jugadores' }))
+    await screen.findByTestId('players-roster')
+
+    await user.click(screen.getByRole('button', { name: 'Bloquear' }))
+
+    expect(confirmSpy).toHaveBeenCalledTimes(1)
+    expect(h.rpcCalls.find((c) => c.name === 'set_player_blocked')).toBeFalsy()
+    confirmSpy.mockRestore()
+  })
+
+  it('unblocks without a confirm dialog', async () => {
+    const user = userEvent.setup()
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    setRoster()
+    renderAdmin()
+    await user.click(screen.getByRole('tab', { name: 'Jugadores' }))
+    await screen.findByTestId('players-roster')
+
+    await user.click(screen.getByRole('button', { name: 'Desbloquear' }))
+
+    expect(confirmSpy).not.toHaveBeenCalled()
+    const call = h.rpcCalls.find((c) => c.name === 'set_player_blocked')
+    expect(call!.args).toMatchObject({ p_player_id: 'p-blk', p_blocked: false })
+    confirmSpy.mockRestore()
   })
 })
 

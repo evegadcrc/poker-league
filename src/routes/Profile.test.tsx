@@ -239,6 +239,53 @@ describe('Profile (Perfil)', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/no se pudo cargar tu perfil/i)
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
   })
+
+  // -- B: edit the display name via update_own_profile -----------------------
+  it('edits the display name and saves it via update_own_profile', async () => {
+    const user = userEvent.setup()
+    render(<Profile />)
+    await screen.findByTestId('prof-stats')
+
+    await user.click(screen.getByRole('button', { name: 'Editar nombre' }))
+    const input = screen.getByLabelText('Nombre') as HTMLInputElement
+    await user.clear(input)
+    await user.type(input, 'Edwin Vega')
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+
+    const call = h.rpcCalls.find((c) => c.name === 'update_own_profile')
+    expect(call).toBeTruthy()
+    expect(call!.args.p_name).toBe('Edwin Vega')
+    // Context is patched so the new name shows app-wide immediately.
+    await waitFor(() => expect(h.updatePlayer).toHaveBeenCalledWith({ name: 'Edwin Vega' }))
+  })
+
+  it('surfaces a save error and keeps the field open when update_own_profile fails', async () => {
+    h.updateResult = { data: null, error: { message: 'boom' } }
+    const user = userEvent.setup()
+    render(<Profile />)
+    await screen.findByTestId('prof-stats')
+
+    await user.click(screen.getByRole('button', { name: 'Editar nombre' }))
+    await user.type(screen.getByLabelText('Nombre'), ' X')
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/no se pudo guardar el nombre/i)
+    expect(h.updatePlayer).not.toHaveBeenCalled()
+    // Still editing (field remains).
+    expect(screen.getByLabelText('Nombre')).toBeInTheDocument()
+  })
+
+  // -- C: the redundant "Cambiar foto de perfil" text button is gone ---------
+  it('no longer renders the redundant "Cambiar foto de perfil" button, keeping the camera overlay', async () => {
+    render(<Profile />)
+    await screen.findByTestId('prof-stats')
+
+    // The text button is removed…
+    expect(screen.queryByRole('button', { name: /Cambiar foto de perfil/i })).toBeNull()
+    expect(screen.queryByText('Cambiar foto de perfil')).toBeNull()
+    // …but the camera-overlay file input still works.
+    expect(screen.getByLabelText('Subir foto de perfil')).toBeInTheDocument()
+  })
 })
 
 // The sound store (@/lib/sound) is a real module-level singleton — reset it to

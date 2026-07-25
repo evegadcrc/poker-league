@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { useLoadable } from '@/lib/useLoadable'
@@ -73,9 +73,39 @@ export default function Profile() {
   )
   const [upload, setUpload] = useState<Upload>({ status: 'idle' })
   const [avatarOverride, setAvatarOverride] = useState<string | null>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
 
-  const openPicker = useCallback(() => inputRef.current?.click(), [])
+  // Name edit (mig 0012 update_own_profile) — an inline editable field on the
+  // hero. Persists via the SAME SECURITY DEFINER RPC the avatar save uses; the
+  // avatar_url is left untouched (the RPC coalesces a null p_avatar_url).
+  const [editingName, setEditingName] = useState(false)
+  const [nameDraft, setNameDraft] = useState('')
+  const [savingName, setSavingName] = useState(false)
+  const [nameError, setNameError] = useState<string | null>(null)
+
+  const startEditName = useCallback(() => {
+    setNameError(null)
+    setNameDraft(player?.name ?? '')
+    setEditingName(true)
+  }, [player])
+
+  const saveName = useCallback(async () => {
+    const next = nameDraft.trim()
+    if (!player || next === '') return
+    if (next === player.name) {
+      setEditingName(false)
+      return
+    }
+    setSavingName(true)
+    setNameError(null)
+    const { error } = await supabase.rpc('update_own_profile', { p_name: next })
+    setSavingName(false)
+    if (error) {
+      setNameError('No se pudo guardar el nombre. Probá de nuevo.')
+      return
+    }
+    updatePlayer({ name: next })
+    setEditingName(false)
+  }, [nameDraft, player, updatePlayer])
 
   const onFile = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -137,7 +167,6 @@ export default function Profile() {
             📷
           </span>
           <input
-            ref={inputRef}
             type="file"
             accept="image/*"
             aria-label="Subir foto de perfil"
@@ -146,9 +175,54 @@ export default function Profile() {
             style={{ position: 'absolute', width: 1, height: 1, opacity: 0, overflow: 'hidden' }}
           />
         </label>
-        <div>
+        <div style={{ minWidth: 0, flex: 1 }}>
           <span className="overline">Tu perfil</span>
-          <h2>{player.name}</h2>
+          {editingName ? (
+            <div className="name-edit" data-testid="name-edit">
+              <input
+                aria-label="Nombre"
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                disabled={savingName}
+                autoFocus
+              />
+              <div className="btn-row" style={{ padding: 0, gap: 8, marginTop: 6 }}>
+                <button
+                  type="button"
+                  className="btn primary sm"
+                  disabled={savingName || nameDraft.trim() === ''}
+                  onClick={() => void saveName()}
+                >
+                  {savingName ? 'Guardando…' : 'Guardar'}
+                </button>
+                <button
+                  type="button"
+                  className="btn ghost sm"
+                  disabled={savingName}
+                  onClick={() => setEditingName(false)}
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="name-line">
+              <h2>{player.name}</h2>
+              <button
+                type="button"
+                className="link-btn name-edit-btn"
+                aria-label="Editar nombre"
+                onClick={startEditName}
+              >
+                ✎ Editar
+              </button>
+            </div>
+          )}
+          {nameError && (
+            <div className="prof-message" role="alert" style={{ padding: '4px 0' }}>
+              <p>{nameError}</p>
+            </div>
+          )}
           <div className="sub">
             {state.status === 'loading'
               ? 'Cargando…'
@@ -205,18 +279,6 @@ export default function Profile() {
               <div className="v">{profile.podiums}</div>
               <div className="k">Podios</div>
             </div>
-          </div>
-
-          <div className="btn-row">
-            <button
-              type="button"
-              className="btn ghost full sm"
-              style={{ height: 40 }}
-              onClick={openPicker}
-              disabled={uploading}
-            >
-              📷 {uploading ? 'Subiendo…' : 'Cambiar foto de perfil'}
-            </button>
           </div>
 
           {upload.status === 'error' && (
