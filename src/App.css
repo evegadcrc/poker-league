@@ -1233,6 +1233,73 @@
   white-space: nowrap;
 }
 
+/* ---- PWA install prompt (feat/install-prompt) ---- */
+/* Slim banner floating above the bottom tab bar; global (mounted in AppLayout).
+   Colors from the design tokens so it reads correctly in all three themes. */
+.install-prompt {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--tab-h) + env(safe-area-inset-bottom) + 10px);
+  width: calc(100% - 24px);
+  max-width: 456px;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 12px 11px 14px;
+  border: 1.5px solid var(--ink);
+  border-radius: 14px;
+  background: var(--paper-2);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+[data-theme='neon'] .install-prompt {
+  border-color: rgba(255, 46, 136, 0.4);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.install-ic {
+  flex: none;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--oxblood);
+}
+.install-body {
+  flex: 1;
+  min-width: 0;
+}
+.install-title {
+  font: 800 13px 'Archivo';
+  letter-spacing: 0.01em;
+}
+.install-text {
+  font: 600 11.5px/1.4 'Archivo';
+  color: var(--ink-2);
+  margin-top: 2px;
+}
+.install-share {
+  font-size: 12px;
+}
+.install-prompt .btn {
+  flex: none;
+}
+.install-close {
+  flex: none;
+  align-self: flex-start;
+  border: 0;
+  background: transparent;
+  color: var(--ink-3);
+  font-size: 15px;
+  line-height: 1;
+  padding: 4px;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+.install-close:hover {
+  color: var(--ink);
+}
+
 .live-wrap {
   background: var(--ink);
   color: var(--paper);

@@ -3,6 +3,7 @@ import logo from '@/assets/poker-friends.jpg'
 import { useRole } from '@/lib/auth'
 import { THEME_ICONS, THEME_LABELS, useTheme } from '@/lib/theme'
 import { cn } from '@/lib/utils'
+import InstallPrompt from './InstallPrompt'
 
 type Tab = { to: string; label: string; icon: string; end?: boolean; adminOnly?: boolean }
 
@@ -89,6 +90,8 @@ export default function AppLayout() {
           </NavLink>
         ))}
       </nav>
+
+      <InstallPrompt />
     </div>
   )
 }
