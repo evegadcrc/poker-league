@@ -128,9 +128,17 @@ export default function Login() {
             {status === 'sending' ? 'Enviando…' : 'Enviar enlace'}
           </button>
 
+          {status === 'idle' && (
+            <p className="login-hint">
+              ¿Primera vez? Si tu correo todavía no está en la liga, tu solicitud le llega al
+              admin. Cuando te apruebe, te enviamos el enlace de acceso por correo.
+            </p>
+          )}
+
           {status === 'pending' && (
             <p className="login-note ok" role="status">
-              📨 Tu solicitud fue enviada al admin. Te avisaremos cuando puedas ingresar.
+              📨 Te anotamos en la lista de solicitudes. <b>El admin tiene que aprobarte primero</b> —
+              apenas lo haga, te llega el enlace de acceso a <b>este correo</b>. (Revisá también spam.)
             </p>
           )}
           {status === 'rejected' && (

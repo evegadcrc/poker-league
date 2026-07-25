@@ -139,7 +139,7 @@ describe('Login — magic link', () => {
     await user.click(screen.getByRole('button', { name: 'Enviar enlace' }))
 
     await waitFor(() => expect(h.requestCalls).toEqual(['desconocido@test.com']))
-    expect(await screen.findByText(/Tu solicitud fue enviada al admin/i)).toBeInTheDocument()
+    expect(await screen.findByText(/Te anotamos en la lista de solicitudes/i)).toBeInTheDocument()
     // Crucially, no magic link is sent for a pending request.
     expect(h.signInCalls).toEqual([])
   })

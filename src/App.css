@@ -315,6 +315,12 @@
 .login-note.err {
   color: var(--oxblood);
 }
+.login-hint {
+  margin-top: 14px;
+  font: 500 12px/1.5 'Archivo';
+  color: var(--ink-3);
+  text-align: center;
+}
 
 /* ---- shared full-screen loading (route guards) ---- */
 .fullscreen-center {
