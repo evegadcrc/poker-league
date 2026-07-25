@@ -74,3 +74,29 @@ export async function sendApprovalLink(email: string): Promise<{ error: string |
   })
   return { error: error?.message ?? null }
 }
+
+/**
+ * Read the active season's auto-approve-signups flag (drives the admin
+ * Solicitudes switch). Reads season directly — the "read season" RLS lets an
+ * authenticated user SELECT it; only the write goes through set_auto_approve.
+ */
+export async function fetchAutoApprove(): Promise<{ on: boolean; error: string | null }> {
+  const { data, error } = await supabase
+    .from('season')
+    .select('auto_approve_signups')
+    .eq('status', 'active')
+    .order('year', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (error) return { on: false, error: error.message }
+  return {
+    on: Boolean((data as { auto_approve_signups?: boolean } | null)?.auto_approve_signups),
+    error: null,
+  }
+}
+
+/** Flip auto-approve on the active season (admin-only via set_auto_approve). */
+export async function setAutoApprove(on: boolean): Promise<{ error: string | null }> {
+  const { error } = await supabase.rpc('set_auto_approve', { p_on: on })
+  return { error: error?.message ?? null }
+}

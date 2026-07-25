@@ -3,9 +3,11 @@ import { useAuth, useRole } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import {
   approveRequest,
+  fetchAutoApprove,
   fetchPendingRequests,
   rejectRequest,
   sendApprovalLink,
+  setAutoApprove,
   type SignupRequest,
 } from '@/lib/access'
 import { deriveLiveSignal, useLiveEventCues } from '@/lib/notify'
@@ -429,6 +431,31 @@ function RequestsPanel({
   const [busyId, setBusyId] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Auto-approve switch: reflects the active season's auto_approve_signups. When
+  // ON, an unknown email is approved server-side by request_access (player
+  // created + returns 'member' → Login sends the link) with no admin action.
+  const [autoOn, setAutoOn] = useState(false)
+  const [autoBusy, setAutoBusy] = useState(false)
+
+  useEffect(() => {
+    void (async () => {
+      const { on } = await fetchAutoApprove()
+      setAutoOn(on)
+    })()
+  }, [])
+
+  const toggleAuto = async () => {
+    const next = !autoOn
+    setAutoBusy(true)
+    setError(null)
+    setAutoOn(next) // optimistic
+    const { error: err } = await setAutoApprove(next)
+    setAutoBusy(false)
+    if (err) {
+      setAutoOn(!next) // revert on failure
+      setError('No se pudo cambiar la aprobación automática. Reintentá.')
+    }
+  }
 
   const approve = async (r: SignupRequest) => {
     setBusyId(r.id)
@@ -472,6 +499,25 @@ function RequestsPanel({
 
   return (
     <div data-testid="requests-panel">
+      <div className="toggle-row">
+        <div>
+          <div className="tl">Aprobar solicitudes automáticamente</div>
+          <div className="ts">
+            Si está activo, cualquier correo nuevo se aprueba solo y recibe el enlace al instante.
+          </div>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          data-testid="auto-approve-toggle"
+          aria-checked={autoOn}
+          aria-label="Aprobar solicitudes automáticamente"
+          className={`switch${autoOn ? ' on' : ''}`}
+          disabled={autoBusy}
+          onClick={() => void toggleAuto()}
+        />
+      </div>
+
       <div className="field" style={{ paddingBottom: 2 }}>
         <label>Solicitudes de acceso</label>
         <div className="hintline">

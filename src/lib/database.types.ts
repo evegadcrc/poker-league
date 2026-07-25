@@ -262,6 +262,7 @@ export type Database = {
       }
       season: {
         Row: {
+          auto_approve_signups: boolean
           bonus_attendance: number
           bonus_final_table: number
           bonus_top3: number
@@ -279,6 +280,7 @@ export type Database = {
           year: number
         }
         Insert: {
+          auto_approve_signups?: boolean
           bonus_attendance?: number
           bonus_final_table?: number
           bonus_top3?: number
@@ -296,6 +298,7 @@ export type Database = {
           year: number
         }
         Update: {
+          auto_approve_signups?: boolean
           bonus_attendance?: number
           bonus_final_table?: number
           bonus_top3?: number
@@ -1053,6 +1056,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      set_auto_approve: { Args: { p_on: boolean }; Returns: undefined }
       set_player_blocked: {
         Args: { p_blocked: boolean; p_player_id: string }
         Returns: undefined
