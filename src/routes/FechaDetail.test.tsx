@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 // Inject App.css so class-based layout (e.g. .att-head centering) is computable.
@@ -546,6 +546,62 @@ describe('FechaDetail', () => {
     expect(bd.textContent).toContain('+10 mesa')
     expect(bd.textContent).toContain('+10 (3º)')
     expect(bd.textContent).toContain('= 120')
+  })
+
+  // ---- Tap interactions: avatar → lightbox, row → player-stats (parity w/ Tabla).
+  it('tapping a player avatar opens the lightbox and does NOT open/fetch the stats popup', async () => {
+    const user = userEvent.setup()
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    await user.click(screen.getByRole('button', { name: 'Ver foto de María R.' }))
+
+    // Lightbox is up…
+    expect(screen.getByRole('dialog', { name: 'Foto de María R.' })).toBeInTheDocument()
+    // …and the row's stats popup never mounted → player_profile was NOT called.
+    expect(h.rpcCalls.filter(([n]) => n === 'player_profile')).toHaveLength(0)
+    expect(screen.queryByTestId('ps-stats')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('ps-loading')).not.toBeInTheDocument()
+  })
+
+  it('tapping the row body opens the stats popup and fetches player_profile for that entry', async () => {
+    h.rpcResult = {
+      data: [{ total_points: 77, games_played: 4, wins: 1, podiums: 2, points_history: [], form: [] }],
+      error: null,
+    }
+    const user = userEvent.setup()
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    // The name lives in the row body (outside the avatar button).
+    await user.click(screen.getByText('María R.'))
+
+    await screen.findByTestId('ps-stats')
+    const profileCalls = h.rpcCalls.filter(([n]) => n === 'player_profile')
+    expect(profileCalls).toHaveLength(1)
+    expect((profileCalls[0]![1] as { p_player_id: string }).p_player_id).toBe('p2')
+    // The photo lightbox did not open, and the stats reflect the fetched profile.
+    expect(screen.queryByRole('dialog', { name: /^Foto de/ })).not.toBeInTheDocument()
+    expect(screen.getByTestId('ps-stats').querySelector('.v.blood')?.textContent).toBe('77')
+  })
+
+  it('closes the lightbox via overlay tap and the stats popup via Escape', async () => {
+    const user = userEvent.setup()
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    // Lightbox — tap the overlay to dismiss.
+    await user.click(screen.getByRole('button', { name: 'Ver foto de María R.' }))
+    await user.click(screen.getByRole('dialog', { name: 'Foto de María R.' }))
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Foto de María R.' })).not.toBeInTheDocument(),
+    )
+
+    // Stats popup — Escape closes it.
+    await user.click(screen.getByText('María R.'))
+    await screen.findByTestId('ps-stats')
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByTestId('ps-stats')).not.toBeInTheDocument())
   })
 
   it('live fecha: an eliminated player gets a breakdown, a still-playing one does not', async () => {
