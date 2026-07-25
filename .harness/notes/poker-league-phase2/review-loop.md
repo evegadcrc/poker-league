@@ -54,6 +54,31 @@ Range reviewed: `84b4222...191b670`
 - gallery public-bucket → private+signed-URL (privacy); gallery_photo INSERT storage_path/tournament_id
   not app-validated; **gallery upload needs a mobile pass (HEIC + client-side downscale)**.
 
+## Track 2.1 (UI refinements batch — build-only, then reviewed) — Final: APPROVED
+Iterations: 2 (panel: five-axis + security + data-migration)
+Range reviewed: `d012827..HEAD` (31 files, +1827/-117 — test + SQL heavy)
+
+### Resolved
+- **Required (correctness):** `chopAdjustedPrizes` (admin.ts) over-stated money on a completed fecha
+  for a dead-even MID-FIELD tie (shared `chop_group`, `chopped=false`) — showed full template money
+  instead of the split. Fixed: pool by `chop_group` regardless of `chopped` (`tieSplitMoneyEach`), no
+  champion-chop regression, +test (40k split). Commit `5e55d27`. Also folded a cheap optional
+  (`fmtMoney`→`formatMiles` dedup) + a 0018 comment nit.
+
+### Confirmed clean by the panel
+- **Security CLEAN (empirical):** non-admin UPDATE of `scheduled_at`/`odds_enabled`/`cover_url` → 0
+  rows (mig 0017 admin-only RLS enforced); mig 0018 recreate preserved `leaderboard` definer +
+  `search_path` + grants (anon NOT re-opened). Calc gate is advisory (fail-open), documented.
+- **Data-migration CLEAN:** mig 0018 reproduces the prior `leaderboard` exactly + additive
+  `form_positions` (0 mismatches across 11 players) + `odds_enabled` backfilled; DROP without CASCADE
+  correct (0 dependents); grants re-asserted.
+- pointsExample §5 math correct (85 pts), CreateFecha submits raw integers, Calculadora gate both
+  states tested, FormPills zip-before-reverse alignment, shared PrizeList (no dup).
+
+### Deferred (product calls) → followups.md
+- FormPills co-champion number (show `1` vs raw ordinal); "Pendiente Pago" on eliminated/winner rows
+  vs alive-only.
+
 ## Final
-Both tracks APPROVED. Test gate green (317 passed / 1 skipped from clean db reset). Next: `/dh:verify-ui`
-on Track B (net-new UX; design was skipped) → ship as stacked PRs (Track A, then Track B).
+ALL of Phase 2 APPROVED: Track A + Track B + Track 2.1. Test gate green (350 passed / 1 skipped).
+verify-ui PASSED (Playwright, 3 themes, 20 shots). Next: ship as stacked PRs (or one Phase-2 PR).

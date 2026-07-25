@@ -50,7 +50,15 @@ Premios not shown on legacy seed Fecha 1 (no prizes) — not a bug. Followups up
 NOT review-loop'd (build-only batch). Dropped push (#10). Separator "." confirmed. edwin.vega admin
 re-seeded post-0018 reset.
 
+## Review-loop COMPLETE — ALL Phase 2 APPROVED (2026-07-24)
+2.1 UI batch reviewed (panel five-axis+security+data-migration, 2 iters) → APPROVED. Found+fixed 1
+required: chopAdjustedPrizes over-stated money for a mid-field tie → now pools by chop_group
+(5e55d27). Security CLEAN (non-admin tournament UPDATE→0 rows; 0018 preserved leaderboard
+definer/grants). Data-migration CLEAN (0018 form_positions aligned, 0 mismatches). Test gate 350/1skip.
+Full record: review-loop.md. Track A + Track B + Track 2.1 all APPROVED; verify-ui PASSED.
+
 ## Next step
-The 2.1 + 2.1b commits are verify-ui'd but NOT code-reviewed. Options: /dh:review-loop the 2.1 batch,
-OR ship everything (Track A + B + 2.1) as stacked PRs. Local Supabase up; dev server :5173. Followups:
-profile-racha numbers, gallery mobile-upload (HEIC+downscale), private bucket, wire máx-recompras/bonus-stack.
+SHIP. Everything on feat/poker-friends-phase2 (NOT pushed): Track A + B + 2.1, all reviewed + verify-ui'd,
+350/1skip green. Ship as ONE Phase-2 PR (or stacked). Then go-live (hosted Supabase + SMTP + FE deploy).
+Deferred followups (all optional): profile-racha numbers, gallery mobile-upload (HEIC+downscale), private
+bucket, wire máx-recompras/bonus-stack, FormPills co-champ number + Pendiente-Pago-alive-only (product calls).
