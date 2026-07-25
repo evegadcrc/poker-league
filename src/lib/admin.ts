@@ -62,6 +62,46 @@ export function pointValueForPosition(position: number, n: number, cfg: ScoringC
   )
 }
 
+/** Per-category split of a finisher's scoring-v2 points (for transparent display). */
+export type PointsBreakdown = {
+  /** (N − P) × multiplier. */
+  base: number
+  /** bonus_attendance, if the finisher paid; else 0. */
+  asistencia: number
+  /** bonus_final_table, if the finisher made the final table; else 0. */
+  mesaFinal: number
+  /** graduated top_finish_bonuses[P−1] for P in 1..4; else 0. */
+  top4: number
+  /** base + asistencia + mesaFinal + top4. */
+  total: number
+}
+
+/**
+ * The scoring-v2 point breakdown of a REGULAR (non-chop) finisher, split into its
+ * named terms so the fecha view can show a transparent, real-time "cómo se llegó
+ * a estos puntos". Mirrors the regular-finisher branch of fn_tournament_points
+ * (mig 0019) term-for-term:
+ *   base       = (N − P) · points_multiplier
+ *   asistencia = bonus_attendance      when paid
+ *   mesaFinal  = bonus_final_table     when madeFinalTable
+ *   top4       = top_finish_bonuses[P−1] for P in 1..4 (index 0 = 1st), else 0
+ * `total` sums the four terms — equal to pointValueForPosition when both bonuses
+ * apply. Chop co-champions are NOT modelled here (the engine AVERAGES their value
+ * across the group); callers skip finishers with a chop_group.
+ */
+export function pointsBreakdown(
+  position: number,
+  n: number,
+  cfg: ScoringConfig,
+  opts: { paid: boolean; madeFinalTable: boolean },
+): PointsBreakdown {
+  const base = (n - position) * cfg.points_multiplier
+  const asistencia = opts.paid ? cfg.bonus_attendance : 0
+  const mesaFinal = opts.madeFinalTable ? cfg.bonus_final_table : 0
+  const top4 = position >= 1 && position <= 4 ? cfg.top_finish_bonuses[position - 1] ?? 0 : 0
+  return { base, asistencia, mesaFinal, top4, total: base + asistencia + mesaFinal + top4 }
+}
+
 export type ChopPreview = {
   /** Number of choppers K. */
   k: number

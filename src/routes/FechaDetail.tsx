@@ -8,7 +8,7 @@ import Avatar from '@/components/Avatar'
 import Galeria, { galleryUrl } from '@/components/Galeria'
 import PrizeList from '@/components/PrizeList'
 import Sheet from '@/components/Sheet'
-import { chopAdjustedPrizes } from '@/lib/admin'
+import { chopAdjustedPrizes, pointsBreakdown, type PointsBreakdown, type ScoringConfig } from '@/lib/admin'
 import { classifyCheckInError, requestPosition, type Coords } from '@/lib/checkin'
 import { formatMiles } from '@/lib/format'
 import { parsePrizes, type Prize } from '@/lib/live'
@@ -20,6 +20,7 @@ import {
   parseBands,
   parseLeagueConfig,
   pickBand,
+  playedCount,
   statusPill,
   statusRank,
   toDatetimeLocal,
@@ -56,6 +57,8 @@ type EntryRow = {
   chips: number | null
   points_earned: number | null
   final_position: number | null
+  paid: boolean
+  made_final_table: boolean
   chopped: boolean
   chop_group: number | null
   rebuys_count: number
@@ -118,7 +121,7 @@ async function fetchDetail(id: string): Promise<State> {
     supabase
       .from('entry')
       .select(
-        'id, player_id, status, rsvp_at, cancelled_at, checked_in_at, early_bird, chips, points_earned, final_position, chopped, chop_group, rebuys_count, player:player_id(name, avatar_url)',
+        'id, player_id, status, rsvp_at, cancelled_at, checked_in_at, early_bird, chips, points_earned, final_position, paid, made_final_table, chopped, chop_group, rebuys_count, player:player_id(name, avatar_url)',
       )
       .eq('tournament_id', id),
     supabase
@@ -190,6 +193,8 @@ export default function FechaDetail() {
             chips: null,
             points_earned: null,
             final_position: null,
+            paid: false,
+            made_final_table: false,
             chopped: false,
             chop_group: null,
             rebuys_count: 0,
@@ -373,6 +378,18 @@ export default function FechaDetail() {
   // tournament.prizes, chop-adjusted (a chopped top splits its pooled slots
   // equally). Standalone fechas are still played for money → show it too.
   const finalPrizes = completed ? chopAdjustedPrizes(prizes, entries) : []
+  // Real-time per-player points breakdown (transparency). N = everyone who took a
+  // seat (checked-in / playing / eliminated / winner) — the field size the engine
+  // will score against at completion, so a live bust previews its final value and
+  // a completed fecha matches fn_tournament_points exactly. `scoring` re-shapes the
+  // season LeagueConfig into the admin helper's ScoringConfig (same numbers).
+  const seatCount = playedCount(entries)
+  const scoring: ScoringConfig = {
+    points_multiplier: config.multiplier,
+    bonus_final_table: config.bonusFinalTable,
+    bonus_attendance: config.bonusAttendance,
+    top_finish_bonuses: config.topFinishBonuses,
+  }
 
   return (
     <>
@@ -404,28 +421,44 @@ export default function FechaDetail() {
           <span className="fd-buyin-v">₡{formatMiles(tournament.buy_in ?? 0)}</span>
         </div>
       )}
-      {isAdmin && (
-        <AdminFechaActions
-          status={tournament.status}
-          cancelled={cancelled}
-          busy={busy}
-          onCancel={doCancelFecha}
-          onDelete={doDeleteFecha}
-        />
-      )}
       {tournament.counts_for_league === false && (
         <div className="fd-standalone" data-testid="fd-standalone">
           Amistoso · no suma a la liga
         </div>
       )}
+
+      {/* Players list first (prominent) — its own strong top border separates it
+          from the header block. The RSVP summary, own actions and admin actions
+          were moved BELOW it (layout only; every gate is unchanged). */}
+      <div className="plist">
+        {entries.map((e) => (
+          <PlayerAttendanceRow
+            key={e.id}
+            entry={e}
+            isMe={player?.id === e.player_id}
+            completed={completed}
+            seatCount={seatCount}
+            scoring={scoring}
+            canAdminCheckIn={isAdmin && live && e.status === 'confirmed'}
+            onAdminCheckIn={doAdminCheckIn}
+          />
+        ))}
+      </div>
+
+      {finalPrizes.length > 0 && (
+        <PrizeList prizes={finalPrizes} formatAmount={(n) => `₡${formatMiles(n)}`} />
+      )}
+
       <div className="rule faint" />
 
+      {/* (1) RSVP summary chips */}
       <div className="att-head" data-testid="att-head">
         <ChipCount tone="confirmed" n={counts.voy} label="Voy" />
         <ChipCount tone="declined" n={counts.cancelaron} label="Cancelaron" />
         <ChipCount tone="none" n={counts.sinResp} label="Sin resp." />
       </div>
 
+      {/* (2) The player's own RSVP + check-in + Cancelar (RSVP) buttons */}
       {scheduled && runnable && player && (
         <div className="btn-row">
           <RsvpActions status={myEntry?.status} busy={busy} onRsvp={doRsvp} onCancel={() => setCancelOpen(true)} />
@@ -463,21 +496,15 @@ export default function FechaDetail() {
         </div>
       )}
 
-      <div className="plist">
-        {entries.map((e) => (
-          <PlayerAttendanceRow
-            key={e.id}
-            entry={e}
-            isMe={player?.id === e.player_id}
-            completed={completed}
-            canAdminCheckIn={isAdmin && live && e.status === 'confirmed'}
-            onAdminCheckIn={doAdminCheckIn}
-          />
-        ))}
-      </div>
-
-      {finalPrizes.length > 0 && (
-        <PrizeList prizes={finalPrizes} formatAmount={(n) => `₡${formatMiles(n)}`} />
+      {/* (3) Admin Cancelar-fecha / Eliminar-fecha actions */}
+      {isAdmin && (
+        <AdminFechaActions
+          status={tournament.status}
+          cancelled={cancelled}
+          busy={busy}
+          onCancel={doCancelFecha}
+          onDelete={doDeleteFecha}
+        />
       )}
 
       <FechaInfo tournament={tournament} config={config} />
@@ -798,12 +825,18 @@ function PlayerAttendanceRow({
   entry,
   isMe,
   completed,
+  seatCount,
+  scoring,
   canAdminCheckIn,
   onAdminCheckIn,
 }: {
   entry: EntryRow
   isMe: boolean
   completed: boolean
+  /** Field size N (everyone who took a seat) for the points breakdown. */
+  seatCount: number
+  /** Season scoring config re-shaped for the v2 breakdown helper. */
+  scoring: ScoringConfig
   canAdminCheckIn: boolean
   onAdminCheckIn: (entryId: string) => void
 }) {
@@ -813,6 +846,17 @@ function PlayerAttendanceRow({
   // no-show status badge for their finishing PLACE + the POINTS they earned that
   // fecha (entry.points_earned = the fn_tournament_points engine value).
   const result = completed ? fechaResult(entry) : null
+  // Real-time points breakdown for a RANKED, non-chop finisher (live bust OR
+  // completed). Chop co-champions (chop_group set) are skipped — the engine
+  // AVERAGES their value across the group, so a per-position split would mislead.
+  // Players still in juego (no final_position) get no breakdown.
+  const breakdown =
+    entry.final_position != null && entry.chop_group == null
+      ? pointsBreakdown(entry.final_position, seatCount, scoring, {
+          paid: entry.paid,
+          madeFinalTable: entry.made_final_table,
+        })
+      : null
   return (
     <div className="prow" data-testid="prow">
       <Avatar name={name} url={entry.player?.avatar_url} size={36} />
@@ -822,6 +866,7 @@ function PlayerAttendanceRow({
           {isMe ? ' · tú' : ''}
         </b>
         {!result && <div className="sub">{noteFor(entry)}</div>}
+        {breakdown && <PointsBreakdownLine breakdown={breakdown} position={entry.final_position!} />}
       </div>
       {canAdminCheckIn ? (
         <button
@@ -836,6 +881,29 @@ function PlayerAttendanceRow({
       ) : (
         <span className={`status ${pill.cls}`}>{pill.label}</span>
       )}
+    </div>
+  )
+}
+
+// Compact, real-time points breakdown under a finisher's name: how the engine
+// arrives at their fecha points. Base + total always show; a bonus term only
+// appears when non-zero. The top-4 term is tagged with the finishing place
+// ("+10 (3º)"). Tabular figures keep the numbers column-aligned across rows.
+function PointsBreakdownLine({
+  breakdown,
+  position,
+}: {
+  breakdown: PointsBreakdown
+  position: number
+}) {
+  const terms = [`Base ${breakdown.base}`]
+  if (breakdown.asistencia) terms.push(`+${breakdown.asistencia} asist`)
+  if (breakdown.mesaFinal) terms.push(`+${breakdown.mesaFinal} mesa`)
+  if (breakdown.top4) terms.push(`+${breakdown.top4} (${position}º)`)
+  return (
+    <div className="fd-breakdown" data-testid="fd-breakdown">
+      <span className="bd-terms">{terms.join(' · ')}</span>
+      <span className="bd-total">= {breakdown.total}</span>
     </div>
   )
 }

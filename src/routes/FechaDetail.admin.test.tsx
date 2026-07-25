@@ -151,6 +151,15 @@ describe('FechaDetail — admin cancel/delete + PRÓXIMA buy-in + calendar trigg
     expect(screen.queryByTestId('fd-admin-actions')).not.toBeInTheDocument()
   })
 
+  it('renders the admin actions BELOW the players list (reordered)', async () => {
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+    const firstRow = screen.getAllByTestId('prow')[0]
+    const actions = screen.getByTestId('fd-admin-actions')
+    // Admin Cancelar/Eliminar now sit AFTER the players list in the DOM.
+    expect(firstRow.compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
   it('Cancelar fecha confirms, then sets cancelled_at via a tournament update', async () => {
     const user = userEvent.setup()
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
