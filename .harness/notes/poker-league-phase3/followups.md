@@ -32,3 +32,10 @@ deferred, not forgotten. Fixed findings live in the migrations/routes/tests.
   EXECUTE unless intended, and (b) harden all admin guards to
   `coalesce(auth.role(),'') = 'service_role'`. Out of scope for this batch (which is
   gated to the Phase-3 diff + the two named blast-radius helpers).
+
+## Roster/block review (2026-07-25, non-blocking)
+- **Any authenticated member can SELECT all players' emails** (0001 `"read player" using(true)`).
+  PRE-EXISTING (not introduced by the block feature); the admin Jugadores list just surfaces it.
+  Accepted for a private friends' league; if privacy matters, restrict player-email reads to admins
+  (e.g. an admin-only `list_players()` RPC + drop email from the member-facing policy).
+- Optional: `claim_player` public/anon revoke + `pg_temp` search_path now applied (mig 0023).
