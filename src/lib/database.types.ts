@@ -313,6 +313,7 @@ export type Database = {
           ante_enabled: boolean
           blind_structure_id: string | null
           buy_in: number
+          cancelled_at: string | null
           counts_for_league: boolean
           cover_url: string | null
           created_at: string
@@ -343,6 +344,7 @@ export type Database = {
           ante_enabled?: boolean
           blind_structure_id?: string | null
           buy_in?: number
+          cancelled_at?: string | null
           counts_for_league?: boolean
           cover_url?: string | null
           created_at?: string
@@ -373,6 +375,7 @@ export type Database = {
           ante_enabled?: boolean
           blind_structure_id?: string | null
           buy_in?: number
+          cancelled_at?: string | null
           counts_for_league?: boolean
           cover_url?: string | null
           created_at?: string
@@ -759,6 +762,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      delete_tournament: { Args: { p_id: string }; Returns: undefined }
       eliminate: {
         Args: { p_entry_id: string }
         Returns: {

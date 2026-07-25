@@ -713,6 +713,19 @@
   color: var(--ink-2);
   border-color: var(--rule-strong);
 }
+.badge.cancelled {
+  background: color-mix(in srgb, var(--oxblood) 12%, transparent);
+  color: var(--oxblood);
+  border-color: var(--oxblood);
+}
+/* A cancelled fecha reads as struck-through + faded in the calendar list. */
+.tourn-card.cancelled {
+  opacity: 0.62;
+}
+.tourn-card.cancelled .tc-title {
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+}
 @keyframes pulse {
   0%,
   100% {
@@ -2284,4 +2297,61 @@
 }
 [data-theme='neon'] .fd-sched-input {
   background: var(--paper-2);
+}
+
+/* Compact round icon button (e.g. the "editar fecha y hora" calendar trigger).
+   Mirrors .upload-icon; holds an inline SVG glyph rather than an emoji. */
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1.5px solid var(--ink);
+  border-radius: 50%;
+  background: var(--paper);
+  color: var(--ink);
+  line-height: 1;
+  cursor: pointer;
+}
+.icon-btn:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+[data-theme='neon'] .icon-btn {
+  border-color: rgba(255, 46, 136, 0.5);
+}
+
+/* PRÓXIMA fecha: the buy-in, surfaced prominently above the fold. */
+.fd-buyin {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 2px 18px 8px;
+  padding: 10px 14px;
+  border: 1.5px solid var(--ink);
+  border-radius: 12px;
+  background: var(--paper-2);
+}
+.fd-buyin-k {
+  font: 800 10px 'Archivo';
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.fd-buyin-v {
+  font: 800 22px 'Archivo';
+  color: var(--ink);
+}
+
+/* Admin management row on the fecha view: cancel + delete. */
+.fd-admin-actions {
+  display: flex;
+  gap: 8px;
+  padding: 2px 18px 8px;
+}
+.fd-admin-actions .btn {
+  flex: 1;
 }
