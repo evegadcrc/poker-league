@@ -461,6 +461,81 @@
   color: var(--oxblood);
 }
 
+/* ---- tap affordances (avatar → lightbox, row → stats popup) ---- */
+.lb-row {
+  cursor: pointer;
+}
+.lb-row:focus-visible {
+  outline: 2px solid var(--oxblood);
+  outline-offset: -2px;
+}
+/* the avatar is a nested button — reset chrome, keep the round photo tappable */
+.avatar-btn {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: none;
+  line-height: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  flex: none;
+}
+.avatar-btn:focus-visible {
+  outline: 2px solid var(--oxblood);
+  outline-offset: 2px;
+}
+
+/* ---- avatar lightbox (full-screen enlarged photo) ---- */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(10, 8, 4, 0.82);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: fade 0.18s ease both;
+}
+.lightbox-img {
+  line-height: 0;
+}
+.lightbox-img .avatar {
+  width: min(72vw, 320px);
+  height: min(72vw, 320px);
+  font-size: 96px;
+  border-width: 2.5px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.5);
+}
+.lightbox-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1.5px solid var(--paper);
+  background: rgba(10, 8, 4, 0.5);
+  color: var(--paper);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.lightbox-close:focus-visible {
+  outline: 2px solid var(--paper);
+  outline-offset: 2px;
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 /* ---- legend ---- */
 .legend {
   display: flex;
