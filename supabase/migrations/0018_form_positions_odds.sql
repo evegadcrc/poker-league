@@ -9,9 +9,12 @@
 --   Because adding a column changes the function's return TABLE shape (which
 --   CREATE OR REPLACE cannot do), we DROP the current function and recreate it.
 --   Everything else — roster-at-0 (0014), counts_for_league filter (0015), the
---   aggregates, tier logic, ordering and tiebreakers — is preserved byte-for-byte
---   from 0015's definition; the ONLY additions are the `form_positions int[]`
---   return column and the `array_agg(final_position order by rn)` that fills it.
+--   aggregates, tier logic, ordering and tiebreakers — is preserved verbatim from
+--   0015's definition. Two intentional differences vs 0015: (a) the `form_positions
+--   int[]` return column and the `array_agg(final_position order by rn)` that fills
+--   it (additive), and (b) the `search_path` is tightened from 0015's bare
+--   `public` to the 0012 idiom `public, pg_temp` (non-additive but result-neutral:
+--   every body ref is schema-qualified — see the SECURITY DEFINER note below).
 --   `form` and `form_positions` are built from the SAME `form_rows` CTE with the
 --   SAME `order by rn`, so they are guaranteed aligned index-for-index.
 --

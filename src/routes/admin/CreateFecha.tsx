@@ -9,6 +9,7 @@ import PrizeDistributionEditor, {
   type PctRow,
 } from '@/components/PrizeDistributionEditor'
 import type { Database, Json } from '@/lib/database.types'
+import { formatMiles } from '@/lib/format'
 
 type Structure = { id: string; name: string }
 
@@ -78,13 +79,6 @@ function saveFechaDefaults(d: FechaDefaults): void {
   }
 }
 
-/**
- * Display a whole-colón integer with "." thousands separators (10000 → "10.000").
- * Grouping is done explicitly rather than via toLocaleString('es-CR') because the
- * es-CR grouping separator varies by ICU/CLDR version (some emit a space); money
- * here is always whole colones, so a deterministic "." group is correct.
- */
-const fmtMoney = (n: number): string => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
 /** Strip every non-digit and return the raw integer (empty → 0). */
 const parseMoney = (s: string): number => {
   const digits = s.replace(/\D/g, '')
@@ -331,7 +325,7 @@ export default function CreateFecha() {
             <input
               id="cf-buyin"
               inputMode="numeric"
-              value={fmtMoney(buyIn)}
+              value={formatMiles(buyIn)}
               onChange={onMoney(setBuyIn)}
             />
           </span>
@@ -340,7 +334,7 @@ export default function CreateFecha() {
               id="cf-rebuy"
               inputMode="numeric"
               aria-label="Recompra"
-              value={fmtMoney(rebuyAmount)}
+              value={formatMiles(rebuyAmount)}
               onChange={onMoney(setRebuyAmount)}
             />
           </span>
@@ -353,14 +347,14 @@ export default function CreateFecha() {
           <input
             id="cf-stack"
             inputMode="numeric"
-            value={fmtMoney(startingStack)}
+            value={formatMiles(startingStack)}
             onChange={onMoney(setStartingStack)}
           />
           <input
             id="cf-bonus"
             inputMode="numeric"
             aria-label="Bonus stack"
-            value={fmtMoney(bonusStack)}
+            value={formatMiles(bonusStack)}
             onChange={onMoney(setBonusStack)}
           />
         </div>

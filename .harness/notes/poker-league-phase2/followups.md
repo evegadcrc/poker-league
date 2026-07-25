@@ -37,3 +37,11 @@ hardening pass or a later slice.
   HEIC in the grid anyway. Also no client-side downscale, so large phone photos hit the 10 MiB cap.
   Proper fix = convert HEIC→JPEG + downscale in the browser before upload (then the allowlist can stay
   JPEG/PNG/WebP). Affects most of the league (mobile-first). Do as a dedicated gallery-upload slice.
+
+## Review iter-1 ui21 (cosmetic, deferred — need product intent)
+- **FormPills gold chop pill shows true ordinality "2" for a co-champion** (FormPills.tsx:67 + mig 0018
+  `f.final_position as pos`), while FechaDetail normalizes co-champions to 1º. Emit `1` (or drop the
+  number) on champion-tier chops if leaderboard/FechaDetail should read consistently. Product call.
+- **Live `Pendiente Pago` badge renders on every unpaid StandingRow** (Live.tsx:461), incl.
+  eliminated/out and an unpaid winner — not just alive players. Gate on `alive` if the intent is
+  "who still owes at the table"; leave as-is if any unpaid cash still owed should show. Product call.

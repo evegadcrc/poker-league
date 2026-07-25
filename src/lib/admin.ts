@@ -96,22 +96,34 @@ export function tieSplitMoneyEach(prizes: readonly Prize[], positions: readonly 
 type ChopFinisher = { final_position: number | null; chopped: boolean; chop_group: number | null }
 
 /**
- * Per-place prize amounts for a COMPLETED fecha, adjusted for any chop(s).
- * `tournament.prizes` stays per-position (set_prizes); a chop instead POOLS the
- * positions a chop_group occupies and pays each chopper the equal split
- * (`tieSplitMoneyEach` = round(Σ amounts / K)). This rewrites every chopped
- * position's amount to its group's split-each and leaves un-chopped places at the
- * template amount — so the Premios list shows the ACTUAL payout, not the pre-chop
- * template. Returns a fresh array; the input prizes are never mutated.
+ * Per-place prize amounts for a COMPLETED fecha, adjusted for any chop(s) OR any
+ * dead-even mid-field tie. `tournament.prizes` stays per-position (set_prizes);
+ * a shared `chop_group` instead POOLS the positions that group occupies and pays
+ * each member the equal split (`tieSplitMoneyEach` = round(Σ amounts / K)). This
+ * rewrites every pooled position's amount to its group's split-each and leaves
+ * un-pooled places at the template amount — so the Premios list shows the ACTUAL
+ * payout, not the pre-chop template.
+ *
+ * Pooling keys off `chop_group` REGARDLESS of the `chopped` flag: a dead-even
+ * `eliminate_multi` tie (mig 0015) sets `chop_group` but deliberately leaves
+ * `chopped=false` (the anti-mislabel trap), yet decision 2026-07-24 (A) requires
+ * such a tie to split BOTH points and money equally — including at PAID places
+ * (e.g. a 2º/3º tie). The points side already splits via `chop_group` in the SQL;
+ * this covers the money display. Final-table chops (`chopped=true`) also carry
+ * `chop_group`, so their behavior is unchanged. Returns a fresh array; the input
+ * prizes are never mutated.
  */
 export function chopAdjustedPrizes(
   prizes: readonly Prize[],
   finishers: readonly ChopFinisher[],
 ): Prize[] {
-  // chop_group → the finishing positions that group occupies.
+  // chop_group → the finishing positions that group occupies. Any finishers that
+  // share a non-null chop_group split the pooled money of their positions equally,
+  // whether the group is a final-table chop (chopped=true) or a dead-even tie
+  // (chopped=false).
   const groups = new Map<number, number[]>()
   for (const f of finishers) {
-    if (!f.chopped || f.final_position == null || f.chop_group == null) continue
+    if (f.final_position == null || f.chop_group == null) continue
     const positions = groups.get(f.chop_group) ?? []
     positions.push(f.final_position)
     groups.set(f.chop_group, positions)

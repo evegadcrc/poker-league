@@ -116,6 +116,22 @@ describe('chopAdjustedPrizes (completed-fecha payout per place)', () => {
     expect(out.find((p) => p.position === 3)!.amount).toBe(30_000)
   })
 
+  it('splits a dead-even mid-field tie (chopped:false) sharing a chop_group at paid places', () => {
+    // eliminate_multi tie (mig 0015) sets chop_group but leaves chopped=false by
+    // design; decision 2026-07-24 (A) still splits money equally. Survivor crowned
+    // 1º, the two tied players take paid places 2º/3º sharing chop_group 3.
+    const out = chopAdjustedPrizes(prizes, [
+      { final_position: 1, chopped: false, chop_group: null },
+      { final_position: 2, chopped: false, chop_group: 3 },
+      { final_position: 3, chopped: false, chop_group: 3 },
+    ])
+    // pooled = round((50k + 30k) / 2) = 40k each; non-tied 1º unaffected.
+    const each = Math.round((50_000 + 30_000) / 2)
+    expect(out.find((p) => p.position === 1)!.amount).toBe(80_000)
+    expect(out.find((p) => p.position === 2)!.amount).toBe(each)
+    expect(out.find((p) => p.position === 3)!.amount).toBe(each)
+  })
+
   it('splits independent chop_groups separately', () => {
     const out = chopAdjustedPrizes(prizes, [
       { final_position: 1, chopped: false, chop_group: null },
