@@ -186,16 +186,15 @@ const CUE_TONES: Record<SoundCue, readonly Tone[]> = {
 }
 
 /**
- * Play a named cue. NO-OP when muted or volume is 0 (checked BEFORE any audio
- * node is created), and when no AudioContext is available. Individual tone
- * failures are swallowed so a cue never throws into an event handler.
+ * Schedule a bundle of tones on the shared context. NO-OP when muted or volume
+ * is 0 (checked BEFORE any audio node is created), and when no AudioContext is
+ * available. Individual tone failures are swallowed so a cue never throws into
+ * an event handler. Shared by the one-shot cues (`playCue`) and the looping
+ * level-end alarm.
  */
-export function playCue(cue: SoundCue): void {
+function playTones(tones: readonly Tone[]): void {
   const { muted, volume } = settings
   if (muted || volume <= 0) return
-
-  const tones = CUE_TONES[cue]
-  if (!tones) return
 
   const ctx = ensureContext()
   if (!ctx) return
@@ -225,6 +224,57 @@ export function playCue(cue: SoundCue): void {
     } catch {
       /* skip a tone that fails to schedule; never throw from a cue */
     }
+  }
+}
+
+/**
+ * Play a named cue. NO-OP when muted or volume is 0 (checked BEFORE any audio
+ * node is created), and when no AudioContext is available.
+ */
+export function playCue(cue: SoundCue): void {
+  const tones = CUE_TONES[cue]
+  if (!tones) return
+  playTones(tones)
+}
+
+// ---------------------------------------------------------------------------
+// Level-end alarm (persistent, looping)
+// ---------------------------------------------------------------------------
+
+/**
+ * The level-END alert. Unlike the one-shot cues this LOOPS until the admin
+ * acknowledges (starts the next level / pauses). A distinct urgent two-note
+ * klaxon (high→low square blasts) so it's unmistakable versus `levelWarning`.
+ */
+const ALARM_TONES: readonly Tone[] = [
+  { freq: 988, start: 0, duration: 0.24, type: 'square', peak: 0.55 },
+  { freq: 740, start: 0.3, duration: 0.3, type: 'square', peak: 0.55 },
+]
+
+/** How often the alarm re-sounds while it's active. */
+const ALARM_INTERVAL_MS = 1200
+
+let alarmTimer: ReturnType<typeof setInterval> | null = null
+
+/**
+ * Start the persistent level-end alarm: sound the klaxon immediately, then
+ * repeat every ~1.2s until `stopLevelAlarm`. Idempotent — a second call while
+ * already sounding is a no-op. Each pulse goes through `playTones`, which is a
+ * live no-op while muted / volume 0 / no AudioContext, so a muted alarm creates
+ * no audio nodes (and un-muting mid-alarm starts sounding on the next pulse).
+ * Safe to call outside a user gesture (it resumes a suspended context).
+ */
+export function startLevelAlarm(): void {
+  if (alarmTimer !== null) return
+  playTones(ALARM_TONES)
+  alarmTimer = setInterval(() => playTones(ALARM_TONES), ALARM_INTERVAL_MS)
+}
+
+/** Stop the persistent alarm. Safe to call when it isn't running. */
+export function stopLevelAlarm(): void {
+  if (alarmTimer !== null) {
+    clearInterval(alarmTimer)
+    alarmTimer = null
   }
 }
 

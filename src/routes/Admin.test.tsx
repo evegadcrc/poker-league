@@ -84,7 +84,15 @@ vi.mock('@/lib/supabase', () => ({
   },
 }))
 
+// Spy on the persistent level-end alarm without touching the real cue engine
+// (notify.ts still imports playCue/resumeAudio from here — keep them real).
+vi.mock('@/lib/sound', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/sound')>('@/lib/sound')
+  return { ...actual, startLevelAlarm: vi.fn(), stopLevelAlarm: vi.fn() }
+})
+
 import Admin from './Admin'
+import { startLevelAlarm, stopLevelAlarm } from '@/lib/sound'
 
 const LEVELS = [
   { level_number: 1, small_blind: 25, big_blind: 50, ante: 0, duration_seconds: 1200, is_break: false },
@@ -155,6 +163,8 @@ beforeEach(() => {
   h.updates = []
   h.channelStatus = undefined
   h.authPlayer = null
+  vi.mocked(startLevelAlarm).mockClear()
+  vi.mocked(stopLevelAlarm).mockClear()
   setLive()
 })
 
@@ -386,10 +396,12 @@ describe('Admin console — error / reconnect states (slice 16)', () => {
   })
 })
 
-// Auto-advance FE contract (single writer). The admin client, and only in
-// timer_mode='auto', advances the level when the LOCAL clock reaches 0. Uses
-// real fixtures (never forces manual mode to dodge the effect).
-describe('Admin console — auto-advance (single-writer clock)', () => {
+// Level-END FE contract (single writer, NO silent auto-advance). When a running
+// auto-mode level's LOCAL clock reaches 0 the admin client must NOT fire
+// next_level on its own: it sounds a persistent alarm and surfaces a manual
+// "start next level" control. Only a tap advances the level (and stops the
+// alarm). Uses real fixtures (never forces manual mode to dodge the effect).
+describe('Admin console — level-end alarm + manual next-level (single writer)', () => {
   // An auto tournament whose running clock has already expired (started well
   // before its level duration) → remaining computes to 0.
   function setAutoExpired(overrides: Record<string, unknown> = {}) {
@@ -408,57 +420,58 @@ describe('Admin console — auto-advance (single-writer clock)', () => {
       (c) => c.name === 'clock' && (c.args as { p_action?: string }).p_action === 'next_level',
     ).length
 
-  it('fires clock(next_level) exactly once when an auto timer hits 0', async () => {
+  it('at 0: does NOT auto-fire next_level — it starts the alarm and shows the start button', async () => {
     setAutoExpired()
     renderAdmin()
+    // Level-end state: the manual "start next level" affordance is present…
+    expect(await screen.findByTestId('start-next-level')).toBeInTheDocument()
+    expect(screen.getByTestId('level-ended')).toHaveTextContent(/Nivel 1 terminado/i)
+    // …the persistent alarm is sounding…
+    await waitFor(() => expect(startLevelAlarm).toHaveBeenCalled())
+    // …and NOTHING advanced on its own.
+    expect(nextLevelCalls()).toBe(0)
+  })
+
+  it('tapping "Iniciar siguiente nivel" stops the alarm and advances exactly once', async () => {
+    setAutoExpired()
+    const user = userEvent.setup()
+    renderAdmin()
+    const btn = await screen.findByTestId('start-next-level')
+    vi.mocked(stopLevelAlarm).mockClear()
+
+    await user.click(btn)
+
     await waitFor(() => expect(nextLevelCalls()).toBe(1))
-    // Latched for this level → does not fire again on the reconcile refetch.
-    await screen.findAllByTestId('admin-prow')
+    expect(stopLevelAlarm).toHaveBeenCalled()
+    // `busy` disables the button while the RPC is in flight → no double-advance.
     expect(nextLevelCalls()).toBe(1)
   })
 
-  it('does NOT auto-advance while the clock is paused', async () => {
+  it('does NOT start the alarm or show the button while the clock is paused', async () => {
     setAutoExpired({ is_paused: true, paused_remaining_seconds: 0 })
     renderAdmin()
     await screen.findAllByTestId('admin-prow')
+    expect(screen.queryByTestId('start-next-level')).not.toBeInTheDocument()
+    expect(startLevelAlarm).not.toHaveBeenCalled()
     expect(nextLevelCalls()).toBe(0)
   })
 
-  it('does NOT auto-advance in manual mode even when expired', async () => {
+  it('does NOT enter the level-end state in manual mode even when expired', async () => {
     setAutoExpired({ timer_mode: 'manual' })
     renderAdmin()
     await screen.findAllByTestId('admin-prow')
+    expect(screen.queryByTestId('start-next-level')).not.toBeInTheDocument()
+    expect(startLevelAlarm).not.toHaveBeenCalled()
     expect(nextLevelCalls()).toBe(0)
   })
 
-  it('a FAILED auto-advance does not permanently stall — it retries on the next tick', async () => {
-    setAutoExpired()
-    h.rpc.clock = { data: null, error: { message: 'kong-502' } }
+  it('on the LAST level ending: terminal state, no start button, no looping alarm', async () => {
+    setAutoExpired({ current_level: 2 }) // level 2 is the last in LEVELS
     renderAdmin()
-    // First attempt fires and fails (toast shown), guard NOT latched.
-    await waitFor(() => expect(nextLevelCalls()).toBe(1))
-    expect(await screen.findByTestId('admin-toast')).toBeInTheDocument()
-    // The per-tick throttle blocks a tight loop within the same second, then the
-    // 1s clock tick re-arms the attempt → a second next_level write is issued.
-    await waitFor(() => expect(nextLevelCalls()).toBeGreaterThanOrEqual(2), { timeout: 3000 })
-  })
-
-  it('does NOT double-fire next_level when the clock RPC is still in flight across a tick', async () => {
-    setAutoExpired()
-    // Keep the next_level RPC in flight (unresolved) so ~2 one-second ticks elapse
-    // while it's pending. The pre-await latch must prevent a second fire (which the
-    // increment-based next_level would turn into a skipped level).
-    let resolveClock: (v: { data: unknown; error: unknown }) => void = () => {}
-    h.rpcImpl.clock = () =>
-      new Promise((res) => {
-        resolveClock = res
-      })
-    renderAdmin()
-    await waitFor(() => expect(nextLevelCalls()).toBe(1))
-    await new Promise((r) => setTimeout(r, 2200)) // ~2 real 1s ticks while in flight
-    expect(nextLevelCalls()).toBe(1) // latched before the await → no double-fire
-    resolveClock({ data: null, error: null }) // resolve success; stays latched
-    await waitFor(() => expect(nextLevelCalls()).toBe(1))
+    expect(await screen.findByTestId('level-ended-final')).toBeInTheDocument()
+    expect(screen.queryByTestId('start-next-level')).not.toBeInTheDocument()
+    expect(startLevelAlarm).not.toHaveBeenCalled()
+    expect(nextLevelCalls()).toBe(0)
   })
 })
 

@@ -160,3 +160,78 @@ describe('playCue', () => {
     expect(() => s.resumeAudio()).not.toThrow()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Persistent level-end alarm. Unlike the one-shot cues it LOOPS (every ~1.2s)
+// until stopped, so the loop tests drive setInterval with fake timers.
+// ---------------------------------------------------------------------------
+describe('level-end alarm', () => {
+  it('sounds a klaxon immediately when started (unmuted)', async () => {
+    const spies = installMockAudio()
+    const s = await freshSound()
+
+    s.startLevelAlarm()
+
+    // The klaxon is a 2-tone sting → an oscillator + gain per tone.
+    expect(spies.createOscillator).toHaveBeenCalledTimes(2)
+    expect(spies.createGain).toHaveBeenCalledTimes(2)
+    s.stopLevelAlarm()
+  })
+
+  it('is a no-op when muted (no audio nodes created)', async () => {
+    const spies = installMockAudio()
+    const s = await freshSound()
+    s.setMuted(true)
+
+    s.startLevelAlarm()
+
+    expect(spies.createOscillator).not.toHaveBeenCalled()
+    expect(spies.createGain).not.toHaveBeenCalled()
+    s.stopLevelAlarm()
+  })
+
+  it('loops until stopped, then stays silent', async () => {
+    vi.useFakeTimers()
+    try {
+      const spies = installMockAudio()
+      const s = await freshSound()
+
+      s.startLevelAlarm()
+      expect(spies.createOscillator).toHaveBeenCalledTimes(2) // immediate klaxon
+      vi.advanceTimersByTime(1300) // one interval → another klaxon
+      expect(spies.createOscillator).toHaveBeenCalledTimes(4)
+      vi.advanceTimersByTime(1300)
+      expect(spies.createOscillator).toHaveBeenCalledTimes(6)
+
+      s.stopLevelAlarm()
+      vi.advanceTimersByTime(5000) // no further klaxons after stop
+      expect(spies.createOscillator).toHaveBeenCalledTimes(6)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('start is idempotent — a second call does not stack the loop', async () => {
+    vi.useFakeTimers()
+    try {
+      const spies = installMockAudio()
+      const s = await freshSound()
+
+      s.startLevelAlarm()
+      s.startLevelAlarm() // ignored while already sounding
+      expect(spies.createOscillator).toHaveBeenCalledTimes(2) // one immediate klaxon, not two
+      vi.advanceTimersByTime(1300)
+      expect(spies.createOscillator).toHaveBeenCalledTimes(4) // one interval, not two
+
+      s.stopLevelAlarm()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not throw when no AudioContext is available (safe no-op)', async () => {
+    const s = await freshSound() // jsdom → no AudioContext
+    expect(() => s.startLevelAlarm()).not.toThrow()
+    expect(() => s.stopLevelAlarm()).not.toThrow()
+  })
+})
