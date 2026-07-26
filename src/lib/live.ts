@@ -152,6 +152,12 @@ export type StandingEntry = {
   chips: number | null
   /** Buy-in payment confirmed by the admin (confirm_payment). False → pending. */
   paid: boolean
+  /** Engine points for this finisher (mig 0030 writes it live on every bust); null while still playing. */
+  points_earned: number | null
+  /** Reached the final table → the bonus_final_table term applies. */
+  made_final_table: boolean
+  /** Chop / dead-even tie group; non-null → the engine averages points, so no per-position breakdown. */
+  chop_group: number | null
   player: { name: string; avatar_url: string | null } | null
 }
 
