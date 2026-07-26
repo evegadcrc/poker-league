@@ -1195,10 +1195,6 @@
   flex-wrap: wrap;
   font-variant-numeric: tabular-nums;
 }
-.fd-breakdown .bd-total {
-  color: var(--ink);
-  font-weight: 800;
-}
 .status {
   font: 800 9.5px 'Archivo';
   letter-spacing: 0.09em;
@@ -2821,6 +2817,42 @@
 .fd-buyin-v {
   font: 800 22px 'Archivo';
   color: var(--ink);
+}
+
+/* Pre-live sub-label under the header date — "check-in y pagos abiertos". */
+.fd-prelive-note {
+  margin: 0 18px 6px;
+  font: 800 10px 'Archivo';
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--oxblood);
+}
+
+/* Top action bar — the player's single actionable CTA, above the player list.
+   Reuses .btn-row / .geo internals; this wrapper just tightens their spacing so
+   the primary CTA reads as one intentional block right under the header. */
+.fd-top-actions {
+  display: flex;
+  flex-direction: column;
+}
+.fd-top-actions .btn-row {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.fd-top-actions .btn-row + .btn-row {
+  padding-top: 0;
+}
+
+/* Admin per-row registration-desk cluster (Confirmar pago / Registrar). */
+.prow-admin {
+  display: flex;
+  flex: none;
+  gap: 6px;
+  margin-left: 8px;
+}
+/* The wrapper owns the left gap; reset the standalone button's own margin. */
+.prow-admin .admin-checkin {
+  margin-left: 0;
 }
 
 /* Admin management row on the fecha view: cancel + delete. */

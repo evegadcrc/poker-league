@@ -174,6 +174,14 @@ export default function FechaDetail() {
   const [celebrate, setCelebrate] = useState<{ earlyBird: boolean; chips: number | null } | null>(
     null,
   )
+  // Reactive wall-clock (ms) so the pre-live window (opens 1h before the start)
+  // flips on its own without a manual reload. Mirrors Live.tsx's clock tick, but
+  // coarser (30s) — the only boundary that matters here is the 1h mark.
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30_000)
+    return () => clearInterval(timer)
+  }, [])
 
   // Optimistically patch the signed-in player's entry, then refetch to reconcile.
   const patchMine = useCallback(
@@ -277,6 +285,18 @@ export default function FechaDetail() {
     async (entryId: string) => {
       const { error } = await supabase.rpc('admin_check_in', { p_entry_id: entryId })
       if (error) console.error('admin_check_in failed', error.message)
+      else reload({ silent: true })
+    },
+    [reload],
+  )
+
+  // Admin registration desk (pre-live / live): confirm a player's buy-in payment
+  // (confirm_payment RPC, mig 0009 — admin-gated, no status check → works while
+  // scheduled). Marks the entry paid so it counts toward the pot.
+  const doConfirmPayment = useCallback(
+    async (entryId: string) => {
+      const { error } = await supabase.rpc('confirm_payment', { p_entry_id: entryId })
+      if (error) console.error('confirm_payment failed', error.message)
       else reload({ silent: true })
     },
     [reload],
@@ -433,9 +453,15 @@ export default function FechaDetail() {
   // checked-in — every "run" affordance is gated on `runnable`.
   const cancelled = tournament.cancelled_at != null
   const runnable = !cancelled
-  // People arrive before the admin opens the fecha, so a confirmed player can
-  // check in while it's still scheduled (before open) as well as once live.
-  const canCheckIn = (scheduled || live) && runnable && myEntry?.status === 'confirmed'
+  // Pre-live window: the fecha is still `scheduled` but the game night is close
+  // enough (≤1h before the scheduled start) that check-in + payments open. No new
+  // DB status — it's a purely time-derived UI state (reactive via the `now` tick).
+  const scheduledAtMs = new Date(tournament.scheduled_at).getTime()
+  const preLive =
+    scheduled && runnable && Number.isFinite(scheduledAtMs) && now >= scheduledAtMs - 3_600_000
+  // Check-in is gated to the pre-live window (or once live): a confirmed player
+  // sees it only within the 1h run-up or after open — not days early.
+  const canCheckIn = (preLive || live) && runnable && myEntry?.status === 'confirmed'
   const alreadyCheckedIn = live && myEntry != null && CHECKED_IN_STATUSES.has(myEntry.status)
   // A late arrival can still confirm ("Voy") after the fecha is opened: show it
   // to a live, runnable player who has NOT confirmed and has NOT taken a seat
@@ -444,6 +470,12 @@ export default function FechaDetail() {
   const canConfirmLive =
     live &&
     runnable &&
+    player != null &&
+    (myEntry == null || myEntry.status === 'invited' || myEntry.status === 'declined')
+  // Same "Voy — confirmar asistencia" affordance during the pre-live window: a
+  // player who hasn't confirmed (no entry / invited / declined) can still join.
+  const canConfirmPreLive =
+    preLive &&
     player != null &&
     (myEntry == null || myEntry.status === 'invited' || myEntry.status === 'declined')
   const locating = checkIn.kind === 'locating' || checkIn.kind === 'submitting'
@@ -481,7 +513,7 @@ export default function FechaDetail() {
       )}
       <div className="section-head" style={{ paddingTop: 10 }}>
         <div>
-          <span className="overline">{OVERLINE[tournament.status]}</span>
+          <span className="overline">{preLive ? 'Registro abierto' : OVERLINE[tournament.status]}</span>
           <h1>{tournament.name}</h1>
         </div>
         {cancelled && (
@@ -493,6 +525,11 @@ export default function FechaDetail() {
       <div className="tc-sub" style={{ padding: '0 18px 4px' }}>
         {formatWhen(tournament.scheduled_at)}
       </div>
+      {preLive && (
+        <div className="fd-prelive-note" data-testid="fd-prelive-note">
+          Check-in y pagos abiertos
+        </div>
+      )}
       {scheduled && isAdmin && !cancelled && (
         <ScheduleEditor
           tournamentId={tournament.id}
@@ -512,9 +549,75 @@ export default function FechaDetail() {
         </div>
       )}
 
-      {/* Players list first (prominent) — its own strong top border separates it
-          from the header block. The RSVP summary, own actions and admin actions
-          were moved BELOW it (layout only; every gate is unchanged). */}
+      {/* Top action bar — the player's SINGLE currently-actionable CTA for this
+          moment, surfaced above the list so it's the first thing they act on. The
+          gates (canCheckIn / canConfirm* / RsvpActions) are unchanged; only their
+          placement moved here from the old bottom block. Admin fecha-management
+          (Abrir / Cancelar / Eliminar) stays below — it's not a player action. */}
+      {!completed && runnable && (scheduled || live) && player && (
+        <div className="fd-top-actions" data-testid="fd-top-actions">
+          {live && alreadyCheckedIn ? (
+            <div className="btn-row">
+              <Link className="btn blood full" to="/vivo">
+                Ir a En Vivo
+              </Link>
+            </div>
+          ) : canConfirmLive || canConfirmPreLive ? (
+            <div className="btn-row">
+              <button
+                type="button"
+                className="btn blood full"
+                disabled={busy}
+                onClick={() => doRsvp('confirm')}
+              >
+                Voy — confirmar asistencia
+              </button>
+            </div>
+          ) : canCheckIn ? (
+            <>
+              <GeoBanner state={checkIn} radius={tournament.geofence_radius_m} />
+              <div className="btn-row">
+                <button
+                  type="button"
+                  className="btn blood full"
+                  disabled={locating}
+                  onClick={doCheckIn}
+                >
+                  {checkIn.kind === 'locating'
+                    ? 'Ubicando…'
+                    : checkIn.kind === 'submitting'
+                      ? 'Confirmando…'
+                      : '📍 Hacer check-in'}
+                </button>
+              </div>
+              {preLive && (
+                <div className="btn-row">
+                  <button
+                    type="button"
+                    className="btn ghost sm"
+                    disabled={busy}
+                    onClick={() => setCancelOpen(true)}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              )}
+            </>
+          ) : scheduled && !preLive ? (
+            <div className="btn-row">
+              <RsvpActions
+                status={myEntry?.status}
+                busy={busy}
+                onRsvp={doRsvp}
+                onCancel={() => setCancelOpen(true)}
+              />
+            </div>
+          ) : null}
+        </div>
+      )}
+
+      {/* Players list (prominent) — its own strong top border separates it from
+          the header block. The RSVP summary + admin fecha actions sit BELOW it. */}
       <div className="plist">
         {entries.map((e) => (
           <PlayerAttendanceRow
@@ -524,8 +627,12 @@ export default function FechaDetail() {
             completed={completed}
             seatCount={seatCount}
             scoring={scoring}
-            canAdminCheckIn={isAdmin && (scheduled || live) && runnable && e.status === 'confirmed'}
+            canAdminCheckIn={isAdmin && (preLive || live) && runnable && e.status === 'confirmed'}
+            canConfirmPayment={
+              isAdmin && (preLive || live) && runnable && e.status === 'confirmed' && !e.paid
+            }
             onAdminCheckIn={doAdminCheckIn}
+            onConfirmPayment={doConfirmPayment}
           />
         ))}
       </div>
@@ -543,57 +650,7 @@ export default function FechaDetail() {
         <ChipCount tone="none" n={counts.sinResp} label="Sin resp." />
       </div>
 
-      {/* (2) The player's own RSVP + check-in + Cancelar (RSVP) buttons */}
-      {scheduled && runnable && player && (
-        <div className="btn-row">
-          <RsvpActions status={myEntry?.status} busy={busy} onRsvp={doRsvp} onCancel={() => setCancelOpen(true)} />
-        </div>
-      )}
-      {canConfirmLive && (
-        <div className="btn-row">
-          <button
-            type="button"
-            className="btn blood full"
-            disabled={busy}
-            onClick={() => doRsvp('confirm')}
-          >
-            Voy — confirmar asistencia
-          </button>
-        </div>
-      )}
-      {canCheckIn && (
-        <>
-          <GeoBanner state={checkIn} radius={tournament.geofence_radius_m} />
-          <div className="btn-row">
-            <button
-              type="button"
-              className="btn blood full"
-              disabled={locating}
-              onClick={doCheckIn}
-            >
-              {checkIn.kind === 'locating'
-                ? 'Ubicando…'
-                : checkIn.kind === 'submitting'
-                  ? 'Confirmando…'
-                  : '📍 Hacer check-in'}
-            </button>
-          </div>
-        </>
-      )}
-      {live && runnable && (
-        <div className="btn-row">
-          {alreadyCheckedIn && (
-            <button type="button" className="btn full" disabled>
-              ✓ Ya hiciste check-in
-            </button>
-          )}
-          <Link className="btn blood full" to="/vivo">
-            Ir a En Vivo
-          </Link>
-        </div>
-      )}
-
-      {/* (3) Admin Cancelar-fecha / Eliminar-fecha actions */}
+      {/* (2) Admin Cancelar-fecha / Eliminar-fecha actions (player CTAs moved up) */}
       {isAdmin && (
         <AdminFechaActions
           status={tournament.status}
@@ -962,7 +1019,9 @@ function PlayerAttendanceRow({
   seatCount,
   scoring,
   canAdminCheckIn,
+  canConfirmPayment,
   onAdminCheckIn,
+  onConfirmPayment,
 }: {
   entry: EntryRow
   isMe: boolean
@@ -972,7 +1031,10 @@ function PlayerAttendanceRow({
   /** Season scoring config re-shaped for the v2 breakdown helper. */
   scoring: ScoringConfig
   canAdminCheckIn: boolean
+  /** Admin registration desk: this confirmed entry hasn't paid its buy-in yet. */
+  canConfirmPayment: boolean
   onAdminCheckIn: (entryId: string) => void
+  onConfirmPayment: (entryId: string) => void
 }) {
   const pill = statusPill(entry.status)
   const name = entry.player?.name ?? 'Jugador'
@@ -1044,21 +1106,43 @@ function PlayerAttendanceRow({
           {!result && <div className="sub">{noteFor(entry)}</div>}
           {breakdown && <PointsBreakdownLine breakdown={breakdown} position={entry.final_position!} />}
         </div>
-        {canAdminCheckIn ? (
-          <button
-            type="button"
-            className="btn sm blood admin-checkin"
-            onClick={(e) => {
-              // Don't let the admin action also open the stats popup.
-              e.stopPropagation()
-              onAdminCheckIn(entry.id)
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') e.stopPropagation()
-            }}
-          >
-            Registrar
-          </button>
+        {canAdminCheckIn || canConfirmPayment ? (
+          // Admin registration desk (pre-live / live): confirm the buy-in payment
+          // and/or force a check-in. Each button stops propagation so it never
+          // also opens the row's stats popup.
+          <div className="prow-admin" data-testid="prow-admin">
+            {canConfirmPayment && (
+              <button
+                type="button"
+                className="btn sm ghost admin-pay"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onConfirmPayment(entry.id)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') e.stopPropagation()
+                }}
+              >
+                Confirmar pago
+              </button>
+            )}
+            {canAdminCheckIn && (
+              <button
+                type="button"
+                className="btn sm blood admin-checkin"
+                onClick={(e) => {
+                  // Don't let the admin action also open the stats popup.
+                  e.stopPropagation()
+                  onAdminCheckIn(entry.id)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') e.stopPropagation()
+                }}
+              >
+                Registrar
+              </button>
+            )}
+          </div>
         ) : result ? (
           <FechaResult result={result} />
         ) : (
@@ -1098,10 +1182,11 @@ function PointsBreakdownLine({
   if (breakdown.asistencia) terms.push(`+${breakdown.asistencia} asist`)
   if (breakdown.mesaFinal) terms.push(`+${breakdown.mesaFinal} mesa`)
   if (breakdown.top4) terms.push(`+${breakdown.top4} (${position}º)`)
+  // The running total is intentionally omitted here — it already shows in the
+  // row's place/points badge, so repeating it in the term line was redundant.
   return (
     <div className="fd-breakdown" data-testid="fd-breakdown">
       <span className="bd-terms">{terms.join(' · ')}</span>
-      <span className="bd-total">= {breakdown.total}</span>
     </div>
   )
 }

@@ -240,14 +240,60 @@ describe('FechaDetail', () => {
     expect(h.rpcCalls).toContainEqual(['rsvp', { p_tournament_id: 't-1', p_choice: 'confirm' }])
   })
 
-  it('locks RSVP actions once the fecha is live (shows Ir a En Vivo instead)', async () => {
-    setTournament('live')
+  it('locks RSVP actions once the fecha is live (confirmed → check-in, no Voy/Cancelar)', async () => {
+    setTournament('live') // default beforeEach entry: confirmed
     renderDetail()
     await screen.findByRole('heading', { name: 'Fecha 9' })
 
+    // The scheduled RSVP affordances are gone once live; a confirmed player's
+    // primary CTA is the geofenced check-in.
     expect(screen.queryByRole('button', { name: 'Cancelar' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Voy' })).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /en vivo/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Hacer check-in/i })).toBeInTheDocument()
+  })
+
+  it('live + already-checked-in player sees "Ir a En Vivo" at the top', async () => {
+    setTournament('live')
+    setEntries('checked_in')
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    const bar = screen.getByTestId('fd-top-actions')
+    expect(within(bar).getByRole('link', { name: /en vivo/i })).toBeInTheDocument()
+    // No RSVP / check-in CTA once a seat is taken.
+    expect(within(bar).queryByRole('button', { name: /Hacer check-in/i })).not.toBeInTheDocument()
+  })
+
+  // CHANGE 4 — live-join for a player NOT on the initial list: they can tap "Voy"
+  // to confirm, then the check-in CTA appears (now confirmed).
+  it('live + player with NO entry sees "Voy" at the top; confirming surfaces check-in', async () => {
+    const user = userEvent.setup()
+    setTournament('live')
+    // Entries list does NOT include the signed-in player (p-me).
+    h.list.entry = {
+      data: [
+        { id: 'e2', player_id: 'p2', status: 'playing', rsvp_at: null, cancelled_at: null, checked_in_at: null, early_bird: false, points_earned: null, final_position: null, rebuys_count: 0, player: { name: 'María R.', avatar_url: null } },
+      ],
+      error: null,
+    }
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    const bar = screen.getByTestId('fd-top-actions')
+    const voy = within(bar).getByRole('button', { name: /Voy — confirmar asistencia/i })
+
+    // The post-confirm silent reload returns the now-confirmed entry for p-me.
+    h.list.entry = {
+      data: [
+        { id: 'e-me', player_id: 'p-me', status: 'confirmed', rsvp_at: null, cancelled_at: null, checked_in_at: null, early_bird: false, points_earned: null, final_position: null, rebuys_count: 0, player: { name: 'Edwin V.', avatar_url: null } },
+        { id: 'e2', player_id: 'p2', status: 'playing', rsvp_at: null, cancelled_at: null, checked_in_at: null, early_bird: false, points_earned: null, final_position: null, rebuys_count: 0, player: { name: 'María R.', avatar_url: null } },
+      ],
+      error: null,
+    }
+    await user.click(voy)
+
+    expect(h.rpcCalls).toContainEqual(['rsvp', { p_tournament_id: 't-1', p_choice: 'confirm' }])
+    expect(await screen.findByRole('button', { name: /Hacer check-in/i })).toBeInTheDocument()
   })
 
   // Slice 24 — a late arrival can confirm ("Voy") on a LIVE fecha; decline/cancel
@@ -583,7 +629,9 @@ describe('FechaDetail', () => {
     expect(bd.textContent).toContain('+15 asist')
     expect(bd.textContent).toContain('+10 mesa')
     expect(bd.textContent).toContain('+10 (3º)')
-    expect(bd.textContent).toContain('= 120')
+    // CHANGE 1: the running total is no longer duplicated in the breakdown line
+    // (it already shows in the row's place/points badge).
+    expect(bd.textContent).not.toContain('=')
   })
 
   // ---- Tap interactions: avatar → lightbox, row → player-stats (parity w/ Tabla).
@@ -672,7 +720,7 @@ describe('FechaDetail', () => {
     // Eliminated on a LIVE fecha → real-time breakdown. N = 3 seated → (3−3)×5 = 0 base.
     const elim = within(byName('Carla')).getByTestId('fd-breakdown')
     expect(elim.textContent).toContain('Base 0')
-    expect(elim.textContent).toContain('= 35') // 0 + 15 asist + 10 mesa + 10 (3º)
+    expect(elim.textContent).not.toContain('=') // total moved to the result badge
     // …AND the right-side badge shows the finishing place + live total (breakdown
     // fallback since points_earned is null): "3º · +35 pts".
     const result = within(byName('Carla')).getByTestId('fd-result')
