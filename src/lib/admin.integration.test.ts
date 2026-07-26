@@ -232,7 +232,7 @@ describe.skipIf(!canRun)('admin console RPCs (slice 12, local integration)', () 
   })
 
   // ------------------------------------------------------------------------
-  it('add_rebuy reactivates an eliminated player but is REJECTED while playing', async () => {
+  it('add_rebuy reactivates an eliminated player (fresh stack, +1 rebuy, grows pot) but is REJECTED while playing', async () => {
     const t = await mkTournament({ finalTableSize: 5, currentLevel: 3, rebuyUntil: 6 })
     const eliminated = await mkEntry(t, await mkPlayer(), {
       status: 'eliminated',
@@ -241,7 +241,9 @@ describe.skipIf(!canRun)('admin console RPCs (slice 12, local integration)', () 
     })
     const playing = await mkEntry(t, await mkPlayer(), { status: 'playing' })
 
-    // eliminated + within period → reactivated.
+    const potBefore = Number((await admin.rpc('fn_pot', { p_tournament_id: t })).data)
+
+    // eliminated → reactivated with a fresh stack.
     const { error } = await admin.rpc('add_rebuy', { p_entry_id: eliminated })
     expect(error).toBeNull()
     const re = await readEntry(eliminated)
@@ -251,6 +253,10 @@ describe.skipIf(!canRun)('admin console RPCs (slice 12, local integration)', () 
     expect(re.rebuys_count).toBe(1)
     expect(re.chips).toBe(STACK)
 
+    // the re-entry grew the pot by one rebuy_amount.
+    const potAfter = Number((await admin.rpc('fn_pot', { p_tournament_id: t })).data)
+    expect(potAfter).toBeGreaterThan(potBefore)
+
     // playing → rejected.
     const { error: err2 } = await admin.rpc('add_rebuy', { p_entry_id: playing })
     expect(err2).not.toBeNull()
@@ -258,7 +264,9 @@ describe.skipIf(!canRun)('admin console RPCs (slice 12, local integration)', () 
   })
 
   // ------------------------------------------------------------------------
-  it('add_rebuy is rejected once the rebuy period has closed', async () => {
+  // mig 0029: the blind-level cutoff is removed — a player who busts near the
+  // window edge can still rebuy after the clock passed the old rebuy window.
+  it('add_rebuy is allowed past the blind window (level cutoff removed)', async () => {
     const t = await mkTournament({ currentLevel: 7, rebuyUntil: 6 })
     const eliminated = await mkEntry(t, await mkPlayer(), {
       status: 'eliminated',
@@ -266,8 +274,46 @@ describe.skipIf(!canRun)('admin console RPCs (slice 12, local integration)', () 
       eliminated_at: new Date().toISOString(),
     })
     const { error } = await admin.rpc('add_rebuy', { p_entry_id: eliminated })
+    expect(error).toBeNull()
+    const re = await readEntry(eliminated)
+    expect(re.status).toBe('playing')
+    expect(re.final_position).toBeNull()
+    expect(re.eliminated_at).toBeNull()
+    expect(re.rebuys_count).toBe(1)
+    expect(re.chips).toBe(STACK)
+  })
+
+  // ------------------------------------------------------------------------
+  // mig 0029: once the fecha is decided (a winner is crowned, heads-up over) a
+  // rebuy is rejected — no resurrecting a busted player after the night is over.
+  it('add_rebuy is rejected once the fecha has a winner', async () => {
+    const t = await mkTournament({ finalTableSize: 5, currentLevel: 3, rebuyUntil: 6 })
+    const a = await mkEntry(t, await mkPlayer(), { status: 'playing' })
+    const b = await mkEntry(t, await mkPlayer(), { status: 'playing' })
+
+    // 2 alive incl self → bust a → position 2; b is crowned winner at position 1.
+    expect((await admin.rpc('eliminate', { p_entry_id: a })).error).toBeNull()
+    expect((await readEntry(b)).status).toBe('winner')
+
+    // a is eliminated, but the fecha is over → rebuy rejected by the winner guard.
+    const { error } = await admin.rpc('add_rebuy', { p_entry_id: a })
     expect(error).not.toBeNull()
-    expect(error!.message).toMatch(/recompra ya cerró/i)
+    expect(error!.message).toMatch(/ya terminó \(hay ganador\)/i)
+  })
+
+  // ------------------------------------------------------------------------
+  // The admin gate still holds: a signed-in non-admin cannot register a rebuy.
+  it('add_rebuy is rejected for a non-admin caller', async () => {
+    const t = await mkTournament({ currentLevel: 3, rebuyUntil: 6 })
+    const eliminated = await mkEntry(t, await mkPlayer(), {
+      status: 'eliminated',
+      final_position: 4,
+      eliminated_at: new Date().toISOString(),
+    })
+    const { client } = await mkSignedInMember()
+    const { error } = await client.rpc('add_rebuy', { p_entry_id: eliminated })
+    expect(error).not.toBeNull()
+    expect(error!.message).toMatch(/solo un admin/i)
   })
 
   // ------------------------------------------------------------------------
