@@ -297,6 +297,75 @@ describe('Live — state-based timer + scoreboard', () => {
   })
 })
 
+describe('Live — live points (parity with Fecha)', () => {
+  // Field of 14, everyone paid, points_earned null so the CLIENT breakdown drives
+  // the displayed total. Positions 1..10 made the final table; 11..14 did not.
+  function setBigField() {
+    h.list.entry = {
+      data: Array.from({ length: 14 }, (_, i) => {
+        const p = i + 1
+        return {
+          id: `s${p}`,
+          player_id: `p-${p}`,
+          status: 'eliminated',
+          final_position: p,
+          chips: 0,
+          paid: true,
+          points_earned: null,
+          made_final_table: p <= 10,
+          chop_group: null,
+          player: { name: `Jugador ${p}`, avatar_url: null },
+        }
+      }),
+      error: null,
+    }
+    // Scoring-v2 season config (== the parser defaults; set to exercise the load).
+    h.single.season = {
+      data: {
+        points_multiplier: 5,
+        bonus_final_table: 10,
+        bonus_attendance: 15,
+        top_finish_bonuses: [20, 15, 10, 5],
+      },
+      error: null,
+    }
+  }
+
+  it('shows each eliminated finisher its fecha points total + breakdown', async () => {
+    setBigField()
+    renderLive()
+    await screen.findByTestId('timer')
+
+    // 14º of 14, paid, no final table → base (14−14)×5=0 + asist 15 = 15.
+    const last = screen.getByText('Jugador 14').closest('[data-testid="standing"]') as HTMLElement
+    expect(within(last).getByTestId('standing-points')).toHaveTextContent('+15 pts')
+    const lastBd = within(last).getByTestId('standing-breakdown')
+    expect(lastBd).toHaveTextContent('Base 0')
+    expect(lastBd).toHaveTextContent('+15 asist')
+    expect(lastBd).toHaveTextContent('= 15')
+    expect(lastBd).not.toHaveTextContent('mesa')
+
+    // 10º of 14, paid, made the final table → base (14−10)×5=20 + asist 15 + mesa 10 = 45.
+    const tenth = screen.getByText('Jugador 10').closest('[data-testid="standing"]') as HTMLElement
+    expect(within(tenth).getByTestId('standing-points')).toHaveTextContent('+45 pts')
+    const tenthBd = within(tenth).getByTestId('standing-breakdown')
+    expect(tenthBd).toHaveTextContent('Base 20')
+    expect(tenthBd).toHaveTextContent('+15 asist')
+    expect(tenthBd).toHaveTextContent('+10 mesa')
+    expect(tenthBd).toHaveTextContent('= 45')
+  })
+
+  it('shows NO points for a still-alive player', async () => {
+    // Default fixture: Cid is playing (alive) → keeps "En juego", never a total.
+    renderLive()
+    await screen.findByTestId('timer')
+    const alive = screen.getByText('Cid').closest('[data-testid="standing"]') as HTMLElement
+    expect(within(alive).getByText('En juego')).toBeInTheDocument()
+    expect(within(alive).queryByTestId('standing-points')).not.toBeInTheDocument()
+    expect(within(alive).queryByTestId('standing-breakdown')).not.toBeInTheDocument()
+  })
+})
+
 describe('Live — realtime', () => {
   it('subscribes, patches state when a postgres_changes payload arrives, unsubscribes on unmount', async () => {
     const { unmount } = renderLive()
