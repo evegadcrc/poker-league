@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAuth, useRole } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { deriveLiveSignal, useLiveEventCues } from '@/lib/notify'
+import { startLevelAlarm, stopLevelAlarm } from '@/lib/sound'
 import Sheet from '@/components/Sheet'
 import PrizeList from '@/components/PrizeList'
 import { aliveCount, colonesCompact, playedCount, type EntryStatus } from '@/lib/fechas'
@@ -30,6 +31,7 @@ type LiveTournament = {
   id: string
   name: string
   ante_enabled: boolean
+  timer_mode: 'auto' | 'manual'
   current_level: number
   level_started_at: string | null
   is_paused: boolean
@@ -61,7 +63,7 @@ type Conn = 'connecting' | 'live' | 'reconnecting'
 // The cue-engine signal is derived by the shared `deriveLiveSignal` (notify.ts).
 
 const TOURNAMENT_COLUMNS =
-  'id, name, ante_enabled, current_level, level_started_at, is_paused, paused_remaining_seconds, blind_structure_id, prizes, payout_distribution'
+  'id, name, ante_enabled, timer_mode, current_level, level_started_at, is_paused, paused_remaining_seconds, blind_structure_id, prizes, payout_distribution'
 
 async function fetchLive(): Promise<State> {
   // A single fecha is live at a time; take the most recent just in case.
@@ -198,6 +200,50 @@ export default function Live() {
   const { toast: eventToast, permission: notifyPermission, requestNotifications } =
     useLiveEventCues(deriveLiveSignal(state, now))
 
+  // Level clock, computed BEFORE the early returns so the alarm effect below
+  // runs unconditionally (hooks can't sit after a conditional return). After the
+  // returns `state.phase === 'ready'`, so these are the same values the render uses.
+  const level = state.phase === 'ready' ? findLevel(state.levels, state.tournament.current_level) : null
+  const upcoming =
+    state.phase === 'ready' ? nextLevel(state.levels, state.tournament.current_level) : null
+  const remaining =
+    state.phase === 'ready'
+      ? remainingSeconds(
+          {
+            isPaused: state.tournament.is_paused,
+            pausedRemainingSeconds: state.tournament.paused_remaining_seconds,
+            levelStartedAt: state.tournament.level_started_at,
+            levelDurationSeconds: level?.duration_seconds ?? 0,
+          },
+          now,
+        )
+      : 0
+
+  // Level-END alarm for PLAYERS. The admin device is the sole clock writer; a
+  // player never advances the level. When THIS player's local clock for a live,
+  // running (auto-mode, not paused) level reaches 0, sound the SAME persistent
+  // alarm the admin hears and show a "waiting for the admin" indicator. The
+  // alarm loops until the admin advances (a Realtime update brings a fresh
+  // level_started_at → remaining > 0 → alarmActive false), pauses, or completes
+  // the fecha, or this view unmounts — all covered by the effect cleanup below.
+  // Mirrors the admin's condition; only sounds when there's actually a next
+  // level to wait for (the last level ending is terminal, no looping alarm).
+  const levelEnded =
+    state.phase === 'ready' &&
+    state.tournament.timer_mode === 'auto' &&
+    !state.tournament.is_paused &&
+    state.tournament.level_started_at != null &&
+    remaining <= 0
+  const alarmActive = levelEnded && upcoming != null
+
+  // Key the effect on the `alarmActive` boolean (NOT the per-second `now` tick)
+  // so the synth's own loop keeps sounding instead of restarting every second.
+  useEffect(() => {
+    if (!alarmActive) return
+    startLevelAlarm()
+    return () => stopLevelAlarm()
+  }, [alarmActive])
+
   if (state.phase === 'loading') {
     return <Framed overline="En juego" title="En vivo" note="Cargando torneo…" />
   }
@@ -221,7 +267,7 @@ export default function Live() {
     )
   }
 
-  const { tournament, levels, entries, prizes, pot } = state
+  const { tournament, entries, prizes, pot } = state
   const myEntry = player ? (entries.find((e) => e.player_id === player.id) ?? null) : null
   // A player can self-report only while they are still in play (checked_in / playing).
   const canSelfBust = myEntry != null && isAlive(myEntry.status)
@@ -259,17 +305,6 @@ export default function Live() {
     void load() // reconcile optimistic placement with server truth
   }
 
-  const level = findLevel(levels, tournament.current_level)
-  const upcoming = nextLevel(levels, tournament.current_level)
-  const remaining = remainingSeconds(
-    {
-      isPaused: tournament.is_paused,
-      pausedRemainingSeconds: tournament.paused_remaining_seconds,
-      levelStartedAt: tournament.level_started_at,
-      levelDurationSeconds: level?.duration_seconds ?? 0,
-    },
-    now,
-  )
   const anteVisible = showAnte(level, tournament.ante_enabled)
   const standings = liveStandings(entries)
   const alive = aliveCount(entries)
@@ -317,7 +352,7 @@ export default function Live() {
         </div>
       )}
 
-      <div className={`live-wrap${tournament.is_paused ? ' paused' : ''}`}>
+      <div className={`live-wrap${tournament.is_paused ? ' paused' : ''}${levelEnded ? ' ended' : ''}`}>
         <div className="lvl">{level?.is_break ? 'Descanso' : `Nivel ${tournament.current_level}`}</div>
         <div className="timer" data-testid="timer">
           {formatClock(remaining)}
@@ -335,7 +370,13 @@ export default function Live() {
             {anteVisible && <Blind label="Ante" value={level?.ante ?? 0} />}
           </div>
         )}
-        <div className="next-lvl">{nextLabel(upcoming)}</div>
+        {levelEnded ? (
+          <div className="level-ended" role="status" data-testid="live-level-ended">
+            <div className="level-ended-msg">¡Tiempo! Esperando al admin…</div>
+          </div>
+        ) : (
+          <div className="next-lvl">{nextLabel(upcoming)}</div>
+        )}
       </div>
 
       <div className="live-stats">
