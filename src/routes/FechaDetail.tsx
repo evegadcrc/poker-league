@@ -6,6 +6,8 @@ import { cn } from '@/lib/utils'
 import { useLoadable } from '@/lib/useLoadable'
 import Avatar from '@/components/Avatar'
 import AvatarLightbox from '@/components/AvatarLightbox'
+import PhotoLightbox from '@/components/PhotoLightbox'
+import ImageCropper from '@/components/ImageCropper'
 import PlayerStatsSheet from '@/components/PlayerStatsSheet'
 import Galeria, { galleryUrl } from '@/components/Galeria'
 import PrizeList from '@/components/PrizeList'
@@ -16,6 +18,7 @@ import { formatMiles } from '@/lib/format'
 import { parsePrizes, type Prize } from '@/lib/live'
 import {
   attendanceCounts,
+  attendanceSort,
   bandLabel,
   formatWhen,
   hoursUntil,
@@ -24,7 +27,6 @@ import {
   pickBand,
   playedCount,
   statusPill,
-  statusRank,
   toDatetimeLocal,
   type Band,
   type EntryStatus,
@@ -137,9 +139,7 @@ async function fetchDetail(id: string): Promise<State> {
 
   if (eErr || sErr) return { phase: 'error' }
 
-  const rows = ((entries ?? []) as EntryRow[])
-    .slice()
-    .sort((a, b) => statusRank(a.status) - statusRank(b.status))
+  const rows = ((entries ?? []) as EntryRow[]).slice().sort(attendanceSort)
 
   const seasonRow = (season ?? null) as { cancel_bands?: unknown } | null
 
@@ -165,6 +165,8 @@ export default function FechaDetail() {
   )
   const [busy, setBusy] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
+  // Non-null → the cover hero is expanded in a full-screen lightbox.
+  const [coverZoom, setCoverZoom] = useState(false)
   // Non-null → the "Abrir fecha" RPC failed (e.g. it's no longer scheduled).
   const [openError, setOpenError] = useState<string | null>(null)
   const [checkIn, setCheckIn] = useState<CheckIn>({ kind: 'idle' })
@@ -205,7 +207,7 @@ export default function FechaDetail() {
             player: { name: player.name, avatar_url: player.avatar_url },
           })
         }
-        entries.sort((a, b) => statusRank(a.status) - statusRank(b.status))
+        entries.sort(attendanceSort)
         return { ...prev, entries }
       })
     },
@@ -465,6 +467,18 @@ export default function FechaDetail() {
   return (
     <>
       <Back />
+      {/* Portada hero — visible to EVERYONE (not just the admin), tap to expand.
+          The upload affordance stays admin-only in CoverControl below. */}
+      {tournament.cover_url && (
+        <button
+          type="button"
+          className="fd-cover-hero"
+          data-testid="fd-cover-hero"
+          style={{ backgroundImage: `url("${tournament.cover_url}")` }}
+          aria-label="Ampliar portada de la fecha"
+          onClick={() => setCoverZoom(true)}
+        />
+      )}
       <div className="section-head" style={{ paddingTop: 10 }}>
         <div>
           <span className="overline">{OVERLINE[tournament.status]}</span>
@@ -614,6 +628,14 @@ export default function FechaDetail() {
       />
 
       <CheckInCelebration celebrate={celebrate} onClose={() => setCelebrate(null)} />
+
+      {coverZoom && tournament.cover_url && (
+        <PhotoLightbox
+          url={tournament.cover_url}
+          alt="Portada de la fecha"
+          onClose={() => setCoverZoom(false)}
+        />
+      )}
     </>
   )
 
@@ -1266,19 +1288,29 @@ function CoverControl({
   const inputRef = useRef<HTMLInputElement>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Non-null → the picked file is being framed in the crop modal (16/9) before
+  // it is uploaded, so the stored cover already centers nicely in the card.
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
 
-  const onFile = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0]
-      e.target.value = ''
-      if (!file || !uploaderId) return
+  const onFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setError(null)
+    setPendingFile(file)
+  }, [])
+
+  // Upload the CROPPED blob (always JPEG) then point tournament.cover_url at it.
+  const uploadBlob = useCallback(
+    async (blob: Blob) => {
+      setPendingFile(null)
+      if (!uploaderId) return
       setBusy(true)
       setError(null)
-      const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
-      const path = `${uploaderId}/covers/${tournamentId}-${crypto.randomUUID()}.${ext}`
+      const path = `${uploaderId}/covers/${tournamentId}-${crypto.randomUUID()}.jpg`
       const { error: upErr } = await supabase.storage
         .from('gallery')
-        .upload(path, file, { contentType: file.type || undefined })
+        .upload(path, blob, { contentType: 'image/jpeg' })
       if (upErr) {
         setBusy(false)
         setError('No se pudo subir la portada. Probá de nuevo.')
@@ -1317,15 +1349,6 @@ function CoverControl({
           🖼️
         </button>
       </div>
-      {coverUrl && (
-        <div
-          className="cover-preview"
-          style={{ backgroundImage: `url("${coverUrl}")` }}
-          data-testid="cover-preview"
-          role="img"
-          aria-label="Portada de la fecha"
-        />
-      )}
       <input
         ref={inputRef}
         type="file"
@@ -1339,6 +1362,16 @@ function CoverControl({
         <div className="fd-note" role="alert">
           <p>{error}</p>
         </div>
+      )}
+      {pendingFile && (
+        <ImageCropper
+          file={pendingFile}
+          aspect={16 / 9}
+          outputWidth={1200}
+          title="Ajustá la portada"
+          onCancel={() => setPendingFile(null)}
+          onCropped={uploadBlob}
+        />
       )}
     </section>
   )

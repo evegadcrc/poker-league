@@ -182,6 +182,9 @@ describe('Profile (Perfil)', () => {
     const file = new File(['x'], 'me.png', { type: 'image/png' })
     await user.upload(screen.getByLabelText('Subir foto de perfil'), file)
 
+    // Picking the file opens the 1:1 crop modal; confirm it to trigger the upload.
+    await user.click(await screen.findByRole('button', { name: 'Usar foto' }))
+
     await waitFor(() => expect(h.updatePlayer).toHaveBeenCalled())
 
     // Uploaded under the player-id folder so the owner-only RLS policy matches.
@@ -211,6 +214,7 @@ describe('Profile (Perfil)', () => {
 
     const file = new File(['x'], 'me.png', { type: 'image/png' })
     await user.upload(screen.getByLabelText('Subir foto de perfil'), file)
+    await user.click(await screen.findByRole('button', { name: 'Usar foto' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/no se pudo subir la foto/i)
     // No profile-save RPC attempted on a failed upload.
@@ -225,6 +229,7 @@ describe('Profile (Perfil)', () => {
 
     const file = new File(['x'], 'me.png', { type: 'image/png' })
     await user.upload(screen.getByLabelText('Subir foto de perfil'), file)
+    await user.click(await screen.findByRole('button', { name: 'Usar foto' }))
 
     // The RPC was attempted (upload succeeded) but reported an error.
     expect(await screen.findByRole('alert')).toHaveTextContent(/no se pudo guardar/i)
