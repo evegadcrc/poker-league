@@ -50,6 +50,12 @@ vi.mock('@/lib/supabase', () => ({
       h.rpcCalls.push([name, args])
       return Promise.resolve(h.rpcResult)
     },
+    // Realtime stub (mig 0030 live-refresh subscription) — chainable no-op.
+    channel: () => {
+      const ch: Record<string, unknown> = { on: () => ch, subscribe: () => ch }
+      return ch
+    },
+    removeChannel: () => {},
   },
 }))
 
