@@ -342,7 +342,9 @@ describe('Live — live points (parity with Fecha)', () => {
     const lastBd = within(last).getByTestId('standing-breakdown')
     expect(lastBd).toHaveTextContent('Base 0')
     expect(lastBd).toHaveTextContent('+15 asist')
-    expect(lastBd).toHaveTextContent('= 15')
+    // The running total is no longer duplicated in the breakdown line — it lives
+    // in the standings points badge (asserted above).
+    expect(lastBd).not.toHaveTextContent('=')
     expect(lastBd).not.toHaveTextContent('mesa')
 
     // 10º of 14, paid, made the final table → base (14−10)×5=20 + asist 15 + mesa 10 = 45.
@@ -352,7 +354,7 @@ describe('Live — live points (parity with Fecha)', () => {
     expect(tenthBd).toHaveTextContent('Base 20')
     expect(tenthBd).toHaveTextContent('+15 asist')
     expect(tenthBd).toHaveTextContent('+10 mesa')
-    expect(tenthBd).toHaveTextContent('= 45')
+    expect(tenthBd).not.toHaveTextContent('=')
   })
 
   it('shows NO points for a still-alive player', async () => {

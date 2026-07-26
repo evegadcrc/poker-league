@@ -62,14 +62,16 @@ vi.mock('@/lib/supabase', () => ({
 import FechaDetail from './FechaDetail'
 
 const FUTURE = new Date(Date.now() + 2 * 3_600_000).toISOString()
+// Inside the 1h pre-live window (30 min out) vs. comfortably outside it (2h out).
+const PRELIVE = new Date(Date.now() + 30 * 60_000).toISOString()
 
-function setTournament(status = 'live') {
+function setTournament(status = 'live', scheduledAt = FUTURE) {
   h.single.tournament = {
     data: {
       id: 't-1',
       season_id: 's1',
       name: 'Fecha 9',
-      scheduled_at: FUTURE,
+      scheduled_at: scheduledAt,
       status,
       geofence_radius_m: 100,
     },
@@ -129,12 +131,24 @@ describe('FechaDetail — geofenced check-in', () => {
     expect(screen.getByRole('button', { name: /Hacer check-in/i })).toBeInTheDocument()
   })
 
-  it('a scheduled + confirmed player already sees the check-in button (before open)', async () => {
-    setTournament('scheduled')
+  it('pre-live (scheduled, ≤1h before start) + confirmed player sees the check-in button', async () => {
+    setTournament('scheduled', PRELIVE)
     renderDetail()
     await screen.findByRole('heading', { name: 'Fecha 9' })
 
     expect(screen.getByRole('button', { name: /Hacer check-in/i })).toBeInTheDocument()
+    // Pre-live surfaces its "Registro abierto" state label + sub-label.
+    expect(screen.getByTestId('fd-prelive-note')).toHaveTextContent(/check-in y pagos abiertos/i)
+  })
+
+  it('scheduled but NOT yet pre-live (>1h before start): NO check-in button yet', async () => {
+    setTournament('scheduled', FUTURE) // 2h out
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    // Check-in is gated to the 1h window — a confirmed player only sees RSVP.
+    expect(screen.queryByRole('button', { name: /Hacer check-in/i })).not.toBeInTheDocument()
+    expect(screen.queryByTestId('fd-prelive-note')).not.toBeInTheDocument()
   })
 
   it('success: geolocates, calls check_in with coords, shows the +2.000 fichas moment', async () => {
@@ -196,6 +210,39 @@ describe('FechaDetail — geofenced check-in', () => {
     await user.click(within(maria).getByRole('button', { name: 'Registrar' }))
 
     expect(h.rpcCalls).toContainEqual(['admin_check_in', { p_entry_id: 'e2' }])
+  })
+
+  // CHANGE 3 — admin registration desk: a "Confirmar pago" per-row button for a
+  // confirmed-but-unpaid entry (pre-live / live) → confirm_payment RPC.
+  it('admin sees "Confirmar pago" for a confirmed unpaid entry and it calls confirm_payment', async () => {
+    h.isAdmin = true
+    // Live + confirmed rows (paid undefined → treated as unpaid).
+    const user = userEvent.setup()
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    const maria = screen.getAllByTestId('prow').find((r) => within(r).queryByText(/María/))!
+    await user.click(within(maria).getByRole('button', { name: 'Confirmar pago' }))
+
+    expect(h.rpcCalls).toContainEqual(['confirm_payment', { p_entry_id: 'e2' }])
+    // The stats popup never opened (the button stops propagation).
+    expect(screen.queryByTestId('ps-stats')).not.toBeInTheDocument()
+  })
+
+  it('hides "Confirmar pago" once the entry is already paid', async () => {
+    h.isAdmin = true
+    h.list.entry = {
+      data: [
+        { id: 'e2', player_id: 'p2', status: 'confirmed', paid: true, rsvp_at: null, cancelled_at: null, checked_in_at: null, early_bird: false, chips: null, points_earned: null, final_position: null, rebuys_count: 0, player: { name: 'María R.', avatar_url: null } },
+      ],
+      error: null,
+    }
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    expect(screen.queryByRole('button', { name: 'Confirmar pago' })).not.toBeInTheDocument()
+    // Registrar (admin_check_in) is still offered for the confirmed player.
+    expect(screen.getByRole('button', { name: 'Registrar' })).toBeInTheDocument()
   })
 
   it('scheduled fecha: admin edits the date/time → updates tournament.scheduled_at', async () => {
