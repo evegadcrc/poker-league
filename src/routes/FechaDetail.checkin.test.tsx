@@ -123,6 +123,14 @@ describe('FechaDetail — geofenced check-in', () => {
     expect(screen.getByRole('button', { name: /Hacer check-in/i })).toBeInTheDocument()
   })
 
+  it('a scheduled + confirmed player already sees the check-in button (before open)', async () => {
+    setTournament('scheduled')
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    expect(screen.getByRole('button', { name: /Hacer check-in/i })).toBeInTheDocument()
+  })
+
   it('success: geolocates, calls check_in with coords, shows the +2.000 fichas moment', async () => {
     stubGeo('ok')
     h.rpcResult = { data: [{ early_bird: true, chips: 12000 }], error: null }

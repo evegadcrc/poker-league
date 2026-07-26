@@ -51,8 +51,9 @@ describe.skipIf(!canRun)('check_in / admin_check_in (slice 10, local integration
 
   async function mkTournament(opts: {
     scheduledAt: string
-    status?: 'scheduled' | 'live'
+    status?: 'scheduled' | 'live' | 'completed'
     withVenue?: boolean
+    cancelledAt?: string
   }) {
     const { data, error } = await admin
       .from('tournament')
@@ -61,6 +62,7 @@ describe.skipIf(!canRun)('check_in / admin_check_in (slice 10, local integration
         name: `T ${RUN}`,
         scheduled_at: opts.scheduledAt,
         status: opts.status ?? 'live',
+        cancelled_at: opts.cancelledAt ?? null,
         venue_lat: opts.withVenue === false ? null : VENUE.lat,
         venue_lng: opts.withVenue === false ? null : VENUE.lng,
         geofence_radius_m: 100,
@@ -82,6 +84,16 @@ describe.skipIf(!canRun)('check_in / admin_check_in (slice 10, local integration
         status: 'confirmed',
         rsvp_at: new Date().toISOString(),
       })
+      .select('id')
+      .single()
+    if (error) throw error
+    return data.id
+  }
+
+  async function mkEntry(tournamentId: string, status: 'invited' | 'declined' | 'no_show') {
+    const { data, error } = await admin
+      .from('entry')
+      .insert({ tournament_id: tournamentId, player_id: memberPlayerId, status })
       .select('id')
       .single()
     if (error) throw error
@@ -211,10 +223,34 @@ describe.skipIf(!canRun)('check_in / admin_check_in (slice 10, local integration
   })
 
   // ------------------------------------------------------------------------
-  it('status not live (scheduled) → rejected even inside the radius', async () => {
+  // Check-in is allowed BEFORE the admin opens the fecha: people arrive early.
+  it('scheduled (before open) + before start → checked_in, early_bird, chips = stack+bonus', async () => {
     const t = await mkTournament({
       scheduledAt: new Date(Date.now() + 2 * HOUR_MS).toISOString(),
       status: 'scheduled',
+    })
+    await mkConfirmedEntry(t)
+
+    const { error } = await member.rpc('check_in', {
+      p_tournament_id: t,
+      p_lat: VENUE.lat,
+      p_lng: VENUE.lng,
+    })
+    expect(error).toBeNull()
+
+    const entry = await readEntry(t)
+    expect(entry!.status).toBe('checked_in')
+    expect(entry!.check_in_geo_ok).toBe(true)
+    expect(entry!.early_bird).toBe(true)
+    expect(entry!.chips).toBe(STACK + BONUS)
+    expect(await readFinalTableSize(t)).toBe(5)
+  })
+
+  // ------------------------------------------------------------------------
+  it('completed fecha → rejected (the night is over)', async () => {
+    const t = await mkTournament({
+      scheduledAt: new Date(Date.now() - 2 * HOUR_MS).toISOString(),
+      status: 'completed',
     })
     await mkConfirmedEntry(t)
 
@@ -231,6 +267,47 @@ describe.skipIf(!canRun)('check_in / admin_check_in (slice 10, local integration
   })
 
   // ------------------------------------------------------------------------
+  it('cancelled fecha (cancelled_at set) → rejected even while scheduled', async () => {
+    const t = await mkTournament({
+      scheduledAt: new Date(Date.now() + 2 * HOUR_MS).toISOString(),
+      status: 'scheduled',
+      cancelledAt: new Date().toISOString(),
+    })
+    await mkConfirmedEntry(t)
+
+    const { error } = await member.rpc('check_in', {
+      p_tournament_id: t,
+      p_lat: VENUE.lat,
+      p_lng: VENUE.lng,
+    })
+    expect(error).not.toBeNull()
+    expect(error!.message).toMatch(/cancelada/i)
+
+    const entry = await readEntry(t)
+    expect(entry!.status).toBe('confirmed')
+  })
+
+  // ------------------------------------------------------------------------
+  it('non-confirmed entry (invited) → rejected', async () => {
+    const t = await mkTournament({
+      scheduledAt: new Date(Date.now() + 2 * HOUR_MS).toISOString(),
+      status: 'scheduled',
+    })
+    await mkEntry(t, 'invited')
+
+    const { error } = await member.rpc('check_in', {
+      p_tournament_id: t,
+      p_lat: VENUE.lat,
+      p_lng: VENUE.lng,
+    })
+    expect(error).not.toBeNull()
+    expect(error!.message).toMatch(/no estás confirmado/i)
+
+    const entry = await readEntry(t)
+    expect(entry!.status).toBe('invited')
+  })
+
+  // ------------------------------------------------------------------------
   it('admin_check_in bypasses geo (check_in_geo_ok=false) and recomputes', async () => {
     const t = await mkTournament({ scheduledAt: new Date(Date.now() + 2 * HOUR_MS).toISOString() })
     const entryId = await mkConfirmedEntry(t)
@@ -244,5 +321,40 @@ describe.skipIf(!canRun)('check_in / admin_check_in (slice 10, local integration
     expect(entry!.early_bird).toBe(true) // before start
     expect(entry!.chips).toBe(STACK + BONUS)
     expect(await readFinalTableSize(t)).toBe(5)
+  })
+
+  // ------------------------------------------------------------------------
+  it('admin_check_in works on a SCHEDULED fecha (before open)', async () => {
+    const t = await mkTournament({
+      scheduledAt: new Date(Date.now() + 2 * HOUR_MS).toISOString(),
+      status: 'scheduled',
+    })
+    const entryId = await mkConfirmedEntry(t)
+
+    const { error } = await admin.rpc('admin_check_in', { p_entry_id: entryId })
+    expect(error).toBeNull()
+
+    const entry = await readEntry(t)
+    expect(entry!.status).toBe('checked_in')
+    expect(entry!.check_in_geo_ok).toBe(false)
+    expect(entry!.early_bird).toBe(true)
+    expect(entry!.chips).toBe(STACK + BONUS)
+  })
+
+  // ------------------------------------------------------------------------
+  it('admin_check_in rejects a non-admin caller', async () => {
+    const t = await mkTournament({
+      scheduledAt: new Date(Date.now() + 2 * HOUR_MS).toISOString(),
+      status: 'scheduled',
+    })
+    const entryId = await mkConfirmedEntry(t)
+
+    // `member` is a signed-in, non-admin league member → gate rejects.
+    const { error } = await member.rpc('admin_check_in', { p_entry_id: entryId })
+    expect(error).not.toBeNull()
+    expect(error!.message).toMatch(/solo un admin/i)
+
+    const entry = await readEntry(t)
+    expect(entry!.status).toBe('confirmed')
   })
 })
