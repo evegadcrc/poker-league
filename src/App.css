@@ -2656,9 +2656,14 @@
 /* Admin management row on the fecha view: cancel + delete. */
 .fd-admin-actions {
   display: flex;
+  flex-direction: column;
   gap: 8px;
   padding: 2px 18px 8px;
 }
-.fd-admin-actions .btn {
+.fd-admin-actions .fd-admin-row {
+  display: flex;
+  gap: 8px;
+}
+.fd-admin-actions .fd-admin-row .btn {
   flex: 1;
 }

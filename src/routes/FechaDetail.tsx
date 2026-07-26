@@ -165,6 +165,8 @@ export default function FechaDetail() {
   )
   const [busy, setBusy] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
+  // Non-null → the "Abrir fecha" RPC failed (e.g. it's no longer scheduled).
+  const [openError, setOpenError] = useState<string | null>(null)
   const [checkIn, setCheckIn] = useState<CheckIn>({ kind: 'idle' })
   // Non-null → show the celebratory "+2.000 fichas" sheet after a check-in.
   const [celebrate, setCelebrate] = useState<{ earlyBird: boolean; chips: number | null } | null>(
@@ -291,6 +293,30 @@ export default function FechaDetail() {
     },
     [setState, reload],
   )
+
+  // Admin: open a scheduled fecha → live (open_tournament RPC, mig 0005). It sizes
+  // the final table, materializes prizes and auto-flips confirmed-but-not-checked-in
+  // players to no_show, so it's confirmed first. On success the admin lands on the
+  // live view (/vivo) to run the clock / open the Consola; the RPC raises if the
+  // fecha is no longer scheduled (already live / completed).
+  const doOpenFecha = useCallback(async () => {
+    if (
+      !window.confirm(
+        '¿Abrir la fecha? Empieza el juego y los confirmados que no hicieron check-in quedarán como no-show.',
+      )
+    )
+      return
+    setBusy(true)
+    setOpenError(null)
+    const { error } = await supabase.rpc('open_tournament', { p_tournament_id: id })
+    setBusy(false)
+    if (error) {
+      console.error('open_tournament failed', error.message)
+      setOpenError('No se pudo abrir la fecha. Puede que ya no esté programada.')
+      return
+    }
+    navigate('/vivo')
+  }, [id, navigate])
 
   // Admin: mark a scheduled/live fecha as cancelled (soft flag via the admin-only
   // tournament UPDATE policy, 0017). The row stays; it just stops being runnable.
@@ -527,6 +553,8 @@ export default function FechaDetail() {
           status={tournament.status}
           cancelled={cancelled}
           busy={busy}
+          openError={openError}
+          onOpen={doOpenFecha}
           onCancel={doCancelFecha}
           onDelete={doDeleteFecha}
         />
@@ -692,22 +720,29 @@ function CalendarIcon() {
   )
 }
 
-// Admin management for a fecha: soft-cancel a scheduled/live fecha (keeps the row
-// + history, just stops it being runnable) and hard-delete a fecha created by
-// mistake (delete_tournament RPC). Both confirm before acting (in the handlers).
+// Admin management for a fecha: OPEN a scheduled fecha → live (open_tournament,
+// the primary action — starts the game), soft-cancel a scheduled/live fecha
+// (keeps the row + history, just stops it being runnable) and hard-delete a fecha
+// created by mistake (delete_tournament RPC). Each confirms before acting.
 function AdminFechaActions({
   status,
   cancelled,
   busy,
+  openError,
+  onOpen,
   onCancel,
   onDelete,
 }: {
   status: TournamentStatus
   cancelled: boolean
   busy: boolean
+  openError: string | null
+  onOpen: () => void
   onCancel: () => void
   onDelete: () => void
 }) {
+  // Opening is only for a scheduled, uncancelled fecha (the RPC also enforces this).
+  const canOpen = status === 'scheduled' && !cancelled
   const canCancel = (status === 'scheduled' || status === 'live') && !cancelled
   // Delete is only for mistakes: a scheduled fecha, or any already-cancelled one.
   // A COMPLETED fecha holds real results + gallery, and a LIVE (uncancelled) fecha
@@ -715,27 +750,47 @@ function AdminFechaActions({
   const canDelete = cancelled || status === 'scheduled'
   return (
     <div className="fd-admin-actions" data-testid="fd-admin-actions">
-      {canCancel && (
+      {canOpen && (
         <button
           type="button"
-          className="btn ghost sm"
+          className="btn blood full"
           disabled={busy}
-          onClick={onCancel}
-          data-testid="fd-cancel-fecha"
+          onClick={onOpen}
+          data-testid="fd-open-fecha"
         >
-          Cancelar fecha
+          Abrir fecha
         </button>
       )}
-      {canDelete && (
-        <button
-          type="button"
-          className="btn blood sm"
-          disabled={busy}
-          onClick={onDelete}
-          data-testid="fd-delete-fecha"
-        >
-          Eliminar fecha
-        </button>
+      {openError && (
+        <div className="fd-note" role="alert">
+          <p>{openError}</p>
+        </div>
+      )}
+      {(canCancel || canDelete) && (
+        <div className="fd-admin-row">
+          {canCancel && (
+            <button
+              type="button"
+              className="btn ghost sm"
+              disabled={busy}
+              onClick={onCancel}
+              data-testid="fd-cancel-fecha"
+            >
+              Cancelar fecha
+            </button>
+          )}
+          {canDelete && (
+            <button
+              type="button"
+              className="btn blood sm"
+              disabled={busy}
+              onClick={onDelete}
+              data-testid="fd-delete-fecha"
+            >
+              Eliminar fecha
+            </button>
+          )}
+        </div>
       )}
     </div>
   )
