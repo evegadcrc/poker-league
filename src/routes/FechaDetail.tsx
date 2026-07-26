@@ -373,7 +373,9 @@ export default function FechaDetail() {
   // checked-in — every "run" affordance is gated on `runnable`.
   const cancelled = tournament.cancelled_at != null
   const runnable = !cancelled
-  const canCheckIn = live && runnable && myEntry?.status === 'confirmed'
+  // People arrive before the admin opens the fecha, so a confirmed player can
+  // check in while it's still scheduled (before open) as well as once live.
+  const canCheckIn = (scheduled || live) && runnable && myEntry?.status === 'confirmed'
   const alreadyCheckedIn = live && myEntry != null && CHECKED_IN_STATUSES.has(myEntry.status)
   // A late arrival can still confirm ("Voy") after the fecha is opened: show it
   // to a live, runnable player who has NOT confirmed and has NOT taken a seat
@@ -450,7 +452,7 @@ export default function FechaDetail() {
             completed={completed}
             seatCount={seatCount}
             scoring={scoring}
-            canAdminCheckIn={isAdmin && live && e.status === 'confirmed'}
+            canAdminCheckIn={isAdmin && (scheduled || live) && runnable && e.status === 'confirmed'}
             onAdminCheckIn={doAdminCheckIn}
           />
         ))}
