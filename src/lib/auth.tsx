@@ -122,6 +122,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [userId])
 
+  // Self-heal for a stranded session: authenticated yet still unbound (player
+  // null). The once-per-session bind above can miss when the admin adds the
+  // member AFTER first login, or a transient RPC failure left `bindError`. Re-run
+  // claim_player when the tab regains focus / becomes visible and bind on success
+  // — idempotent, and a genuinely-not-added user simply stays 'no-player'. Guard:
+  // only while signed-in-but-unbound, so it never spams a bound (or signed-out)
+  // session (the effect detaches its listeners the moment `player` binds).
+  const retryBind = useCallback(async () => {
+    const { data, error } = await supabase.rpc('claim_player')
+    const row = data?.[0] ?? null
+    if (error) setBindError('other')
+    else if (!row) setBindError('no-player')
+    else {
+      setPlayer(row)
+      setBindError(null)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!session || player || loading) return
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void retryBind()
+    }
+    const onFocus = () => void retryBind()
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onFocus)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [session, player, loading, retryBind])
+
   const requestAccess = useCallback((email: string) => requestAccessRpc(email), [])
 
   const signInWithOtp = useCallback(async (email: string) => {

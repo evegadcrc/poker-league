@@ -591,10 +591,10 @@ function PointsBreakdownLine({
   if (breakdown.asistencia) terms.push(`+${breakdown.asistencia} asist`)
   if (breakdown.mesaFinal) terms.push(`+${breakdown.mesaFinal} mesa`)
   if (breakdown.top4) terms.push(`+${breakdown.top4} (${position}º)`)
+  // Total omitted — the standings row already shows it in its points badge.
   return (
     <div className="fd-breakdown" data-testid="standing-breakdown">
       <span className="bd-terms">{terms.join(' · ')}</span>
-      <span className="bd-total">= {breakdown.total}</span>
     </div>
   )
 }
