@@ -778,4 +778,124 @@ describe.skipIf(!canRun)('admin console RPCs (slice 12, local integration)', () 
     expect(row2.total_points).toBe(40) // pos 2 (v2): (2−2)×5 + bmf 10 + top-4[1]=15 (2nd) + att 15 = 40
     expect(row2.games_played).toBe(1)
   })
+
+  // ========================================================================
+  // mig 0030 — LIVE SCORING: points populate on EVERY bust with N = the SEATED
+  // field (checked_in / playing / eliminated / winner), matching the FE's
+  // playedCount(); undo + rebuy revert; the Tabla includes the live fecha.
+  // ========================================================================
+
+  // ------------------------------------------------------------------------
+  // A live bust writes points_earned immediately, scored against seated-N.
+  // Concrete: field of 14 all paid → first out (pos 14) → 15 (attendance only).
+  it('LIVE elimination populates points_earned immediately with N = seated field', async () => {
+    // final_table 10 so a bust that lands at position 10 makes the final table.
+    const t = await mkTournament({ finalTableSize: 10 })
+    const players: string[] = []
+    for (let i = 0; i < 14; i++) players.push(await mkEntry(t, await mkPlayer()))
+
+    // First bust → final_position 14; N=14 seated → base (14−14)×5=0 + attendance 15.
+    expect((await admin.rpc('eliminate', { p_entry_id: players[0]! })).error).toBeNull()
+    const first = await readEntry(players[0]!)
+    expect(first.final_position).toBe(14)
+    expect(first.points_earned).toBe(15)
+
+    // Bust down to a player at final_position 10 (4 more busts: 13, 12, 11, 10).
+    for (let i = 1; i <= 4; i++) await admin.rpc('eliminate', { p_entry_id: players[i]! })
+    const p10 = await readEntry(players[4]!)
+    expect(p10.final_position).toBe(10)
+    expect(p10.made_final_table).toBe(true)
+    // base (14−10)×5=20 + final_table 10 + attendance 15 = 45.
+    expect(p10.points_earned).toBe(45)
+
+    // N stays the SEATED 14 (busts move playing→eliminated, both seated) → the
+    // first-out value is unchanged by later busts (never re-derived downward).
+    expect((await readEntry(players[0]!)).points_earned).toBe(15)
+
+    // A still-playing player has no rank and scores 0 — never a negative base.
+    const alive = await readEntry(players[13]!)
+    expect(alive.final_position).toBeNull()
+    expect(alive.points_earned).toBe(0)
+  })
+
+  // ------------------------------------------------------------------------
+  // The Tabla now includes a LIVE fecha's eliminated player (was 'completed'
+  // only pre-0030); still-playing players contribute nothing until they bust.
+  it('leaderboard() includes a LIVE fecha eliminated player in total_points', async () => {
+    const t = await mkTournament({ finalTableSize: 5 }) // status 'live', counts_for_league
+    const a = await mkEntry(t, await mkPlayer())
+    const b = await mkEntry(t, await mkPlayer())
+    await mkEntry(t, await mkPlayer())
+
+    // 3 alive → bust a → pos 3, N=3 seated → (3−3)×5=0 + attendance 15 +
+    // final_table 10 (pos 3 ≤ size 5) + top-4[2]=10 (3rd) = 35.
+    await admin.rpc('eliminate', { p_entry_id: a })
+    const ae = await readEntry(a)
+    expect(ae.points_earned).toBe(35)
+
+    const { data: lb, error } = await admin.rpc('leaderboard', { p_season_id: seasonId })
+    expect(error).toBeNull()
+    const rows = (lb ?? []) as { player_id: string; total_points: number; games_played: number }[]
+
+    // Busted player's LIVE points feed the standings while the fecha is 'live'.
+    const rowA = rows.find((r) => r.player_id === ae.player_id)!
+    expect(rowA.total_points).toBe(35)
+    expect(rowA.games_played).toBe(1)
+
+    // A still-playing player (final_position null, 0 pts) adds nothing yet.
+    const be = await readEntry(b)
+    const rowB = rows.find((r) => r.player_id === be.player_id)
+    expect(rowB?.total_points ?? 0).toBe(0)
+    expect(rowB?.games_played ?? 0).toBe(0)
+  })
+
+  // ------------------------------------------------------------------------
+  // Undo reverts the undone player's points (→ 0 / playing) and re-scores.
+  it('undo_last_elimination reverts the undone player points → 0 and re-scores', async () => {
+    const t = await mkTournament({ finalTableSize: 5 })
+    const p1 = await mkEntry(t, await mkPlayer())
+    const p2 = await mkEntry(t, await mkPlayer())
+    const p3 = await mkEntry(t, await mkPlayer())
+
+    // pos 3, N=3 → (3−3)×5=0 + attendance 15 + final_table 10 + top-4[2]=10 = 35.
+    await admin.rpc('eliminate', { p_entry_id: p1 })
+    expect((await readEntry(p1)).points_earned).toBe(35)
+    await admin.rpc('eliminate', { p_entry_id: p2 }) // pos 2 → p3 winner pos 1
+
+    const { error } = await admin.rpc('undo_last_elimination', { p_tournament_id: t })
+    expect(error).toBeNull()
+
+    // p2 (last bust) restored to playing → points reverted to 0.
+    const p2e = await readEntry(p2)
+    expect(p2e.status).toBe('playing')
+    expect(p2e.final_position).toBeNull()
+    expect(p2e.points_earned).toBe(0)
+    // p3 un-crowned → playing, 0 pts.
+    const p3e = await readEntry(p3)
+    expect(p3e.status).toBe('playing')
+    expect(p3e.points_earned).toBe(0)
+    // p1 stays eliminated at pos 3 with its (unchanged, seated-N) 35 pts.
+    expect((await readEntry(p1)).points_earned).toBe(35)
+  })
+
+  // ------------------------------------------------------------------------
+  // Rebuy clears the rebought player's final_position → they re-score to 0.
+  it('add_rebuy resets the rebought player to playing/0 and re-scores the field', async () => {
+    const t = await mkTournament({ finalTableSize: 5, currentLevel: 3, rebuyUntil: 6 })
+    const a = await mkEntry(t, await mkPlayer(), {
+      status: 'eliminated',
+      final_position: 3,
+      eliminated_at: new Date().toISOString(),
+      points_earned: 15,
+    })
+    await mkEntry(t, await mkPlayer(), { status: 'playing' })
+    await mkEntry(t, await mkPlayer(), { status: 'playing' })
+
+    expect((await admin.rpc('add_rebuy', { p_entry_id: a })).error).toBeNull()
+    const re = await readEntry(a)
+    expect(re.status).toBe('playing')
+    expect(re.final_position).toBeNull()
+    // final_position cleared → live scoring recomputes them to 0 (not their old 15).
+    expect(re.points_earned).toBe(0)
+  })
 })

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useAuth, useRole } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
@@ -279,6 +279,38 @@ export default function FechaDetail() {
     },
     [reload],
   )
+
+  // Realtime: reflect console-driven changes (busts / undos / rebuys / opens)
+  // in this Fecha view. Mirrors Live.tsx — subscribe to this tournament's row
+  // (clock/status) and its entries (standings/points), and silently reload on
+  // any change. postgres_changes carries STATE only, never per-tick updates. A
+  // silent reload keeps the current screen (no skeleton flash) while it syncs;
+  // resubscribe resyncs after a (re)connect so the view never drifts.
+  useEffect(() => {
+    if (!id) return
+    const channel = supabase
+      .channel(`fecha:${id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tournament', filter: `id=eq.${id}` },
+        () => {
+          reload({ silent: true })
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'entry', filter: `tournament_id=eq.${id}` },
+        () => {
+          reload({ silent: true })
+        },
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') reload({ silent: true })
+      })
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [id, reload])
 
   // Admin edited the scheduled start (0017 admin-only tournament UPDATE): patch
   // the displayed date/time immediately, then reconcile against server truth.
@@ -923,10 +955,6 @@ function PlayerAttendanceRow({
   const pill = statusPill(entry.status)
   const name = entry.player?.name ?? 'Jugador'
   const avatarUrl = entry.player?.avatar_url ?? null
-  // On a COMPLETED fecha, finishers and no-shows swap their CAMPEÓN / FUERA /
-  // no-show status badge for their finishing PLACE + the POINTS they earned that
-  // fecha (entry.points_earned = the fn_tournament_points engine value).
-  const result = completed ? fechaResult(entry) : null
   // Real-time points breakdown for a RANKED, non-chop finisher (live bust OR
   // completed). Chop co-champions (chop_group set) are skipped — the engine
   // AVERAGES their value across the group, so a per-position split would mislead.
@@ -938,6 +966,13 @@ function PlayerAttendanceRow({
           madeFinalTable: entry.made_final_table,
         })
       : null
+  // The finishing PLACE + POINTS badge (in place of the status pill). Shown for
+  // any ranked finisher — on a COMPLETED fecha (finishers + no-shows) AND, mig
+  // 0030, LIVE once a player busts (final_position set), so eliminated/winner
+  // rows show their live total as it lands. Still-playing players keep their
+  // status pill. Points prefer the DB value; the client breakdown is a fallback
+  // so the total shows even in the instant before the live fn write arrives.
+  const result = completed || entry.final_position != null ? fechaResult(entry, breakdown) : null
 
   // Two tap targets (parity with the Tabla row): the avatar opens a full-screen
   // photo lightbox, the rest of the row opens the season-stats popup. The avatar
@@ -1055,18 +1090,21 @@ type FechaResultData =
   | { kind: 'noshow'; points: number }
 
 /**
- * For a completed fecha, the outcome to render for one entry — or null for rows
- * that keep their ordinary status pill (declined / invited / non-participants).
- * Ranked finishers show their place; chopped co-champions share `1º` (they sit
- * at the top K positions) and keep the champion accent.
+ * The outcome to render for one entry (place + points) — or null for rows that
+ * keep their ordinary status pill (declined / invited / non-participants /
+ * still-playing on a live fecha). Ranked finishers show their place; chopped
+ * co-champions share `1º` (they sit at the top K positions) and keep the
+ * champion accent. Points prefer the stored engine value (`points_earned`) and
+ * fall back to the client-computed `breakdown.total` so a live bust shows its
+ * total even before the fn_tournament_points write lands (mig 0030).
  */
-function fechaResult(e: EntryRow): FechaResultData | null {
+function fechaResult(e: EntryRow, breakdown: PointsBreakdown | null): FechaResultData | null {
   if (e.final_position != null) {
     return {
       kind: 'place',
       place: e.chopped ? 1 : e.final_position,
       isChamp: e.chopped || e.final_position === 1,
-      points: e.points_earned ?? 0,
+      points: e.points_earned ?? breakdown?.total ?? 0,
     }
   }
   if (e.status === 'no_show') {

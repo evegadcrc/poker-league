@@ -41,6 +41,14 @@ vi.mock('@/lib/supabase', () => ({
       h.rpcCalls.push([name, args])
       return Promise.resolve(h.rpcResult)
     },
+    // Realtime stub (mig 0030 live-refresh subscription): a chainable no-op
+    // channel so mounting FechaDetail doesn't throw. The subscribe callback is
+    // intentionally not invoked — these tests assert render, not resync.
+    channel: () => {
+      const ch: Record<string, unknown> = { on: () => ch, subscribe: () => ch }
+      return ch
+    },
+    removeChannel: () => {},
   },
 }))
 
@@ -604,7 +612,7 @@ describe('FechaDetail', () => {
     await waitFor(() => expect(screen.queryByTestId('ps-stats')).not.toBeInTheDocument())
   })
 
-  it('live fecha: an eliminated player gets a breakdown, a still-playing one does not', async () => {
+  it('live fecha: an eliminated player shows place + points + breakdown; a still-playing one does not', async () => {
     setTournament('live')
     const base = {
       rsvp_at: null,
@@ -620,7 +628,9 @@ describe('FechaDetail', () => {
       data: [
         { id: 'a', player_id: 'pa', status: 'playing', final_position: null, paid: true, made_final_table: true, ...base, player: { name: 'Alicia P.', avatar_url: null } },
         { id: 'b', player_id: 'pb', status: 'playing', final_position: null, paid: true, made_final_table: true, ...base, player: { name: 'Bruno Q.', avatar_url: null } },
-        { id: 'c', player_id: 'pc', status: 'eliminated', final_position: 3, paid: true, made_final_table: true, ...base, player: { name: 'Carla R.', avatar_url: null } },
+        // points_earned null → the badge falls back to the client breakdown total
+        // (mig 0030: shows the live total even before the DB write lands).
+        { id: 'c', player_id: 'pc', status: 'eliminated', final_position: 3, paid: true, made_final_table: true, ...base, points_earned: null, player: { name: 'Carla R.', avatar_url: null } },
       ],
       error: null,
     }
@@ -629,11 +639,17 @@ describe('FechaDetail', () => {
 
     const rows = screen.getAllByTestId('prow')
     const byName = (n: string) => rows.find((r) => within(r).queryByText(new RegExp(n)))!
-    // Eliminated → real-time breakdown. N = 3 seated → (3−3)×5 = 0 base.
+    // Eliminated on a LIVE fecha → real-time breakdown. N = 3 seated → (3−3)×5 = 0 base.
     const elim = within(byName('Carla')).getByTestId('fd-breakdown')
     expect(elim.textContent).toContain('Base 0')
     expect(elim.textContent).toContain('= 35') // 0 + 15 asist + 10 mesa + 10 (3º)
-    // Still en juego → no breakdown.
+    // …AND the right-side badge shows the finishing place + live total (breakdown
+    // fallback since points_earned is null): "3º · +35 pts".
+    const result = within(byName('Carla')).getByTestId('fd-result')
+    expect(result.textContent).toContain('3º')
+    expect(result.textContent).toContain('35')
+    // Still en juego → no breakdown, and it keeps its status pill (no result badge).
     expect(within(byName('Alicia')).queryByTestId('fd-breakdown')).toBeNull()
+    expect(within(byName('Alicia')).queryByTestId('fd-result')).toBeNull()
   })
 })
