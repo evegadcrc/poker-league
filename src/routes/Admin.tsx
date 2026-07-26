@@ -11,6 +11,7 @@ import {
   type SignupRequest,
 } from '@/lib/access'
 import { deriveLiveSignal, useLiveEventCues } from '@/lib/notify'
+import { startLevelAlarm, stopLevelAlarm } from '@/lib/sound'
 import Avatar from '@/components/Avatar'
 import Sheet from '@/components/Sheet'
 import PrizeDistributionEditor, {
@@ -707,12 +708,6 @@ function ConsolePanel() {
   const [conn, setConn] = useState<Conn>('connecting')
   // Transient error surfaced after a failed action RPC (auto-dismisses).
   const [toast, setToast] = useState<string | null>(null)
-  // Level we have SUCCESSFULLY auto-advanced past (blocks re-firing that level).
-  const autoAdvancedLevel = useRef<number | null>(null)
-  // `now` value of the last auto-advance attempt → throttles retries to at most
-  // one per clock tick, so a failed write re-fires next second instead of either
-  // stalling forever or hammering the server in a tight reconcile loop.
-  const autoAttemptAt = useRef<number | null>(null)
 
   const load = useCallback(async () => {
     const next = await fetchConsole()
@@ -840,29 +835,41 @@ function ConsolePanel() {
   const { toast: eventToast, permission: notifyPermission, requestNotifications } =
     useLiveEventCues(deriveLiveSignal(state, now))
 
-  // Auto-advance: admin client is the single writer. When timer_mode='auto' and
-  // the running clock hits 0, write next_level. It fires once per level on
-  // success; the per-tick throttle (autoAttemptAt) bounds retries so a transient
-  // failure re-fires on the NEXT second's tick — never stalling at 00:00 forever
-  // (Kong-502 class), never looping tightly on the failure-driven refetch.
+  // Level-END (no more silent auto-advance): when a running auto-mode level's
+  // local clock reaches 0 we do NOT fire next_level. Instead we enter a "level
+  // ended" state, sound a PERSISTENT alarm, and wait for the admin to start the
+  // next level (or pause). Manual mode is unchanged — the admin drives the clock
+  // with the "Nivel ▶" control and there is no time-up event to acknowledge.
+  const upcoming = state.phase === 'ready' ? nextLevel(state.levels, state.tournament.current_level) : null
+  const levelEnded =
+    state.phase === 'ready' &&
+    state.tournament.timer_mode === 'auto' &&
+    !state.tournament.is_paused &&
+    state.tournament.level_started_at != null &&
+    remaining <= 0
+  // Only sound the alarm when there's actually a next level to start; the last
+  // level ending is a terminal state (no next-level button, no looping alarm).
+  const alarmActive = levelEnded && upcoming != null
+
+  // Drive the persistent alarm off `alarmActive`. Depending only on the boolean
+  // means the per-second `now` tick doesn't restart it — the synth's own loop
+  // keeps it sounding. The cleanup stops it whenever the level advances, the
+  // admin pauses (alarmActive → false), or the console unmounts, so it never
+  // lingers after acknowledgement.
   useEffect(() => {
-    if (state.phase !== 'ready') return
-    const { tournament } = state
-    if (tournament.timer_mode !== 'auto' || tournament.is_paused) return
-    if (remaining > 0) return
-    if (autoAdvancedLevel.current === tournament.current_level) return
-    if (autoAttemptAt.current === now) return // at most one attempt per tick
-    autoAttemptAt.current = now
-    // Latch the level BEFORE the await so a tick that fires while the RPC is still
-    // in flight (round-trip > 1s, Kong-502 class) can't double-fire next_level and
-    // skip a level. On failure, release the latch so the next distinct tick retries;
-    // on success it stays latched (current_level advances via realtime).
-    autoAdvancedLevel.current = tournament.current_level
-    void (async () => {
-      const ok = await doClock('next_level')
-      if (!ok) autoAdvancedLevel.current = null
-    })()
-  }, [state, remaining, now, doClock])
+    if (!alarmActive) return
+    startLevelAlarm()
+    return () => stopLevelAlarm()
+  }, [alarmActive])
+
+  // Acknowledge the level-end alarm and start the next level. Silences the alarm
+  // immediately (before the RPC round-trips) then advances. `busy` disables the
+  // button for the duration of the in-flight RPC, so a double-tap can't
+  // double-advance (the next_level RPC is increment-based).
+  const startNextLevel = useCallback(() => {
+    stopLevelAlarm()
+    void doClock('next_level')
+  }, [doClock])
 
   if (state.phase === 'loading') return <div className="fd-note">Cargando consola…</div>
   if (state.phase === 'error')
@@ -881,8 +888,7 @@ function ConsolePanel() {
       </div>
     )
 
-  const { tournament, levels, entries, prizes, scoring, pot } = state
-  const upcoming = nextLevel(levels, tournament.current_level)
+  const { tournament, entries, prizes, scoring, pot } = state
   const anteVisible = showAnte(level, tournament.ante_enabled)
   const finishersWithPosition = entries.filter((e) => e.final_position != null).length
   const canUndo = entries.some((e) => e.status === 'eliminated' || e.status === 'winner')
@@ -934,7 +940,7 @@ function ConsolePanel() {
           </button>
         </div>
       )}
-      <div className={`live-wrap${tournament.is_paused ? ' paused' : ''}`} style={{ padding: 16 }}>
+      <div className={`live-wrap${tournament.is_paused ? ' paused' : ''}${levelEnded ? ' ended' : ''}`} style={{ padding: 16 }}>
         <div className="lvl">
           Nivel {tournament.current_level} · reloj{tournament.is_paused ? ' · en pausa' : ''}
         </div>
@@ -957,10 +963,33 @@ function ConsolePanel() {
             </div>
           )}
         </div>
-        <div className="next-lvl">
-          {upcoming ? `Siguiente · Nivel ${upcoming.level_number}` : 'Último nivel'} ·{' '}
-          {tournament.timer_mode === 'auto' ? 'avance automático' : 'avance manual'}
-        </div>
+        {levelEnded ? (
+          <div className="level-ended" role="status" data-testid="level-ended">
+            <div className="level-ended-msg">
+              ¡Tiempo! Nivel {tournament.current_level} terminado
+            </div>
+            {upcoming ? (
+              <button
+                type="button"
+                className="btn primary wide"
+                data-testid="start-next-level"
+                disabled={busy}
+                onClick={startNextLevel}
+              >
+                ▶ Iniciar siguiente nivel
+              </button>
+            ) : (
+              <div className="level-ended-final" data-testid="level-ended-final">
+                Fin de la estructura · último nivel
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="next-lvl">
+            {upcoming ? `Siguiente · Nivel ${upcoming.level_number}` : 'Último nivel'} ·{' '}
+            {tournament.timer_mode === 'auto' ? 'alarma al terminar' : 'avance manual'}
+          </div>
+        )}
       </div>
 
       <div className="clock-grid" data-testid="clock-grid">

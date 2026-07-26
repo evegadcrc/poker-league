@@ -1453,6 +1453,52 @@
   border-top-color: var(--rule);
 }
 
+/* Level-END state: the running clock hit 0. The wrap pulses and a prominent
+ * "start next level" affordance replaces the passive "next level" footer while
+ * the persistent alarm sounds (src/lib/sound.ts). */
+.live-wrap.ended {
+  animation: level-ended-pulse 1.2s ease-in-out infinite;
+}
+@keyframes level-ended-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--oxblood) 60%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--oxblood) 0%, transparent);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-wrap.ended {
+    animation: none;
+  }
+}
+.level-ended {
+  margin-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+}
+[data-theme='neon'] .level-ended {
+  border-top-color: var(--rule);
+}
+.level-ended-msg {
+  font: 800 14px 'Archivo';
+  letter-spacing: 0.02em;
+  color: var(--oxblood-2);
+  text-transform: uppercase;
+}
+.level-ended-final {
+  font: 600 12px 'Archivo';
+  color: color-mix(in srgb, var(--paper) 70%, transparent);
+}
+[data-theme='neon'] .level-ended-final {
+  color: var(--ink-2);
+}
+
 .live-stats {
   display: flex;
   margin: 0 18px;
