@@ -41,6 +41,22 @@ if (typeof window !== 'undefined') {
   })
 }
 
+// jsdom ships no real canvas and no blob-URL support, both of which the
+// ImageCropper (crop-on-upload) touches. Provide deterministic no-op stubs so
+// any test that mounts a cropper (Profile / FechaDetail cover) can drive the
+// "Usar foto" confirm path without a native canvas backend. The crop GEOMETRY
+// is unit-tested separately via the pure `computeCropRect` helper.
+URL.createObjectURL = () => 'blob:mock'
+URL.revokeObjectURL = () => {}
+if (typeof HTMLCanvasElement !== 'undefined') {
+  HTMLCanvasElement.prototype.getContext = (() => ({
+    drawImage: () => {},
+  })) as unknown as HTMLCanvasElement['getContext']
+  HTMLCanvasElement.prototype.toBlob = function toBlob(cb: BlobCallback) {
+    cb(new Blob(['stub'], { type: 'image/jpeg' }))
+  }
+}
+
 afterEach(() => {
   cleanup()
 })

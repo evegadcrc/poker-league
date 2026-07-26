@@ -5,6 +5,7 @@ import { useLoadable } from '@/lib/useLoadable'
 import { useSound } from '@/lib/sound'
 import Avatar from '@/components/Avatar'
 import FormPills from '@/components/FormPills'
+import ImageCropper from '@/components/ImageCropper'
 
 /** One point of the cumulative points series (from `player_profile`). */
 type HistoryPoint = { scheduled_at: string; points: number; cumulative: number }
@@ -73,6 +74,9 @@ export default function Profile() {
   )
   const [upload, setUpload] = useState<Upload>({ status: 'idle' })
   const [avatarOverride, setAvatarOverride] = useState<string | null>(null)
+  // Non-null → the picked file is being framed in the crop modal (1:1) before
+  // it is uploaded, so the stored avatar already fills its round chip.
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
 
   // Name edit (mig 0012 update_own_profile) — an inline editable field on the
   // hero. Persists via the SAME SECURITY DEFINER RPC the avatar save uses; the
@@ -107,12 +111,20 @@ export default function Profile() {
     setEditingName(false)
   }, [nameDraft, player, updatePlayer])
 
-  const onFile = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0]
-      // Clear so re-selecting the same file fires change again.
-      e.target.value = ''
-      if (!file || !player) return
+  const onFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    // Clear so re-selecting the same file fires change again.
+    e.target.value = ''
+    if (!file) return
+    setUpload({ status: 'idle' })
+    setPendingFile(file)
+  }, [])
+
+  // Upload the CROPPED (1:1) blob, then persist + reflect the new avatar.
+  const uploadBlob = useCallback(
+    async (blob: Blob) => {
+      setPendingFile(null)
+      if (!player) return
 
       setUpload({ status: 'uploading' })
       // Stable path under the player-id folder → owner-only RLS matches; a
@@ -120,7 +132,7 @@ export default function Profile() {
       const path = `${player.id}/avatar`
       const { error: upErr } = await supabase.storage
         .from('avatars')
-        .upload(path, file, { upsert: true, contentType: file.type || undefined })
+        .upload(path, blob, { upsert: true, contentType: 'image/jpeg' })
       if (upErr) {
         setUpload({ status: 'error', message: 'No se pudo subir la foto. Probá de nuevo.' })
         return
@@ -326,6 +338,17 @@ export default function Profile() {
           Cerrar sesión
         </button>
       </div>
+
+      {pendingFile && (
+        <ImageCropper
+          file={pendingFile}
+          aspect={1}
+          outputWidth={512}
+          title="Ajustá tu foto"
+          onCancel={() => setPendingFile(null)}
+          onCropped={uploadBlob}
+        />
+      )}
     </>
   )
 }

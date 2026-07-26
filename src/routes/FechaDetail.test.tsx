@@ -503,6 +503,36 @@ describe('FechaDetail', () => {
     expect(premios.textContent).toContain('₡60.000')
   })
 
+  // ---- Portada hero: visible to EVERYONE (not just admin), tap to expand. ----
+  it('shows the portada hero to a NON-admin when cover_url is set (tap opens the lightbox)', async () => {
+    // The mock's useRole returns isAdmin:false → CoverControl (upload) is hidden,
+    // yet the cover must still render as a hero banner for everyone.
+    h.single.tournament = {
+      data: { ...(h.single.tournament!.data as object), cover_url: 'https://cdn.test/gallery/cover.jpg' },
+      error: null,
+    }
+    const user = userEvent.setup()
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    const hero = screen.getByTestId('fd-cover-hero')
+    expect(hero).toHaveAttribute('aria-label', 'Ampliar portada de la fecha')
+    expect(hero.style.backgroundImage).toContain('cover.jpg')
+    // Upload control stays admin-only → absent for this non-admin viewer.
+    expect(screen.queryByTestId('cover-upload')).not.toBeInTheDocument()
+
+    // Tap → full-screen lightbox of the cover.
+    await user.click(hero)
+    const dialog = screen.getByRole('dialog', { name: 'Portada de la fecha' })
+    expect(dialog.querySelector('img')).toHaveAttribute('src', 'https://cdn.test/gallery/cover.jpg')
+  })
+
+  it('renders no portada hero when the fecha has no cover_url', async () => {
+    renderDetail() // default fixture has no cover_url
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+    expect(screen.queryByTestId('fd-cover-hero')).not.toBeInTheDocument()
+  })
+
   // ---- CHANGE 1: reorder — players list first, chips/actions below it. -------
   it('renders the players list BEFORE the RSVP summary chips (reordered)', async () => {
     renderDetail() // default scheduled fixture (5 entries)

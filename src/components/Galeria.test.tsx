@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 
 // ---------------------------------------------------------------------------
 // Slice 14 — Galería component (RTL). Mocks useAuth (current player) + the
@@ -71,6 +72,32 @@ describe('Galeria', () => {
     expect(await screen.findByText(/aún no hay fotos/i)).toBeInTheDocument()
     expect(screen.getByTestId('gallery-upload')).toBeInTheDocument()
     expect(screen.queryByTestId('gal-grid')).not.toBeInTheDocument()
+  })
+
+  it('tapping a photo opens the full-screen lightbox for that photo, and closes on tap', async () => {
+    h.list = {
+      data: [{ id: 'g1', storage_path: 'p-me/t1-a.jpg', uploader_id: 'p-me' }],
+      error: null,
+    }
+    const user = userEvent.setup()
+    render(<Galeria tournamentId="t1" />)
+
+    const photo = (await screen.findAllByTestId('gal-photo'))[0]!
+    // The photo is an accessible, focusable button.
+    expect(photo).toHaveAttribute('role', 'button')
+    expect(photo).toHaveAccessibleName('Ampliar foto')
+
+    await user.click(photo)
+
+    const dialog = screen.getByRole('dialog', { name: 'Foto de la fecha' })
+    expect(dialog).toBeInTheDocument()
+    expect(dialog.querySelector('img')).toHaveAttribute('src', 'https://cdn.test/gallery/p-me/t1-a.jpg')
+
+    // Tapping the overlay dismisses it.
+    await user.click(dialog)
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Foto de la fecha' })).not.toBeInTheDocument(),
+    )
   })
 
   it('the upload trigger is an icon button — aria-label only, no visible "Subir foto" text', async () => {
