@@ -2,6 +2,7 @@ import { Link, NavLink, Outlet } from 'react-router-dom'
 import logo from '@/assets/poker-friends.jpg'
 import { useRole } from '@/lib/auth'
 import { THEME_ICONS, THEME_LABELS, useTheme } from '@/lib/theme'
+import { useWakeLock } from '@/lib/useWakeLock'
 import { cn } from '@/lib/utils'
 import InstallPrompt from './InstallPrompt'
 
@@ -26,6 +27,8 @@ const TABS: readonly Tab[] = [
 export default function AppLayout() {
   const { theme, cycleTheme } = useTheme()
   const { isAdmin } = useRole()
+  // Keep the device screen awake while the app is open (live clock, galleries).
+  useWakeLock()
 
   return (
     <div className="app">
