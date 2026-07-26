@@ -121,6 +121,7 @@ const renderDetail = () =>
       <Routes>
         <Route path="/fechas/:id" element={<FechaDetail />} />
         <Route path="/fechas" element={<div>FECHAS LIST</div>} />
+        <Route path="/vivo" element={<div>EN VIVO</div>} />
       </Routes>
     </MemoryRouter>,
   )
@@ -142,6 +143,83 @@ describe('FechaDetail — admin cancel/delete + PRÓXIMA buy-in + calendar trigg
     await screen.findByRole('heading', { name: 'Fecha 9' })
     expect(screen.getByTestId('fd-cancel-fecha')).toBeInTheDocument()
     expect(screen.getByTestId('fd-delete-fecha')).toBeInTheDocument()
+  })
+
+  it('admin sees the "Abrir fecha" button on a scheduled, non-cancelled fecha', async () => {
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+    expect(screen.getByTestId('fd-open-fecha')).toHaveTextContent('Abrir fecha')
+  })
+
+  it('hides "Abrir fecha" from a non-admin', async () => {
+    h.isAdmin = false
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+    expect(screen.queryByTestId('fd-open-fecha')).not.toBeInTheDocument()
+  })
+
+  it('hides "Abrir fecha" on a LIVE fecha', async () => {
+    setTournament({ status: 'live' })
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+    expect(screen.queryByTestId('fd-open-fecha')).not.toBeInTheDocument()
+  })
+
+  it('hides "Abrir fecha" on a COMPLETED fecha', async () => {
+    setTournament({ status: 'completed' })
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+    expect(screen.queryByTestId('fd-open-fecha')).not.toBeInTheDocument()
+  })
+
+  it('hides "Abrir fecha" on a CANCELLED (scheduled) fecha', async () => {
+    setTournament({ cancelled_at: new Date().toISOString() })
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+    expect(screen.queryByTestId('fd-open-fecha')).not.toBeInTheDocument()
+  })
+
+  it('Abrir fecha confirms, calls open_tournament with the tournament id, then navigates to /vivo', async () => {
+    const user = userEvent.setup()
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    await user.click(screen.getByTestId('fd-open-fecha'))
+
+    expect(confirm).toHaveBeenCalled()
+    expect(h.rpcCalls).toContainEqual(['open_tournament', { p_tournament_id: 't-1' }])
+    // Landed on the live view to run the clock / open the Consola.
+    expect(await screen.findByText('EN VIVO')).toBeInTheDocument()
+    confirm.mockRestore()
+  })
+
+  it('Abrir fecha does nothing when the confirmation is dismissed', async () => {
+    const user = userEvent.setup()
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    await user.click(screen.getByTestId('fd-open-fecha'))
+
+    expect(h.rpcCalls.some(([n]) => n === 'open_tournament')).toBe(false)
+    confirm.mockRestore()
+  })
+
+  it('Abrir fecha shows a friendly error and stays put when the RPC fails', async () => {
+    const user = userEvent.setup()
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    h.rpcResult = { data: null, error: { message: 'open_tournament: tournament is live' } }
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    await user.click(screen.getByTestId('fd-open-fecha'))
+
+    expect(h.rpcCalls).toContainEqual(['open_tournament', { p_tournament_id: 't-1' }])
+    // No navigation; a friendly message is surfaced.
+    expect(screen.queryByText('EN VIVO')).not.toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('No se pudo abrir la fecha')
+    confirm.mockRestore()
   })
 
   it('hides the admin actions from a non-admin', async () => {
