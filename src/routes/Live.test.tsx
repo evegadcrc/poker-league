@@ -27,6 +27,13 @@ vi.mock('@/lib/auth', () => ({
   useAuth: () => ({ player: h.player }),
 }))
 
+// Spy on the persistent level-end alarm without touching the real cue engine
+// (notify.ts still imports playCue/resumeAudio from here — keep them real).
+vi.mock('@/lib/sound', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/sound')>('@/lib/sound')
+  return { ...actual, startLevelAlarm: vi.fn(), stopLevelAlarm: vi.fn() }
+})
+
 vi.mock('@/lib/supabase', () => ({
   supabase: {
     from: (table: string) => {
@@ -84,9 +91,11 @@ vi.mock('@/lib/supabase', () => ({
 }))
 
 import Live from './Live'
+import { startLevelAlarm, stopLevelAlarm } from '@/lib/sound'
 
 type TournamentOverrides = Partial<{
   ante_enabled: boolean
+  timer_mode: 'auto' | 'manual'
   current_level: number
   level_started_at: string | null
   is_paused: boolean
@@ -109,6 +118,7 @@ function setTournament(over: TournamentOverrides = {}) {
       id: 't-live',
       name: 'Fecha 8',
       ante_enabled: false,
+      timer_mode: 'auto',
       current_level: 5,
       level_started_at: null,
       is_paused: true,
@@ -157,6 +167,8 @@ beforeEach(() => {
   h.subscribeStatus = 'SUBSCRIBED'
   h.removed = 0
   h.subscribed = 0
+  vi.mocked(startLevelAlarm).mockClear()
+  vi.mocked(stopLevelAlarm).mockClear()
   setTournament()
   setLevels()
   setEntries()
@@ -400,5 +412,77 @@ describe('Live — self-report bust', () => {
     expect(await screen.findByTestId('bust-error')).toBeInTheDocument()
     expect(screen.queryByTestId('bust-reported')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Estoy fuera — reportar/ })).toBeInTheDocument()
+  })
+})
+
+// Player-side level-END alarm. The admin is the sole clock writer; a player
+// never advances the level. When THIS player's LOCAL clock for a live, running
+// (auto-mode, not paused) level reaches 0, the SAME persistent alarm sounds and
+// a "waiting for the admin" indicator shows — and it stops the moment the admin
+// advances (fresh level_started_at → remaining > 0), pauses, or completes.
+describe('Live — level-end alarm (players)', () => {
+  // A live, non-paused auto level whose running clock has already expired
+  // (started well before its duration) → local remaining computes to 0.
+  const expired = (over: TournamentOverrides = {}) =>
+    setTournament({
+      timer_mode: 'auto',
+      is_paused: false,
+      paused_remaining_seconds: null,
+      current_level: 1, // level 1 (1200s) with an upcoming level 2
+      level_started_at: new Date(Date.now() - 10_000_000).toISOString(),
+      ...over,
+    })
+
+  it('at 0 on a live non-paused fecha: starts the alarm + shows "esperando al admin"', async () => {
+    expired()
+    renderLive()
+    expect(await screen.findByTestId('live-level-ended')).toHaveTextContent(/Esperando al admin/i)
+    await waitFor(() => expect(startLevelAlarm).toHaveBeenCalled())
+  })
+
+  it('stops the alarm when the admin advances the level (new level_started_at, remaining > 0)', async () => {
+    expired()
+    renderLive()
+    await screen.findByTestId('live-level-ended')
+    await waitFor(() => expect(startLevelAlarm).toHaveBeenCalled())
+    vi.mocked(stopLevelAlarm).mockClear()
+
+    // Admin advances to level 2 with a fresh start → the player's clock is > 0.
+    setTournament({
+      timer_mode: 'auto',
+      is_paused: false,
+      paused_remaining_seconds: null,
+      current_level: 2,
+      level_started_at: new Date().toISOString(),
+    })
+    await act(async () => {
+      h.handlers.forEach((cb) => cb({ eventType: 'UPDATE', table: 'tournament' }))
+    })
+
+    await waitFor(() => expect(screen.queryByTestId('live-level-ended')).not.toBeInTheDocument())
+    expect(stopLevelAlarm).toHaveBeenCalled()
+  })
+
+  it('does NOT start the alarm while the clock is paused', async () => {
+    expired({ is_paused: true, paused_remaining_seconds: 0 })
+    renderLive()
+    await screen.findByTestId('timer')
+    expect(screen.queryByTestId('live-level-ended')).not.toBeInTheDocument()
+    expect(startLevelAlarm).not.toHaveBeenCalled()
+  })
+
+  it('does NOT start the alarm in manual mode (the admin drives the clock)', async () => {
+    expired({ timer_mode: 'manual' })
+    renderLive()
+    await screen.findByTestId('timer')
+    expect(screen.queryByTestId('live-level-ended')).not.toBeInTheDocument()
+    expect(startLevelAlarm).not.toHaveBeenCalled()
+  })
+
+  it('does NOT start the alarm when no fecha is live (completed / scheduled)', async () => {
+    h.single.tournament = { data: null, error: null }
+    renderLive()
+    await screen.findByText(/No hay ningún torneo en vivo/i)
+    expect(startLevelAlarm).not.toHaveBeenCalled()
   })
 })

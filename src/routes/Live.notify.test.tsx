@@ -9,6 +9,10 @@ const sound = vi.hoisted(() => ({ playCue: vi.fn(), resumeAudio: vi.fn() }))
 vi.mock('@/lib/sound', () => ({
   playCue: sound.playCue,
   resumeAudio: sound.resumeAudio,
+  // The paused fixtures here never reach a level-end, so these never fire — but
+  // Live imports them, so keep the mocked module complete.
+  startLevelAlarm: vi.fn(),
+  stopLevelAlarm: vi.fn(),
 }))
 
 const h = vi.hoisted(() => ({
