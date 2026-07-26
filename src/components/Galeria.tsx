@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import { useAuth } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { useLoadable } from '@/lib/useLoadable'
+import PhotoLightbox from './PhotoLightbox'
 
 // ---------------------------------------------------------------------------
 // Galería — per-fecha photo grid (Phase 2, slice 14). Embedded as a section in
@@ -49,6 +50,7 @@ export default function Galeria({ tournamentId }: { tournamentId: string }) {
     tournamentId,
   ])
   const [upload, setUpload] = useState<Upload>({ status: 'idle' })
+  const [zoomedUrl, setZoomedUrl] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const openPicker = useCallback(() => inputRef.current?.click(), [])
@@ -152,9 +154,23 @@ export default function Galeria({ tournamentId }: { tournamentId: string }) {
               loading="lazy"
               decoding="async"
               data-testid="gal-photo"
+              role="button"
+              tabIndex={0}
+              aria-label="Ampliar foto"
+              onClick={() => setZoomedUrl(p.url)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  setZoomedUrl(p.url)
+                }
+              }}
             />
           ))}
         </div>
+      )}
+
+      {zoomedUrl && (
+        <PhotoLightbox url={zoomedUrl} alt="Foto de la fecha" onClose={() => setZoomedUrl(null)} />
       )}
     </section>
   )

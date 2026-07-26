@@ -44,6 +44,37 @@ export function statusRank(status: EntryStatus): number {
   return i === -1 ? STATUS_ORDER.length : i
 }
 
+/** The minimal shape `attendanceSort` orders on (status + finishing place). */
+type Sortable = { status: EntryStatus; final_position: number | null }
+
+/**
+ * Coarse bucket for `attendanceSort`: 1 = still alive (checked-in / playing),
+ * 2 = a finisher (winner or eliminated → has a `final_position`), 3 = everyone
+ * else (confirmed / no_show / invited / declined).
+ */
+function attendanceGroup(e: Sortable): number {
+  if (e.status === 'playing' || e.status === 'checked_in') return 1
+  if (e.final_position != null) return 2
+  return 3
+}
+
+/**
+ * Order the attendance list by FINISHING POSITION rather than raw status:
+ *  1. Alive players (checked-in / playing) first — still in the game. Their
+ *     relative order is preserved (return 0 → stable sort keeps array order).
+ *  2. Finishers (final_position set) next, by `final_position` ascending — the
+ *     total−1 scheme means a lower number is a better finish (winner = 1 on top).
+ *  3. Everyone else last, ordered by the existing `statusRank`.
+ */
+export function attendanceSort(a: Sortable, b: Sortable): number {
+  const ga = attendanceGroup(a)
+  const gb = attendanceGroup(b)
+  if (ga !== gb) return ga - gb
+  if (ga === 1) return 0 // alive — keep stable/array order among themselves
+  if (ga === 2) return (a.final_position ?? 0) - (b.final_position ?? 0) // finish asc
+  return statusRank(a.status) - statusRank(b.status) // the RSVP-state remainder
+}
+
 /** Statuses that count as "attending / in" for the Voy chip + card footer. */
 const ATTENDING: ReadonlySet<EntryStatus> = new Set<EntryStatus>([
   'confirmed',

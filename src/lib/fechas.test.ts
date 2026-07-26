@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   attendanceCounts,
+  attendanceSort,
   aliveCount,
   colonesCompact,
   computePot,
@@ -90,6 +91,63 @@ describe('fechas helpers', () => {
     // 5th (past top-4) drops the graduated bonus: (8−5)×5=15 + 0 + 10 + 15 = 40.
     expect(pointsExample(cfg, 8, 5).graduatedTop4).toBe(0)
     expect(pointsExample(cfg, 8, 5).total).toBe(40)
+  })
+
+  it('attendanceSort orders alive → finishers(by place asc) → the RSVP remainder', () => {
+    const s = (status: EntryStatus, final_position: number | null = null) => ({
+      status,
+      final_position,
+    })
+    // Deliberately scrambled: a champion (place 1), mid + late eliminations, an
+    // alive checked-in + playing pair, and confirmed/no_show/declined trailers.
+    const rows = [
+      s('eliminated', 14),
+      s('confirmed'),
+      s('winner', 1),
+      s('checked_in'),
+      s('no_show'),
+      s('eliminated', 2),
+      s('playing'),
+      s('declined'),
+    ]
+    const sorted = [...rows].sort(attendanceSort)
+
+    const seq = sorted.map((r) => `${r.status}${r.final_position ?? ''}`)
+    // Alive (checked_in + playing, stable) first, then finishers 1 < 2 < 14,
+    // then the remainder by statusRank (confirmed < no_show < declined).
+    expect(seq).toEqual([
+      'checked_in',
+      'playing',
+      'winner1',
+      'eliminated2',
+      'eliminated14',
+      'confirmed',
+      'no_show',
+      'declined',
+    ])
+  })
+
+  it('attendanceSort keeps every alive player ahead of any finisher', () => {
+    const alive = { status: 'playing' as EntryStatus, final_position: null }
+    const winner = { status: 'winner' as EntryStatus, final_position: 1 }
+    expect(attendanceSort(alive, winner)).toBeLessThan(0)
+    expect(attendanceSort(winner, alive)).toBeGreaterThan(0)
+  })
+
+  it('attendanceSort ranks a better finish (lower place) ahead of a worse one', () => {
+    const first = { status: 'winner' as EntryStatus, final_position: 1 }
+    const second = { status: 'eliminated' as EntryStatus, final_position: 2 }
+    const last = { status: 'eliminated' as EntryStatus, final_position: 14 }
+    expect(attendanceSort(first, second)).toBeLessThan(0)
+    expect(attendanceSort(second, last)).toBeLessThan(0)
+  })
+
+  it('attendanceSort drops confirmed / no_show below any finisher', () => {
+    const finisher = { status: 'eliminated' as EntryStatus, final_position: 2 }
+    const confirmed = { status: 'confirmed' as EntryStatus, final_position: null }
+    const noShow = { status: 'no_show' as EntryStatus, final_position: null }
+    expect(attendanceSort(finisher, confirmed)).toBeLessThan(0)
+    expect(attendanceSort(finisher, noShow)).toBeLessThan(0)
   })
 
   it('maps every entry status to a pill label + class (all 8 states)', () => {
