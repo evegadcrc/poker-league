@@ -1060,8 +1060,9 @@
   flex-wrap: wrap;
 }
 /* Real-time per-player points breakdown (Base · +asist · +mesa · +top4 = total).
-   Tabular figures so the numbers stay column-aligned down the list. */
-.prow .pinfo .fd-breakdown {
+   Tabular figures so the numbers stay column-aligned down the list. Shared by
+   the Fecha attendance rows (.prow .pinfo) and the Vivo standings (.standing .nm). */
+.fd-breakdown {
   font: 700 11px 'Archivo';
   color: var(--ink-3);
   margin-top: 3px;
@@ -1071,7 +1072,7 @@
   flex-wrap: wrap;
   font-variant-numeric: tabular-nums;
 }
-.prow .pinfo .fd-breakdown .bd-total {
+.fd-breakdown .bd-total {
   color: var(--ink);
   font-weight: 800;
 }

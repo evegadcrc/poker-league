@@ -6,7 +6,8 @@ import { deriveLiveSignal, useLiveEventCues } from '@/lib/notify'
 import { startLevelAlarm, stopLevelAlarm } from '@/lib/sound'
 import Sheet from '@/components/Sheet'
 import PrizeList from '@/components/PrizeList'
-import { aliveCount, colonesCompact, playedCount, type EntryStatus } from '@/lib/fechas'
+import { aliveCount, colonesCompact, parseLeagueConfig, playedCount, type EntryStatus } from '@/lib/fechas'
+import { pointsBreakdown, type PointsBreakdown, type ScoringConfig } from '@/lib/admin'
 import { formatMiles } from '@/lib/format'
 import {
   chipsInPlay,
@@ -30,6 +31,7 @@ import {
 type LiveTournament = {
   id: string
   name: string
+  season_id: string
   ante_enabled: boolean
   timer_mode: 'auto' | 'manual'
   current_level: number
@@ -50,6 +52,8 @@ type Ready = {
   entries: EntryRow[]
   prizes: Prize[]
   pot: number
+  /** Season scoring config (reshaped) for the live per-finisher points breakdown. */
+  scoring: ScoringConfig
 }
 type State =
   | { phase: 'loading' }
@@ -63,7 +67,7 @@ type Conn = 'connecting' | 'live' | 'reconnecting'
 // The cue-engine signal is derived by the shared `deriveLiveSignal` (notify.ts).
 
 const TOURNAMENT_COLUMNS =
-  'id, name, ante_enabled, timer_mode, current_level, level_started_at, is_paused, paused_remaining_seconds, blind_structure_id, prizes, payout_distribution'
+  'id, name, season_id, ante_enabled, timer_mode, current_level, level_started_at, is_paused, paused_remaining_seconds, blind_structure_id, prizes, payout_distribution'
 
 async function fetchLive(): Promise<State> {
   // A single fecha is live at a time; take the most recent just in case.
@@ -80,7 +84,7 @@ async function fetchLive(): Promise<State> {
   if (!t) return { phase: 'no-live' }
   const tournament = t as LiveTournament
 
-  const [levelsRes, entriesRes, potRes] = await Promise.all([
+  const [levelsRes, entriesRes, potRes, seasonRes] = await Promise.all([
     tournament.blind_structure_id
       ? supabase
           .from('blind_level')
@@ -90,12 +94,32 @@ async function fetchLive(): Promise<State> {
       : Promise.resolve({ data: [] as BlindLevel[], error: null }),
     supabase
       .from('entry')
-      .select('id, player_id, status, final_position, chips, paid, player:player_id(name, avatar_url)')
+      .select(
+        'id, player_id, status, final_position, chips, paid, points_earned, made_final_table, chop_group, player:player_id(name, avatar_url)',
+      )
       .eq('tournament_id', tournament.id),
     supabase.rpc('fn_pot', { p_tournament_id: tournament.id }),
+    // Season scoring config so the live standings can preview each finisher's
+    // per-category points breakdown (parity with the Fecha view).
+    supabase
+      .from('season')
+      .select('points_multiplier, bonus_final_table, bonus_attendance, top_finish_bonuses')
+      .eq('id', tournament.season_id)
+      .maybeSingle(),
   ])
 
   if (levelsRes.error || entriesRes.error) return { phase: 'error' }
+
+  // Reshape the season LeagueConfig → the admin helper's ScoringConfig (same
+  // numbers the Fecha view uses). A season fetch error is non-fatal: fall back
+  // to the scoring-v2 defaults so a hiccup never blanks the live board.
+  const config = parseLeagueConfig(seasonRes.error ? null : seasonRes.data)
+  const scoring: ScoringConfig = {
+    points_multiplier: config.multiplier,
+    bonus_final_table: config.bonusFinalTable,
+    bonus_attendance: config.bonusAttendance,
+    top_finish_bonuses: config.topFinishBonuses,
+  }
 
   return {
     phase: 'ready',
@@ -105,6 +129,7 @@ async function fetchLive(): Promise<State> {
     prizes: parsePrizes(tournament.prizes),
     // Pot is best-effort: a transient RPC hiccup shouldn't blank the screen.
     pot: potRes.error ? 0 : Number(potRes.data ?? 0),
+    scoring,
   }
 }
 
@@ -267,7 +292,7 @@ export default function Live() {
     )
   }
 
-  const { tournament, entries, prizes, pot } = state
+  const { tournament, entries, prizes, pot, scoring } = state
   const myEntry = player ? (entries.find((e) => e.player_id === player.id) ?? null) : null
   // A player can self-report only while they are still in play (checked_in / playing).
   const canSelfBust = myEntry != null && isAlive(myEntry.status)
@@ -401,7 +426,9 @@ export default function Live() {
         {standings.length === 0 ? (
           <div className="fd-note">Aún no hay posiciones — el torneo acaba de arrancar.</div>
         ) : (
-          standings.map((s) => <StandingRow key={s.id} entry={s} />)
+          standings.map((s) => (
+            <StandingRow key={s.id} entry={s} seatCount={played} scoring={scoring} />
+          ))
         )}
       </div>
 
@@ -493,19 +520,81 @@ function Stat({ value, label }: { value: string; label: string }) {
   )
 }
 
-function StandingRow({ entry }: { entry: StandingEntry }) {
+function StandingRow({
+  entry,
+  seatCount,
+  scoring,
+}: {
+  entry: StandingEntry
+  /** Field size N (everyone who took a seat) for the points breakdown. */
+  seatCount: number
+  /** Season scoring config, reshaped for the breakdown helper. */
+  scoring: ScoringConfig
+}) {
   const alive = isAlive(entry.status)
   const name = entry.player?.name ?? 'Jugador'
+  // Live per-finisher points (parity with the Fecha view): a RANKED, non-chop
+  // finisher (final_position set, no chop_group) previews its scoring-v2 total +
+  // breakdown. Chop co-champions are skipped (the engine AVERAGES their value).
+  // Still-alive players (final_position null) get no breakdown. Points prefer the
+  // DB value (mig 0030 writes it live on every bust); the client breakdown is a
+  // fallback so the total shows in the instant before that write arrives.
+  const breakdown =
+    entry.final_position != null && entry.chop_group == null
+      ? pointsBreakdown(entry.final_position, seatCount, scoring, {
+          paid: entry.paid,
+          madeFinalTable: entry.made_final_table,
+        })
+      : null
+  const points = breakdown ? entry.points_earned ?? breakdown.total : null
   return (
     <div className={`standing ${alive ? 'alive' : 'out'}`} data-testid="standing">
       <div className="pos">{alive ? '•' : ordinal(entry.final_position ?? 0)}</div>
-      <div className="nm">{name}</div>
+      {/* Name column: the name stays in its own `.nm` (text-only, so name-based
+          test/DOM lookups aren't polluted); the breakdown sits BELOW it. */}
+      <div className="nm-col" style={{ flex: 1, minWidth: 0 }}>
+        <div className="nm">{name}</div>
+        {breakdown && (
+          <PointsBreakdownLine breakdown={breakdown} position={entry.final_position!} />
+        )}
+      </div>
       {!entry.paid && (
         <span className="mini-badge pending" data-testid="pendiente-pago">
           Pendiente Pago
         </span>
       )}
-      {alive && <span className="mini-badge">En juego</span>}
+      {alive ? (
+        <span className="mini-badge">En juego</span>
+      ) : (
+        points != null && (
+          <span className="mini-badge" data-testid="standing-points">
+            +{points} pts
+          </span>
+        )
+      )}
+    </div>
+  )
+}
+
+// Compact, real-time points breakdown under a finisher's name — a local replica
+// of the Fecha view's line (FechaDetail.tsx), sharing the `.fd-breakdown` visual.
+// Base + total always show; a bonus term only appears when non-zero. The top-4
+// term is tagged with the finishing place ("+10 (3º)").
+function PointsBreakdownLine({
+  breakdown,
+  position,
+}: {
+  breakdown: PointsBreakdown
+  position: number
+}) {
+  const terms = [`Base ${breakdown.base}`]
+  if (breakdown.asistencia) terms.push(`+${breakdown.asistencia} asist`)
+  if (breakdown.mesaFinal) terms.push(`+${breakdown.mesaFinal} mesa`)
+  if (breakdown.top4) terms.push(`+${breakdown.top4} (${position}º)`)
+  return (
+    <div className="fd-breakdown" data-testid="standing-breakdown">
+      <span className="bd-terms">{terms.join(' · ')}</span>
+      <span className="bd-total">= {breakdown.total}</span>
     </div>
   )
 }

@@ -118,6 +118,9 @@ const entry = (over: Partial<StandingEntry>): StandingEntry => ({
   final_position: null,
   chips: 10000,
   paid: true,
+  points_earned: null,
+  made_final_table: false,
+  chop_group: null,
   player: { name: 'X', avatar_url: null },
   ...over,
 })
