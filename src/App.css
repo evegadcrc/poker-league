@@ -1573,6 +1573,81 @@
   border-top-color: var(--rule);
 }
 
+/* Tap target around the clock (level + timer + blinds) → opens the read-only
+ * blind structure. A plain affordance: pointer cursor + a focus ring for
+ * keyboard users; it must not restyle the scoreboard it wraps. */
+.clock-tap {
+  cursor: pointer;
+  border-radius: 14px;
+  outline: none;
+}
+.clock-tap:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--paper) 70%, transparent);
+}
+[data-theme='neon'] .clock-tap:focus-visible {
+  box-shadow: 0 0 0 2px var(--oxblood-2);
+}
+
+/* Read-only blind structure table (BlindsTable, clock tap). Scrolls inside the
+ * sheet on small screens; the current level row is accented, the next tagged. */
+.blinds-table-wrap {
+  max-height: 52vh;
+  overflow-y: auto;
+  overflow-x: auto;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+.blinds-table {
+  width: 100%;
+  border-collapse: collapse;
+  font: 700 13px 'Archivo';
+  font-variant-numeric: tabular-nums;
+}
+.blinds-table th,
+.blinds-table td {
+  padding: 9px 12px;
+  text-align: right;
+  white-space: nowrap;
+}
+.blinds-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--paper-3);
+  color: var(--ink-2);
+  font: 800 10px 'Archivo';
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.blinds-table tbody th[scope='row'] {
+  text-align: left;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.blinds-table tbody tr {
+  border-top: 1px solid var(--rule);
+}
+.blinds-table tbody tr.is-current {
+  background: color-mix(in srgb, var(--oxblood) 12%, transparent);
+}
+.blinds-table .bt-tag {
+  font: 800 8.5px 'Archivo';
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: var(--oxblood);
+  color: var(--on-oxblood);
+}
+.blinds-table .bt-tag.next {
+  background: transparent;
+  color: var(--ink-2);
+  box-shadow: inset 0 0 0 1.5px var(--rule-strong);
+}
+
 /* Level-END state: the running clock hit 0. The wrap pulses and a prominent
  * "start next level" affordance replaces the passive "next level" footer while
  * the persistent alarm sounds (src/lib/sound.ts). */
@@ -1748,6 +1823,22 @@
   color: var(--ink-2);
   background: transparent;
   box-shadow: inset 0 0 0 1.5px var(--oxblood);
+}
+
+/* "A tiempo" — checked in on time (pre-live) → early-bird bonus (mig 0031). A
+ * green success pill, per-theme greens mirroring the `.paid-check` convention
+ * (tokens carry no dedicated green). Overrides the base mini-badge oxblood. */
+.mini-badge.ontime {
+  color: #2f7d53;
+  background: color-mix(in srgb, #2f7d53 14%, transparent);
+}
+[data-theme='dark'] .mini-badge.ontime {
+  color: #63b587;
+  background: color-mix(in srgb, #63b587 16%, transparent);
+}
+[data-theme='neon'] .mini-badge.ontime {
+  color: #22d3ee;
+  background: color-mix(in srgb, #22d3ee 16%, transparent);
 }
 
 /* ---------------------------------------------------------------------------

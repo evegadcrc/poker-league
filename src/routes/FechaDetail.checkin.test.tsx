@@ -152,6 +152,8 @@ describe('FechaDetail — geofenced check-in', () => {
   })
 
   it('success: geolocates, calls check_in with coords, shows the +2.000 fichas moment', async () => {
+    // Pre-live (scheduled): check-in proceeds directly, no late-warning sheet.
+    setTournament('scheduled', PRELIVE)
     stubGeo('ok')
     h.rpcResult = { data: [{ early_bird: true, chips: 12000 }], error: null }
     const user = userEvent.setup()
@@ -169,6 +171,7 @@ describe('FechaDetail — geofenced check-in', () => {
   })
 
   it('out-of-range: an "estás fuera de la sede" RPC error shows the warn banner', async () => {
+    setTournament('scheduled', PRELIVE)
     stubGeo('ok')
     h.rpcResult = { data: null, error: { message: 'check_in: estás fuera de la sede' } }
     const user = userEvent.setup()
@@ -182,6 +185,7 @@ describe('FechaDetail — geofenced check-in', () => {
   })
 
   it('permission denied / no GPS: shows the friendly "pedile al admin" banner', async () => {
+    setTournament('scheduled', PRELIVE)
     stubGeo('deny')
     const user = userEvent.setup()
     renderDetail()
@@ -193,6 +197,57 @@ describe('FechaDetail — geofenced check-in', () => {
     expect(alert.textContent).toMatch(/pedile al admin que te registre/i)
     // No check_in RPC was attempted without a fix.
     expect(h.rpcCalls.some(([name]) => name === 'check_in')).toBe(false)
+  })
+
+  // NEW MODEL (mig 0031): a LIVE check-in earns no early-bird bonus, so tapping
+  // check-in once the fecha is live opens a confirmation first. Only "Sí, hacer
+  // check-in" runs the geolocate → check_in flow; "Cancelar" does nothing.
+  it('live check-in shows the late-warning sheet and only checks in on confirm', async () => {
+    setTournament('live') // beforeEach already does this, explicit for clarity
+    stubGeo('ok')
+    h.rpcResult = { data: [{ early_bird: false, chips: 10000 }], error: null }
+    const user = userEvent.setup()
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    // Tapping check-in opens the warning, NOT the RPC.
+    await user.click(screen.getByRole('button', { name: /Hacer check-in/i }))
+    const dialog = await screen.findByRole('dialog', { name: 'Check-in tarde' })
+    expect(dialog).toHaveTextContent(/no recibís las fichas de bono/i)
+    expect(h.rpcCalls.some(([name]) => name === 'check_in')).toBe(false)
+
+    // Cancel → still no check_in.
+    await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }))
+    expect(h.rpcCalls.some(([name]) => name === 'check_in')).toBe(false)
+
+    // Re-open and confirm → check_in fires with the coords.
+    await user.click(screen.getByRole('button', { name: /Hacer check-in/i }))
+    const dialog2 = await screen.findByRole('dialog', { name: 'Check-in tarde' })
+    await user.click(within(dialog2).getByRole('button', { name: 'Sí, hacer check-in' }))
+    expect(h.rpcCalls).toContainEqual([
+      'check_in',
+      { p_tournament_id: 't-1', p_lat: 9.93, p_lng: -84.08 },
+    ])
+  })
+
+  // "A tiempo" badge: an entry checked in on time (early_bird true + checked_in_at
+  // set) renders the green marker; a plain confirmed row does not.
+  it('renders an "A tiempo" badge for an on-time checked-in entry', async () => {
+    h.list.entry = {
+      data: [
+        { id: 'e-ot', player_id: 'p-ot', status: 'checked_in', rsvp_at: null, cancelled_at: null, checked_in_at: new Date().toISOString(), early_bird: true, chips: 12000, points_earned: null, final_position: null, rebuys_count: 0, player: { name: 'Puntual Pam', avatar_url: null } },
+        { id: 'e-late', player_id: 'p-late', status: 'checked_in', rsvp_at: null, cancelled_at: null, checked_in_at: new Date().toISOString(), early_bird: false, chips: 10000, points_earned: null, final_position: null, rebuys_count: 0, player: { name: 'Tardío Tom', avatar_url: null } },
+      ],
+      error: null,
+    }
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    // Exactly one "A tiempo" badge — Pam (early_bird), not Tom (late).
+    const badges = screen.getAllByTestId('ontime-badge')
+    expect(badges).toHaveLength(1)
+    const pam = screen.getAllByTestId('prow').find((r) => within(r).queryByText(/Puntual Pam/))!
+    expect(within(pam).getByTestId('ontime-badge')).toHaveTextContent('A tiempo')
   })
 
   it('admin sees a per-player "Registrar" affordance that calls admin_check_in', async () => {
