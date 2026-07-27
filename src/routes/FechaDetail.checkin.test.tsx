@@ -117,7 +117,9 @@ beforeEach(() => {
   h.rpcCalls = []
   h.updateCalls = []
   h.rpcResult = { data: null, error: null }
-  h.single = { season: { data: { cancel_bands: [] }, error: null } }
+  // Early-bird bonus comes from the season config now (FIX: no longer hardcoded);
+  // 3000 → the celebration/notes show "+3.000 fichas", proving they read config.
+  h.single = { season: { data: { cancel_bands: [], early_bird_bonus_chips: 3000 }, error: null } }
   setTournament('live')
   setEntries('confirmed')
 })
@@ -127,7 +129,7 @@ describe('FechaDetail — geofenced check-in', () => {
     renderDetail()
     await screen.findByRole('heading', { name: 'Fecha 9' })
 
-    expect(screen.getByText(/sin GPS, el admin te registra/i)).toBeInTheDocument()
+    expect(screen.getByText(/sin GPS, el admin registra/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Hacer check-in/i })).toBeInTheDocument()
   })
 
@@ -151,7 +153,7 @@ describe('FechaDetail — geofenced check-in', () => {
     expect(screen.queryByTestId('fd-prelive-note')).not.toBeInTheDocument()
   })
 
-  it('success: geolocates, calls check_in with coords, shows the +2.000 fichas moment', async () => {
+  it('success: geolocates, calls check_in with coords, shows the +3.000 fichas moment', async () => {
     // Pre-live (scheduled): check-in proceeds directly, no late-warning sheet.
     setTournament('scheduled', PRELIVE)
     stubGeo('ok')
@@ -166,8 +168,8 @@ describe('FechaDetail — geofenced check-in', () => {
       'check_in',
       { p_tournament_id: 't-1', p_lat: 9.93, p_lng: -84.08 },
     ])
-    // Celebratory sheet with the early-bird bonus headline.
-    expect(await screen.findByText('+2.000 fichas')).toBeInTheDocument()
+    // Celebratory sheet with the early-bird bonus headline (from season config).
+    expect(await screen.findByText('+3.000 fichas')).toBeInTheDocument()
   })
 
   it('out-of-range: an "estás fuera de la sede" RPC error shows the warn banner', async () => {
@@ -181,10 +183,10 @@ describe('FechaDetail — geofenced check-in', () => {
     await user.click(screen.getByRole('button', { name: /Hacer check-in/i }))
 
     const alert = await screen.findByRole('alert')
-    expect(alert.textContent).toMatch(/fuera de la sede/i)
+    expect(alert.textContent).toMatch(/fuera de rango de la sede/i)
   })
 
-  it('permission denied / no GPS: shows the friendly "pedile al admin" banner', async () => {
+  it('permission denied / no GPS: shows the friendly "solicitar al admin" banner', async () => {
     setTournament('scheduled', PRELIVE)
     stubGeo('deny')
     const user = userEvent.setup()
@@ -194,7 +196,7 @@ describe('FechaDetail — geofenced check-in', () => {
     await user.click(screen.getByRole('button', { name: /Hacer check-in/i }))
 
     const alert = await screen.findByRole('alert')
-    expect(alert.textContent).toMatch(/pedile al admin que te registre/i)
+    expect(alert.textContent).toMatch(/solicitar al admin que lo registre/i)
     // No check_in RPC was attempted without a fix.
     expect(h.rpcCalls.some(([name]) => name === 'check_in')).toBe(false)
   })
@@ -213,7 +215,7 @@ describe('FechaDetail — geofenced check-in', () => {
     // Tapping check-in opens the warning, NOT the RPC.
     await user.click(screen.getByRole('button', { name: /Hacer check-in/i }))
     const dialog = await screen.findByRole('dialog', { name: 'Check-in tarde' })
-    expect(dialog).toHaveTextContent(/no recibís las fichas de bono/i)
+    expect(dialog).toHaveTextContent(/no se reciben las fichas de bono/i)
     expect(h.rpcCalls.some(([name]) => name === 'check_in')).toBe(false)
 
     // Cancel → still no check_in.

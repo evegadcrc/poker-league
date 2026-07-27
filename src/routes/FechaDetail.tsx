@@ -632,6 +632,7 @@ export default function FechaDetail() {
             completed={completed}
             seatCount={seatCount}
             scoring={scoring}
+            earlyBirdChips={config.earlyBirdChips}
             canAdminCheckIn={isAdmin && (preLive || live) && runnable && e.status === 'confirmed'}
             canConfirmPayment={
               isAdmin && (preLive || live) && runnable && e.status === 'confirmed' && !e.paid
@@ -689,7 +690,11 @@ export default function FechaDetail() {
         scheduledAt={tournament.scheduled_at}
       />
 
-      <CheckInCelebration celebrate={celebrate} onClose={() => setCelebrate(null)} />
+      <CheckInCelebration
+        celebrate={celebrate}
+        earlyBirdChips={config.earlyBirdChips}
+        onClose={() => setCelebrate(null)}
+      />
 
       <LateCheckInSheet
         open={lateWarnOpen}
@@ -1032,6 +1037,7 @@ function PlayerAttendanceRow({
   completed,
   seatCount,
   scoring,
+  earlyBirdChips,
   canAdminCheckIn,
   canConfirmPayment,
   onAdminCheckIn,
@@ -1044,6 +1050,8 @@ function PlayerAttendanceRow({
   seatCount: number
   /** Season scoring config re-shaped for the v2 breakdown helper. */
   scoring: ScoringConfig
+  /** Season early-bird bonus (fichas) for the on-time check-in note. */
+  earlyBirdChips: number
   canAdminCheckIn: boolean
   /** Admin registration desk: this confirmed entry hasn't paid its buy-in yet. */
   canConfirmPayment: boolean
@@ -1126,7 +1134,7 @@ function PlayerAttendanceRow({
               A tiempo
             </span>
           )}
-          {!result && <div className="sub">{noteFor(entry)}</div>}
+          {!result && <div className="sub">{noteFor(entry, earlyBirdChips)}</div>}
           {breakdown && <PointsBreakdownLine breakdown={breakdown} position={entry.final_position!} />}
         </div>
         {canAdminCheckIn || canConfirmPayment ? (
@@ -1297,8 +1305,8 @@ function GeoBanner({ state, radius }: { state: CheckIn; radius: number }) {
       <div className="geo warn" role="alert">
         <span className="ring">✕</span>
         <div>
-          Estás <b className="ok">fuera de la sede</b>. Acercate al lugar (radio {radius} m) e
-          intentá de nuevo.
+          <b className="ok">Fuera de rango de la sede.</b> Acercarse al lugar (radio {radius}m) e
+          intentar de nuevo.
         </div>
       </div>
     )
@@ -1308,9 +1316,9 @@ function GeoBanner({ state, radius }: { state: CheckIn; radius: number }) {
       <div className="geo warn" role="alert">
         <span className="ring">!</span>
         <div>
-          No pudimos leer tu ubicación.
+          No se pudo leer la ubicación.
           <br />
-          <span style={{ color: 'var(--ink-3)' }}>Pedile al admin que te registre.</span>
+          <span style={{ color: 'var(--ink-3)' }}>Solicitar al admin que lo registre.</span>
         </div>
       </div>
     )
@@ -1327,10 +1335,10 @@ function GeoBanner({ state, radius }: { state: CheckIn; radius: number }) {
     <div className="geo">
       <span className="ring">📍</span>
       <div>
-        Hacé <b className="ok">check-in</b> cuando estés en la sede.
+        Hacer <b className="ok">check-in</b> al llegar a la sede.
         <br />
         <span style={{ color: 'var(--ink-3)' }}>
-          Radio {radius} m · sin GPS, el admin te registra.
+          Radio {radius} m · sin GPS, el admin registra.
         </span>
       </div>
     </div>
@@ -1341,9 +1349,12 @@ function GeoBanner({ state, radius }: { state: CheckIn; radius: number }) {
 // when the player arrived early (early_bird), a plain confirmation otherwise.
 function CheckInCelebration({
   celebrate,
+  earlyBirdChips,
   onClose,
 }: {
   celebrate: { earlyBird: boolean; chips: number | null } | null
+  /** Season early-bird bonus (fichas) — the real configured value, not a hardcode. */
+  earlyBirdChips: number
   onClose: () => void
 }) {
   const chipsLabel =
@@ -1352,20 +1363,20 @@ function CheckInCelebration({
     <Sheet
       open={celebrate != null}
       onClose={onClose}
-      title={celebrate?.earlyBird ? '¡Llegaste temprano!' : '¡Check-in listo!'}
+      title={celebrate?.earlyBird ? '¡Llegada temprana!' : '¡Check-in listo!'}
     >
       <div className="celebrate">
         {celebrate?.earlyBird ? (
           <>
-            <div className="big">+2.000 fichas</div>
+            <div className="big">+{formatMiles(earlyBirdChips)} fichas</div>
             <div className="sub">
               Bonus por llegar antes del arranque.
-              {chipsLabel ? ` Arrancás con ${chipsLabel}.` : ''}
+              {chipsLabel ? ` Comienza con ${chipsLabel}.` : ''}
             </div>
           </>
         ) : (
           <div className="sub">
-            Check-in confirmado.{chipsLabel ? ` Arrancás con ${chipsLabel}.` : ''}
+            Check-in confirmado.{chipsLabel ? ` Comienza con ${chipsLabel}.` : ''}
           </div>
         )}
       </div>
@@ -1393,7 +1404,7 @@ function LateCheckInSheet({
   return (
     <Sheet open={open} onClose={onClose} title="Check-in tarde">
       <p>
-        La fecha ya arrancó, así que no recibís las fichas de bono por llegar a tiempo. ¿Hacer
+        La fecha ya arrancó, así que no se reciben las fichas de bono por llegar a tiempo. ¿Hacer
         check-in igual?
       </p>
       <div className="btn-row">
@@ -1451,7 +1462,7 @@ function CoverControl({
         .upload(path, blob, { contentType: 'image/jpeg' })
       if (upErr) {
         setBusy(false)
-        setError('No se pudo subir la portada. Probá de nuevo.')
+        setError('No se pudo subir la portada. Intentar de nuevo.')
         return
       }
       const publicUrl = galleryUrl(path)
@@ -1506,7 +1517,7 @@ function CoverControl({
           file={pendingFile}
           aspect={16 / 9}
           outputWidth={1200}
-          title="Ajustá la portada"
+          title="Ajustar la portada"
           onCancel={() => setPendingFile(null)}
           onCropped={uploadBlob}
         />
@@ -1515,7 +1526,7 @@ function CoverControl({
   )
 }
 
-function noteFor(e: EntryRow): string {
+function noteFor(e: EntryRow, earlyBirdChips: number): string {
   switch (e.status) {
     case 'confirmed':
       return 'Confirmado · falta check-in'
@@ -1526,7 +1537,7 @@ function noteFor(e: EntryRow): string {
     case 'invited':
       return 'Sin responder'
     case 'checked_in':
-      return e.early_bird ? 'Check-in · +2.000 fichas' : 'Check-in listo'
+      return e.early_bird ? `Check-in · +${formatMiles(earlyBirdChips)} fichas` : 'Check-in listo'
     case 'playing':
       return e.rebuys_count > 0 ? `En juego · ↺ ${e.rebuys_count}` : 'En juego'
     case 'no_show':

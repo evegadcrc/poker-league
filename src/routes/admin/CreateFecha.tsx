@@ -40,6 +40,13 @@ type FechaDefaults = {
   // from rebuyUntil (the level the rebuy window stays open). No DB column yet, so
   // this is a saved form default only (not persisted onto the tournament row).
   maxRebuys: number
+  // Venue geofence, kept as the raw input strings (lat/lng blank until captured;
+  // radius as typed). Persisted so the venue — usually the same house — carries
+  // across fechas instead of being re-entered each time. Written onto the
+  // tournament at create via venue_lat / venue_lng / geofence_radius_m (submit).
+  lat: string
+  lng: string
+  radius: string
 }
 
 const HARDCODED_FECHA_DEFAULTS: FechaDefaults = {
@@ -49,6 +56,9 @@ const HARDCODED_FECHA_DEFAULTS: FechaDefaults = {
   bonusStack: 5000,
   rebuyUntil: 8,
   maxRebuys: 8,
+  lat: '',
+  lng: '',
+  radius: '100',
 }
 
 function loadFechaDefaults(): FechaDefaults {
@@ -58,6 +68,7 @@ function loadFechaDefaults(): FechaDefaults {
     const parsed = JSON.parse(raw) as Partial<FechaDefaults>
     const num = (v: unknown, fallback: number) =>
       typeof v === 'number' && Number.isFinite(v) ? v : fallback
+    const str = (v: unknown, fallback: string) => (typeof v === 'string' ? v : fallback)
     return {
       buyIn: num(parsed.buyIn, HARDCODED_FECHA_DEFAULTS.buyIn),
       rebuyAmount: num(parsed.rebuyAmount, HARDCODED_FECHA_DEFAULTS.rebuyAmount),
@@ -65,6 +76,9 @@ function loadFechaDefaults(): FechaDefaults {
       bonusStack: num(parsed.bonusStack, HARDCODED_FECHA_DEFAULTS.bonusStack),
       rebuyUntil: parsed.rebuyUntil === null ? null : num(parsed.rebuyUntil, 8),
       maxRebuys: num(parsed.maxRebuys, HARDCODED_FECHA_DEFAULTS.maxRebuys),
+      lat: str(parsed.lat, HARDCODED_FECHA_DEFAULTS.lat),
+      lng: str(parsed.lng, HARDCODED_FECHA_DEFAULTS.lng),
+      radius: str(parsed.radius, HARDCODED_FECHA_DEFAULTS.radius),
     }
   } catch {
     return { ...HARDCODED_FECHA_DEFAULTS }
@@ -105,9 +119,9 @@ export default function CreateFecha() {
   const [name, setName] = useState('')
   const [date, setDate] = useState('')
   const [time, setTime] = useState('19:00')
-  const [lat, setLat] = useState('')
-  const [lng, setLng] = useState('')
-  const [radius, setRadius] = useState('100')
+  const [lat, setLat] = useState(seeded.lat)
+  const [lng, setLng] = useState(seeded.lng)
+  const [radius, setRadius] = useState(seeded.radius)
   const [buyIn, setBuyIn] = useState(seeded.buyIn)
   const [rebuyAmount, setRebuyAmount] = useState(seeded.rebuyAmount)
   const [startingStack, setStartingStack] = useState(seeded.startingStack)
@@ -174,8 +188,10 @@ export default function CreateFecha() {
       const pos = await requestPosition()
       setLat(pos.lat.toFixed(6))
       setLng(pos.lng.toFixed(6))
+      // The venue just changed → the saved-defaults note no longer describes it.
+      setSavedDefaults(false)
     } catch {
-      setError('No se pudo obtener tu ubicación. Ingresá la sede manualmente.')
+      setError('No se pudo obtener la ubicación. Ingresar la sede manualmente.')
     } finally {
       setLocating(false)
     }
@@ -191,11 +207,32 @@ export default function CreateFecha() {
     [],
   )
 
-  // Persist the current money/rebuy values as the defaults for future fechas.
+  // Venue (lat/lng/radius) change handler: store the raw string + invalidate the
+  // "guardado" note, mirroring onMoney so an edited venue never shows as saved.
+  const onVenue = useCallback(
+    (setter: (s: string) => void) => (e: ChangeEvent<HTMLInputElement>) => {
+      setter(e.target.value)
+      setSavedDefaults(false)
+    },
+    [],
+  )
+
+  // Persist the current money/rebuy values + the venue geofence as the defaults
+  // for future fechas (the venue is usually the same house week to week).
   const guardarAjustes = useCallback(() => {
-    saveFechaDefaults({ buyIn, rebuyAmount, startingStack, bonusStack, rebuyUntil, maxRebuys })
+    saveFechaDefaults({
+      buyIn,
+      rebuyAmount,
+      startingStack,
+      bonusStack,
+      rebuyUntil,
+      maxRebuys,
+      lat,
+      lng,
+      radius,
+    })
     setSavedDefaults(true)
-  }, [buyIn, rebuyAmount, startingStack, bonusStack, rebuyUntil, maxRebuys])
+  }, [buyIn, rebuyAmount, startingStack, bonusStack, rebuyUntil, maxRebuys, lat, lng, radius])
 
   const submit = useCallback(async () => {
     setBusy(true)
@@ -287,14 +324,14 @@ export default function CreateFecha() {
             inputMode="decimal"
             placeholder="Latitud"
             value={lat}
-            onChange={(e) => setLat(e.target.value)}
+            onChange={onVenue(setLat)}
           />
           <input
             id="cf-lng"
             inputMode="decimal"
             placeholder="Longitud"
             value={lng}
-            onChange={(e) => setLng(e.target.value)}
+            onChange={onVenue(setLng)}
           />
         </div>
         <button
@@ -314,7 +351,7 @@ export default function CreateFecha() {
           id="cf-radius"
           inputMode="numeric"
           value={radius}
-          onChange={(e) => setRadius(e.target.value)}
+          onChange={onVenue(setRadius)}
         />
       </div>
 
@@ -428,7 +465,7 @@ export default function CreateFecha() {
       <div className="toggle-row">
         <div>
           <div className="tl">Cuenta para la liga</div>
-          <div className="ts">Si lo apagás, la fecha se juega igual pero no suma a la tabla</div>
+          <div className="ts">Si se apaga, la fecha se juega igual pero no suma a la tabla</div>
         </div>
         <button
           type="button"
@@ -443,7 +480,7 @@ export default function CreateFecha() {
       <div className="toggle-row">
         <div>
           <div className="tl">Permitir calculadora de probabilidades</div>
-          <div className="ts">Si lo apagás, la calculadora queda deshabilitada mientras la fecha esté en vivo</div>
+          <div className="ts">Si se apaga, la calculadora queda deshabilitada mientras la fecha esté en vivo</div>
         </div>
         <button
           type="button"
