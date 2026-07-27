@@ -557,3 +557,22 @@ describe('Live — level-end alarm (players)', () => {
     expect(startLevelAlarm).not.toHaveBeenCalled()
   })
 })
+
+// Players can tap the clock to see the full blind structure (read-only).
+describe('Live — blind structure table (clock tap)', () => {
+  it('tapping the clock opens the read-only structure with the current level marked', async () => {
+    setTournament({ current_level: 1, is_paused: true, paused_remaining_seconds: 100 })
+    const user = userEvent.setup()
+    renderLive()
+    await screen.findByTestId('timer')
+
+    expect(screen.queryByTestId('blinds-table')).not.toBeInTheDocument()
+    await user.click(screen.getByTestId('live-clock-tap'))
+
+    const dialog = await screen.findByRole('dialog', { name: 'Estructura de blinds' })
+    const table = within(dialog).getByTestId('blinds-table')
+    expect(within(table).getByText('25 / 50')).toBeInTheDocument() // level 1
+    expect(within(table).getByText('50 / 100')).toBeInTheDocument() // level 2
+    expect(within(dialog).getByTestId('blinds-row-current')).toBeInTheDocument()
+  })
+})

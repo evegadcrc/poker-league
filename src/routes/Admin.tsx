@@ -14,6 +14,7 @@ import { deriveLiveSignal, useLiveEventCues } from '@/lib/notify'
 import { startLevelAlarm, stopLevelAlarm } from '@/lib/sound'
 import Avatar from '@/components/Avatar'
 import Sheet from '@/components/Sheet'
+import BlindsTable from '@/components/BlindsTable'
 import PrizeDistributionEditor, {
   distToRows,
   isValidDist,
@@ -42,6 +43,7 @@ import {
 import {
   findLevel,
   formatClock,
+  nextLabel,
   nextLevel,
   ordinal,
   parseDistribution,
@@ -607,6 +609,7 @@ type ConsoleEntry = {
   chips: number | null
   rebuys_count: number
   early_bird: boolean
+  checked_in_at: string | null
   final_position: number | null
   player: { name: string; avatar_url: string | null; is_guest: boolean } | null
 }
@@ -653,7 +656,7 @@ async function fetchConsole(): Promise<State> {
     supabase
       .from('entry')
       .select(
-        'id, player_id, status, paid, chips, rebuys_count, early_bird, final_position, player:player_id(name, avatar_url, is_guest)',
+        'id, player_id, status, paid, chips, rebuys_count, early_bird, checked_in_at, final_position, player:player_id(name, avatar_url, is_guest)',
       )
       .eq('tournament_id', tournament.id),
     supabase
@@ -699,6 +702,9 @@ function ConsolePanel() {
   const [confirmKill, setConfirmKill] = useState<ConsoleEntry | null>(null)
   const [noShowFor, setNoShowFor] = useState<ConsoleEntry | null>(null)
   const [blindsOpen, setBlindsOpen] = useState(false)
+  // Read-only full structure shown on a clock tap — distinct from blindsOpen
+  // (the per-level EDIT sheet). Do not conflate the two.
+  const [blindsTableOpen, setBlindsTableOpen] = useState(false)
   const [prizesOpen, setPrizesOpen] = useState(false)
   const [multiBustOpen, setMultiBustOpen] = useState(false)
   const [completeOpen, setCompleteOpen] = useState(false)
@@ -941,27 +947,42 @@ function ConsolePanel() {
         </div>
       )}
       <div className={`live-wrap${tournament.is_paused ? ' paused' : ''}${levelEnded ? ' ended' : ''}`} style={{ padding: 16 }}>
-        <div className="lvl">
-          Nivel {tournament.current_level} · reloj{tournament.is_paused ? ' · en pausa' : ''}
-        </div>
-        <div className="timer" style={{ fontSize: 56 }} data-testid="admin-timer">
-          {formatClock(remaining)}
-        </div>
-        <div className="blinds">
-          <div className="b">
-            <div className="v">{level?.small_blind ?? 0}</div>
-            <div className="k">SB</div>
+        <div
+          className="clock-tap"
+          role="button"
+          tabIndex={0}
+          data-testid="admin-clock-tap"
+          aria-label="Ver estructura de blinds"
+          onClick={() => setBlindsTableOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              setBlindsTableOpen(true)
+            }
+          }}
+        >
+          <div className="lvl">
+            Nivel {tournament.current_level} · reloj{tournament.is_paused ? ' · en pausa' : ''}
           </div>
-          <div className="b">
-            <div className="v">{level?.big_blind ?? 0}</div>
-            <div className="k">BB</div>
+          <div className="timer" style={{ fontSize: 56 }} data-testid="admin-timer">
+            {formatClock(remaining)}
           </div>
-          {anteVisible && (
+          <div className="blinds">
             <div className="b">
-              <div className="v">{level?.ante ?? 0}</div>
-              <div className="k">Ante</div>
+              <div className="v">{level?.small_blind ?? 0}</div>
+              <div className="k">SB</div>
             </div>
-          )}
+            <div className="b">
+              <div className="v">{level?.big_blind ?? 0}</div>
+              <div className="k">BB</div>
+            </div>
+            {anteVisible && (
+              <div className="b">
+                <div className="v">{level?.ante ?? 0}</div>
+                <div className="k">Ante</div>
+              </div>
+            )}
+          </div>
         </div>
         {levelEnded ? (
           <div className="level-ended" role="status" data-testid="level-ended">
@@ -985,8 +1006,8 @@ function ConsolePanel() {
             )}
           </div>
         ) : (
-          <div className="next-lvl">
-            {upcoming ? `Siguiente · Nivel ${upcoming.level_number}` : 'Último nivel'} ·{' '}
+          <div className="next-lvl" data-testid="admin-next-lvl">
+            {nextLabel(upcoming)} ·{' '}
             {tournament.timer_mode === 'auto' ? 'alarma al terminar' : 'avance manual'}
           </div>
         )}
@@ -1293,6 +1314,15 @@ function ConsolePanel() {
         entries={entries}
         pot={pot}
       />
+
+      {/* Read-only full blind structure (clock tap) — NOT the edit sheet. */}
+      {blindsTableOpen && (
+        <BlindsTable
+          levels={state.levels}
+          currentLevel={tournament.current_level}
+          onClose={() => setBlindsTableOpen(false)}
+        />
+      )}
     </>
   )
 }
@@ -1485,6 +1515,9 @@ function AdminPlayerRow({
 }) {
   const name = entry.player?.name ?? 'Jugador'
   const isGuest = entry.player?.is_guest ?? false
+  // On time = checked in while the fecha was still pre-live (early_bird set by
+  // check_in / admin_check_in). Shown so the admin can see who arrived on time.
+  const onTime = entry.early_bird === true && entry.checked_in_at != null
   const actions = playerActions(entry.status, entry.paid)
   const fire = (kind: string) => {
     if (kind === 'pay') onPay(entry.id)
@@ -1512,6 +1545,11 @@ function AdminPlayerRow({
             <span className="unpaid">● Sin pagar</span>
           )}
           {entry.rebuys_count > 0 && <span className="mini-badge">↺ {entry.rebuys_count}</span>}
+          {onTime && (
+            <span className="mini-badge ontime" data-testid="admin-ontime-badge">
+              A tiempo
+            </span>
+          )}
           {entry.chips != null && entry.chips > 0 && (
             <span className="chips-badge">
               {entry.chips.toLocaleString('es-CR')} fichas iniciales{entry.early_bird ? ' · +2.000' : ''}

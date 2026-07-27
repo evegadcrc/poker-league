@@ -335,7 +335,12 @@ describe.skipIf(!canRun)('admin console RPCs (slice 12, local integration)', () 
   })
 
   // ------------------------------------------------------------------------
-  it('complete_tournament flips a confirmed ghost → no_show (−15) and recomputes final_table_size before points', async () => {
+  // NEW MODEL (mig 0031): complete_tournament NO LONGER auto-flips a confirmed-
+  // but-never-checked-in entry to no_show. Not checking in is not a penalty — the
+  // ghost stays 'confirmed' and scores 0 (fn_tournament_points branch 5). Only an
+  // admin's mark_no_show applies the −15. final_table_size is still recomputed
+  // from real turnout BEFORE points.
+  it('complete_tournament leaves a confirmed ghost as confirmed (scores 0, no auto no-show) and recomputes final_table_size before points', async () => {
     const t = await mkTournament({ finalTableSize: SENTINEL })
     const p1 = await mkEntry(t, await mkPlayer())
     const p2 = await mkEntry(t, await mkPlayer())
@@ -349,16 +354,17 @@ describe.skipIf(!canRun)('admin console RPCs (slice 12, local integration)', () 
     const { error } = await admin.rpc('complete_tournament', { p_tournament_id: t })
     expect(error).toBeNull()
 
-    // final_table_size recomputed from real turnout (3 checked-in ≤10 → 5), no longer the sentinel.
+    // final_table_size recomputed from real turnout (3 seated ≤10 → 5), no longer the sentinel.
     expect((await readTournament(t)).final_table_size).toBe(5)
     expect((await readTournament(t)).status).toBe('completed')
 
-    // ghost → no_show at −15.
+    // ghost stays 'confirmed' (NOT no_show) and scores 0 — no auto-penalty.
     const g = await readEntry(ghost)
-    expect(g.status).toBe('no_show')
-    expect(g.points_earned).toBe(-15)
+    expect(g.status).toBe('confirmed')
+    expect(g.points_earned).toBe(0)
 
-    // winner points (scoring v2): N=3 → (3−1)×5 + bmf 10 + top-4[0]=20 (1st) + attendance 15 = 55.
+    // winner points (scoring v2): N=3 seated → (3−1)×5 + bmf 10 + top-4[0]=20 (1st) + attendance 15 = 55.
+    // The confirmed ghost is NOT seated, so N stays 3 (unchanged from the old model).
     expect((await readEntry(p3)).points_earned).toBe(55)
   })
 
