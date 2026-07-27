@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { deriveLiveSignal, useLiveEventCues } from '@/lib/notify'
 import { startLevelAlarm, stopLevelAlarm } from '@/lib/sound'
 import Sheet from '@/components/Sheet'
+import BlindsTable from '@/components/BlindsTable'
 import PrizeList from '@/components/PrizeList'
 import { aliveCount, colonesCompact, parseLeagueConfig, playedCount, type EntryStatus } from '@/lib/fechas'
 import { pointsBreakdown, type PointsBreakdown, type ScoringConfig } from '@/lib/admin'
@@ -16,6 +17,7 @@ import {
   formatClock,
   isAlive,
   liveStandings,
+  nextLabel,
   nextLevel,
   ordinal,
   parseDistribution,
@@ -141,6 +143,8 @@ export default function Live() {
   const [conn, setConn] = useState<Conn>('connecting')
   const [confirmBust, setConfirmBust] = useState(false)
   const [busting, setBusting] = useState(false)
+  // Tap the clock → read-only full blind structure (distinct from any edit flow).
+  const [blindsTableOpen, setBlindsTableOpen] = useState(false)
   // Non-null once the player has self-reported → shows the friendly "reportado" note.
   const [reportedPosition, setReportedPosition] = useState<number | null>(null)
   // True after a failed self_bust → surfaces an error and keeps the retry button.
@@ -378,23 +382,38 @@ export default function Live() {
       )}
 
       <div className={`live-wrap${tournament.is_paused ? ' paused' : ''}${levelEnded ? ' ended' : ''}`}>
-        <div className="lvl">{level?.is_break ? 'Descanso' : `Nivel ${tournament.current_level}`}</div>
-        <div className="timer" data-testid="timer">
-          {formatClock(remaining)}
-        </div>
-        {level?.is_break ? (
-          <div className="blinds">
-            <div className="b">
-              <div className="v">Descanso</div>
+        <div
+          className="clock-tap"
+          role="button"
+          tabIndex={0}
+          data-testid="live-clock-tap"
+          aria-label="Ver estructura de blinds"
+          onClick={() => setBlindsTableOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              setBlindsTableOpen(true)
+            }
+          }}
+        >
+          <div className="lvl">{level?.is_break ? 'Descanso' : `Nivel ${tournament.current_level}`}</div>
+          <div className="timer" data-testid="timer">
+            {formatClock(remaining)}
+          </div>
+          {level?.is_break ? (
+            <div className="blinds">
+              <div className="b">
+                <div className="v">Descanso</div>
+              </div>
             </div>
-          </div>
-        ) : (
-          <div className="blinds" data-testid="blinds">
-            <Blind label="SB" value={level?.small_blind ?? 0} />
-            <Blind label="BB" value={level?.big_blind ?? 0} />
-            {anteVisible && <Blind label="Ante" value={level?.ante ?? 0} />}
-          </div>
-        )}
+          ) : (
+            <div className="blinds" data-testid="blinds">
+              <Blind label="SB" value={level?.small_blind ?? 0} />
+              <Blind label="BB" value={level?.big_blind ?? 0} />
+              {anteVisible && <Blind label="Ante" value={level?.ante ?? 0} />}
+            </div>
+          )}
+        </div>
         {levelEnded ? (
           <div className="level-ended" role="status" data-testid="live-level-ended">
             <div className="level-ended-msg">¡Tiempo! Esperando al admin…</div>
@@ -491,15 +510,16 @@ export default function Live() {
           </button>
         </div>
       </Sheet>
+
+      {blindsTableOpen && (
+        <BlindsTable
+          levels={state.levels}
+          currentLevel={tournament.current_level}
+          onClose={() => setBlindsTableOpen(false)}
+        />
+      )}
     </>
   )
-}
-
-function nextLabel(level: BlindLevel | null): string {
-  if (!level) return 'Último nivel'
-  const when = formatClock(level.duration_seconds)
-  if (level.is_break) return `Siguiente · Nivel ${level.level_number} — Descanso · ${when}`
-  return `Siguiente · Nivel ${level.level_number} — ${formatMiles(level.small_blind)} / ${formatMiles(level.big_blind)} · ${when}`
 }
 
 function Blind({ label, value }: { label: string; value: number }) {

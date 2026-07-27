@@ -1,4 +1,5 @@
 import type { EntryStatus } from '@/lib/fechas'
+import { formatMiles } from '@/lib/format'
 
 // ---------------------------------------------------------------------------
 // En Vivo (slice 11) — pure, testable helpers for the state-based clock, the
@@ -73,6 +74,19 @@ export function nextLevel(levels: readonly BlindLevel[], levelNumber: number): B
  */
 export function showAnte(level: BlindLevel | null, anteEnabled: boolean): boolean {
   return Boolean(anteEnabled && level && (level.ante ?? 0) > 0)
+}
+
+/**
+ * The "Siguiente · Nivel N — SB/BB · mm:ss" label for the NEXT blind level,
+ * shared by the En Vivo scoreboard and the Admin console clock so both show the
+ * same upcoming values. A break renders "Descanso" in place of the blinds; when
+ * there is no next level it reads "Último nivel".
+ */
+export function nextLabel(level: BlindLevel | null): string {
+  if (!level) return 'Último nivel'
+  const when = formatClock(level.duration_seconds)
+  if (level.is_break) return `Siguiente · Nivel ${level.level_number} — Descanso · ${when}`
+  return `Siguiente · Nivel ${level.level_number} — ${formatMiles(level.small_blind)} / ${formatMiles(level.big_blind)} · ${when}`
 }
 
 // ---------------------------------------------------------------------------

@@ -165,7 +165,10 @@ describe.skipIf(!canRun)('check_in / admin_check_in (slice 10, local integration
   })
 
   // ------------------------------------------------------------------------
-  it('inside radius + before start → checked_in, early_bird, chips = stack+bonus, recompute', async () => {
+  // NEW MODEL (mig 0031): on time ⇔ checked in while PRE-LIVE (status='scheduled').
+  // A LIVE check-in earns NO early-bird bonus even if the scheduled start is still
+  // in the future — the door has opened, so it is "late" by the bonus rule.
+  it('live check-in (before scheduled start) → checked_in, NO early-bird (bonus is pre-live only)', async () => {
     const t = await mkTournament({ scheduledAt: new Date(Date.now() + 2 * HOUR_MS).toISOString() })
     await mkConfirmedEntry(t)
 
@@ -179,15 +182,15 @@ describe.skipIf(!canRun)('check_in / admin_check_in (slice 10, local integration
     const entry = await readEntry(t)
     expect(entry!.status).toBe('checked_in')
     expect(entry!.check_in_geo_ok).toBe(true)
-    expect(entry!.early_bird).toBe(true)
-    expect(entry!.chips).toBe(STACK + BONUS)
+    expect(entry!.early_bird).toBe(false)
+    expect(entry!.chips).toBe(STACK)
     expect(entry!.checked_in_at).not.toBeNull()
     // recompute overwrote the sentinel: 1 checked-in ≤10 → size 5.
     expect(await readFinalTableSize(t)).toBe(5)
   })
 
   // ------------------------------------------------------------------------
-  it('inside radius + after start → checked_in, no early-bird bonus', async () => {
+  it('live check-in (after start) → checked_in, no early-bird bonus', async () => {
     const t = await mkTournament({ scheduledAt: new Date(Date.now() - 2 * HOUR_MS).toISOString() })
     await mkConfirmedEntry(t)
 
@@ -223,8 +226,10 @@ describe.skipIf(!canRun)('check_in / admin_check_in (slice 10, local integration
   })
 
   // ------------------------------------------------------------------------
-  // Check-in is allowed BEFORE the admin opens the fecha: people arrive early.
-  it('scheduled (before open) + before start → checked_in, early_bird, chips = stack+bonus', async () => {
+  // ON TIME (mig 0031): checked in while the fecha is still PRE-LIVE (scheduled,
+  // before the admin opened it) → early-bird bonus + "A tiempo". This is the
+  // canonical on-time case, independent of the scheduled start clock.
+  it('scheduled (pre-live) → checked_in, early_bird, chips = stack+bonus (on time)', async () => {
     const t = await mkTournament({
       scheduledAt: new Date(Date.now() + 2 * HOUR_MS).toISOString(),
       status: 'scheduled',
@@ -308,7 +313,7 @@ describe.skipIf(!canRun)('check_in / admin_check_in (slice 10, local integration
   })
 
   // ------------------------------------------------------------------------
-  it('admin_check_in bypasses geo (check_in_geo_ok=false) and recomputes', async () => {
+  it('admin_check_in bypasses geo (check_in_geo_ok=false) and recomputes; live → no bonus', async () => {
     const t = await mkTournament({ scheduledAt: new Date(Date.now() + 2 * HOUR_MS).toISOString() })
     const entryId = await mkConfirmedEntry(t)
 
@@ -318,13 +323,13 @@ describe.skipIf(!canRun)('check_in / admin_check_in (slice 10, local integration
     const entry = await readEntry(t)
     expect(entry!.status).toBe('checked_in')
     expect(entry!.check_in_geo_ok).toBe(false)
-    expect(entry!.early_bird).toBe(true) // before start
-    expect(entry!.chips).toBe(STACK + BONUS)
+    expect(entry!.early_bird).toBe(false) // live (default) → late by the bonus rule
+    expect(entry!.chips).toBe(STACK)
     expect(await readFinalTableSize(t)).toBe(5)
   })
 
   // ------------------------------------------------------------------------
-  it('admin_check_in works on a SCHEDULED fecha (before open)', async () => {
+  it('admin_check_in works on a SCHEDULED fecha (before open → on time, bonus)', async () => {
     const t = await mkTournament({
       scheduledAt: new Date(Date.now() + 2 * HOUR_MS).toISOString(),
       status: 'scheduled',

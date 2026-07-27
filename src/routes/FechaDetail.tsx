@@ -165,6 +165,9 @@ export default function FechaDetail() {
   )
   const [busy, setBusy] = useState(false)
   const [cancelOpen, setCancelOpen] = useState(false)
+  // True → the "late check-in (no bonus)" warning sheet is showing. A live check-
+  // in must confirm through it first; a pre-live check-in proceeds directly.
+  const [lateWarnOpen, setLateWarnOpen] = useState(false)
   // Non-null → the cover hero is expanded in a full-screen lightbox.
   const [coverZoom, setCoverZoom] = useState(false)
   // Non-null → the "Abrir fecha" RPC failed (e.g. it's no longer scheduled).
@@ -349,14 +352,16 @@ export default function FechaDetail() {
   )
 
   // Admin: open a scheduled fecha → live (open_tournament RPC, mig 0005). It sizes
-  // the final table, materializes prizes and auto-flips confirmed-but-not-checked-in
-  // players to no_show, so it's confirmed first. On success the admin lands on the
-  // live view (/vivo) to run the clock / open the Consola; the RPC raises if the
-  // fecha is no longer scheduled (already live / completed).
+  // the final table and materializes prizes. Check-in becomes a bonus-only action
+  // once live (no early-bird bonus, mig 0031): confirmed players who haven't
+  // checked in STAY in the fecha — only an admin's mark_no_show sets no_show. On
+  // success the admin lands on the live view (/vivo) to run the clock / open the
+  // Consola; the RPC raises if the fecha is no longer scheduled (already live /
+  // completed).
   const doOpenFecha = useCallback(async () => {
     if (
       !window.confirm(
-        '¿Abrir la fecha? Empieza el juego y los confirmados que no hicieron check-in quedarán como no-show.',
+        '¿Abrir la fecha? Empieza el juego. Los que ya hicieron check-in a tiempo tienen su bono; después de abrir, el check-in ya no da bono.',
       )
     )
       return
@@ -581,7 +586,7 @@ export default function FechaDetail() {
                   type="button"
                   className="btn blood full"
                   disabled={locating}
-                  onClick={doCheckIn}
+                  onClick={() => (live ? setLateWarnOpen(true) : doCheckIn())}
                 >
                   {checkIn.kind === 'locating'
                     ? 'Ubicando…'
@@ -685,6 +690,15 @@ export default function FechaDetail() {
       />
 
       <CheckInCelebration celebrate={celebrate} onClose={() => setCelebrate(null)} />
+
+      <LateCheckInSheet
+        open={lateWarnOpen}
+        onClose={() => setLateWarnOpen(false)}
+        onConfirm={() => {
+          setLateWarnOpen(false)
+          void doCheckIn()
+        }}
+      />
 
       {coverZoom && tournament.cover_url && (
         <PhotoLightbox
@@ -1039,6 +1053,10 @@ function PlayerAttendanceRow({
   const pill = statusPill(entry.status)
   const name = entry.player?.name ?? 'Jugador'
   const avatarUrl = entry.player?.avatar_url ?? null
+  // On time = checked in while the fecha was still pre-live (early_bird set by
+  // the check_in RPC). A late check-in (checked_in_at set, early_bird false)
+  // shows no badge — the plain "Check-in listo" note carries it.
+  const onTime = entry.early_bird === true && entry.checked_in_at != null
   // Real-time points breakdown for a RANKED, non-chop finisher (live bust OR
   // completed). Chop co-champions (chop_group set) are skipped — the engine
   // AVERAGES their value across the group, so a per-position split would mislead.
@@ -1103,6 +1121,11 @@ function PlayerAttendanceRow({
             {name}
             {isMe ? ' · tú' : ''}
           </b>
+          {onTime && (
+            <span className="mini-badge ontime" data-testid="ontime-badge">
+              A tiempo
+            </span>
+          )}
           {!result && <div className="sub">{noteFor(entry)}</div>}
           {breakdown && <PointsBreakdownLine breakdown={breakdown} position={entry.final_position!} />}
         </div>
@@ -1349,6 +1372,36 @@ function CheckInCelebration({
       <div className="btn-row">
         <button type="button" className="btn blood full" onClick={onClose}>
           Listo
+        </button>
+      </div>
+    </Sheet>
+  )
+}
+
+// Late check-in warning: once the fecha is live the early-bird bonus is gone,
+// so a live check-in confirms through this sheet first (a pre-live check-in
+// proceeds directly). Confirm → the caller's doCheckIn runs; cancel → nothing.
+function LateCheckInSheet({
+  open,
+  onClose,
+  onConfirm,
+}: {
+  open: boolean
+  onClose: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <Sheet open={open} onClose={onClose} title="Check-in tarde">
+      <p>
+        La fecha ya arrancó, así que no recibís las fichas de bono por llegar a tiempo. ¿Hacer
+        check-in igual?
+      </p>
+      <div className="btn-row">
+        <button type="button" className="btn ghost" style={{ flex: 1 }} onClick={onClose}>
+          Cancelar
+        </button>
+        <button type="button" className="btn blood" style={{ flex: 1 }} onClick={onConfirm}>
+          Sí, hacer check-in
         </button>
       </div>
     </Sheet>

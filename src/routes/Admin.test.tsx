@@ -306,6 +306,57 @@ describe('Admin console (slice 12)', () => {
   })
 })
 
+// The running clock's next-level footer shows the NEXT blind's real values
+// (SB/BB + duration), and tapping the clock opens the read-only full structure.
+describe('Admin console — next-blind footer + blind structure table', () => {
+  it('the next-level footer shows the next blind values (SB/BB + duration)', async () => {
+    renderAdmin()
+    // current_level 1 → next is level 2 (SB 50 / BB 100, 1200s = 20:00).
+    const next = await screen.findByTestId('admin-next-lvl')
+    expect(next).toHaveTextContent('Nivel 2')
+    expect(next).toHaveTextContent('50 / 100')
+    expect(next).toHaveTextContent('20:00')
+  })
+
+  it('tapping the clock opens the read-only blind structure table', async () => {
+    const user = userEvent.setup()
+    renderAdmin()
+    await screen.findByTestId('admin-timer')
+
+    expect(screen.queryByTestId('blinds-table')).not.toBeInTheDocument()
+    await user.click(screen.getByTestId('admin-clock-tap'))
+
+    const dialog = await screen.findByRole('dialog', { name: 'Estructura de blinds' })
+    const table = within(dialog).getByTestId('blinds-table')
+    // Both levels listed; the current level (1) is marked.
+    expect(within(table).getByText('50 / 100')).toBeInTheDocument()
+    expect(within(dialog).getByTestId('blinds-row-current')).toBeInTheDocument()
+  })
+})
+
+// The admin roster shows an "A tiempo" marker next to players who checked in on
+// time (early_bird set + checked_in_at), so the admin can see who arrived early.
+describe('Admin console — "A tiempo" roster indicator (mig 0031)', () => {
+  it('marks on-time players and leaves late/no check-in players unmarked', async () => {
+    h.list.entry = {
+      data: [
+        { id: 'e-ot', player_id: 'p-ot', status: 'checked_in', paid: true, chips: 12_000, rebuys_count: 0, early_bird: true, checked_in_at: new Date().toISOString(), final_position: null, player: { name: 'Puntual Pam', avatar_url: null, is_guest: false } },
+        { id: 'e-late', player_id: 'p-late', status: 'checked_in', paid: true, chips: 10_000, rebuys_count: 0, early_bird: false, checked_in_at: new Date().toISOString(), final_position: null, player: { name: 'Tardío Tom', avatar_url: null, is_guest: false } },
+        { id: 'e-conf', player_id: 'p-conf', status: 'confirmed', paid: false, chips: null, rebuys_count: 0, early_bird: false, checked_in_at: null, final_position: null, player: { name: 'Confirmó Cata', avatar_url: null, is_guest: false } },
+      ],
+      error: null,
+    }
+    renderAdmin()
+    await screen.findAllByTestId('admin-prow')
+
+    // Exactly one "A tiempo" badge — Pam only.
+    const badges = screen.getAllByTestId('admin-ontime-badge')
+    expect(badges).toHaveLength(1)
+    const pam = screen.getAllByTestId('admin-prow').find((r) => within(r).queryByText(/Puntual Pam/))!
+    expect(within(pam).getByTestId('admin-ontime-badge')).toHaveTextContent('A tiempo')
+  })
+})
+
 describe('Admin console — odds-calculator toggle (Phase-2 step 7)', () => {
   it('flips odds_enabled on the live fecha via .update()', async () => {
     const user = userEvent.setup()
