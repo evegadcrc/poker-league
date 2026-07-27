@@ -464,7 +464,7 @@ export default function Live() {
           <>
             {bustError && (
               <div className="fd-note" role="alert" data-testid="bust-error">
-                No se pudo reportar. Probá de nuevo.
+                No se pudo reportar. Intentar de nuevo.
               </div>
             )}
             <button
@@ -476,7 +476,7 @@ export default function Live() {
                 setConfirmBust(true)
               }}
             >
-              Estoy fuera — reportar
+              Reportar salida
             </button>
           </>
         ) : null}
@@ -485,9 +485,9 @@ export default function Live() {
       <PrizeList prizes={displayPrizes} proposed={proposed} />
 
       {/* Self-report bust confirm */}
-      <Sheet open={confirmBust} onClose={() => setConfirmBust(false)} title="Reportar que quedaste fuera">
+      <Sheet open={confirmBust} onClose={() => setConfirmBust(false)} title="Reportar salida">
         <p>
-          ¿Confirmás que ya quedaste fuera? Se te asigna tu posición final y bajás a tu lugar en la
+          ¿Confirmar la salida? Se asigna la posición final y se baja al lugar correspondiente en la
           tabla. El admin puede reordenar o deshacerlo si hace falta.
         </p>
         <div className="btn-row">
@@ -497,7 +497,7 @@ export default function Live() {
             style={{ flex: 1 }}
             onClick={() => setConfirmBust(false)}
           >
-            Todavía sigo
+            Todavía en juego
           </button>
           <button
             type="button"
@@ -506,7 +506,7 @@ export default function Live() {
             disabled={busting}
             onClick={() => void doSelfBust()}
           >
-            Sí, quedé fuera
+            Sí, reportar salida
           </button>
         </div>
       </Sheet>

@@ -232,11 +232,11 @@ function LigaScoring({ config }: { config: LeagueConfig }) {
               <li>
                 <span className="sc-k">No-show</span>
                 <b>−{Math.abs(config.noShowPenalty)}</b>
-                <em>confirmaste y no llegaste</em>
+                <em>confirmó y no llegó</em>
               </li>
             </ul>
             <p className="scoring-note">
-              N = jugadores en la fecha · posición = tu lugar (1 = campeón).
+              N = jugadores en la fecha · posición = el lugar (1 = campeón).
             </p>
             <div className="scoring-example">
               <p className="sc-ex-head">Ejemplo · 20 jugadores, 3er lugar</p>

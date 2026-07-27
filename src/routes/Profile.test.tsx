@@ -168,7 +168,7 @@ describe('Profile (Perfil)', () => {
     await screen.findByTestId('prof-stats')
 
     expect(screen.getByText('Sin jugadas todavía')).toBeInTheDocument()
-    expect(screen.getByText(/no tienes historial de puntos/i)).toBeInTheDocument()
+    expect(screen.getByText(/no hay historial de puntos/i)).toBeInTheDocument()
     // No sparkline and no form pills.
     expect(screen.queryByTestId('spark')).not.toBeInTheDocument()
     expect(document.querySelector('.big-form')).toBeNull()
@@ -241,7 +241,7 @@ describe('Profile (Perfil)', () => {
   it('renders an error state with a retry when the RPC errors', async () => {
     h.rpcResult = { data: null, error: { message: 'nope' } }
     render(<Profile />)
-    expect(await screen.findByRole('alert')).toHaveTextContent(/no se pudo cargar tu perfil/i)
+    expect(await screen.findByRole('alert')).toHaveTextContent(/no se pudo cargar el perfil/i)
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument()
   })
 
