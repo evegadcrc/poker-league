@@ -632,6 +632,7 @@ type Ready = {
   entries: ConsoleEntry[]
   prizes: Prize[]
   scoring: ScoringConfig
+  earlyBirdChips: number
   pot: number
 }
 type State = { phase: 'loading' } | { phase: 'error' } | { phase: 'no-live' } | Ready
@@ -672,7 +673,9 @@ async function fetchConsole(): Promise<State> {
       .eq('tournament_id', tournament.id),
     supabase
       .from('season')
-      .select('points_multiplier, bonus_final_table, bonus_attendance, top_finish_bonuses')
+      .select(
+        'points_multiplier, bonus_final_table, bonus_attendance, top_finish_bonuses, early_bird_bonus_chips',
+      )
       .eq('id', tournament.season_id)
       .maybeSingle(),
     supabase.rpc('fn_pot', { p_tournament_id: tournament.id }),
@@ -688,6 +691,7 @@ async function fetchConsole(): Promise<State> {
     bonus_final_table?: number
     bonus_attendance?: number
     top_finish_bonuses?: unknown
+    early_bird_bonus_chips?: number
   }
   return {
     phase: 'ready',
@@ -701,6 +705,7 @@ async function fetchConsole(): Promise<State> {
       bonus_attendance: s.bonus_attendance ?? 15,
       top_finish_bonuses: parseTopFinishBonuses(s.top_finish_bonuses),
     },
+    earlyBirdChips: s.early_bird_bonus_chips ?? 5000,
     pot: potRes.error ? 0 : Number(potRes.data ?? 0),
   }
 }
@@ -905,7 +910,7 @@ function ConsolePanel() {
       </div>
     )
 
-  const { tournament, entries, prizes, scoring, pot } = state
+  const { tournament, entries, prizes, scoring, earlyBirdChips, pot } = state
   const anteVisible = showAnte(level, tournament.ante_enabled)
   const finishersWithPosition = entries.filter((e) => e.final_position != null).length
   const canUndo = entries.some((e) => e.status === 'eliminated' || e.status === 'winner')
@@ -1126,6 +1131,7 @@ function ConsolePanel() {
             key={e.id}
             entry={e}
             busy={busy}
+            earlyBirdChips={earlyBirdChips}
             onPay={(id) => void runAction(() => supabase.rpc('confirm_payment', { p_entry_id: id }))}
             onRebuy={(id) => void runAction(() => supabase.rpc('add_rebuy', { p_entry_id: id }))}
             onEliminate={() => setConfirmKill(e)}
@@ -1512,6 +1518,7 @@ function GuestSheet({
 function AdminPlayerRow({
   entry,
   busy,
+  earlyBirdChips,
   onPay,
   onRebuy,
   onEliminate,
@@ -1519,6 +1526,7 @@ function AdminPlayerRow({
 }: {
   entry: ConsoleEntry
   busy: boolean
+  earlyBirdChips: number
   onPay: (id: string) => void
   onRebuy: (id: string) => void
   onEliminate: (id: string) => void
@@ -1563,7 +1571,8 @@ function AdminPlayerRow({
           )}
           {entry.chips != null && entry.chips > 0 && (
             <span className="chips-badge">
-              {entry.chips.toLocaleString('es-CR')} fichas iniciales{entry.early_bird ? ' · +2.000' : ''}
+              {entry.chips.toLocaleString('es-CR')} fichas iniciales
+              {entry.early_bird ? ` · +${earlyBirdChips.toLocaleString('es-CR')}` : ''}
             </span>
           )}
         </div>
