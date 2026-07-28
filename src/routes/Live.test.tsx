@@ -419,24 +419,24 @@ describe('Live — empty / admin', () => {
 })
 
 describe('Live — self-report bust', () => {
-  it('shows "Estoy fuera — reportar" for a playing current player', async () => {
+  it('shows "Reportar salida" for a playing current player', async () => {
     h.player = { id: 'p-ana', name: 'Ana', avatar_url: null } // Ana is playing
     renderLive()
-    expect(await screen.findByRole('button', { name: /Estoy fuera — reportar/ })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /Reportar salida/ })).toBeInTheDocument()
   })
 
   it('hides the button for a player who is already out', async () => {
     h.player = { id: 'p-dee', name: 'Dee', avatar_url: null } // Dee is eliminated
     renderLive()
     await screen.findByTestId('vivo-actions')
-    expect(screen.queryByRole('button', { name: /Estoy fuera/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Reportar salida/ })).not.toBeInTheDocument()
   })
 
   it('hides the button for a player who is not in this fecha', async () => {
     h.player = { id: 'p-nobody', name: 'Nadie', avatar_url: null }
     renderLive()
     await screen.findByTestId('vivo-actions')
-    expect(screen.queryByRole('button', { name: /Estoy fuera/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Reportar salida/ })).not.toBeInTheDocument()
   })
 
   it('does not show the button to admins (they get the console link instead)', async () => {
@@ -444,7 +444,7 @@ describe('Live — self-report bust', () => {
     h.player = { id: 'p-ana', name: 'Ana', avatar_url: null }
     renderLive()
     await screen.findByRole('link', { name: /consola de admin/i })
-    expect(screen.queryByRole('button', { name: /Estoy fuera/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Reportar salida/ })).not.toBeInTheDocument()
   })
 
   it('confirming the sheet calls self_bust with the tournament id and shows the report note', async () => {
@@ -452,12 +452,12 @@ describe('Live — self-report bust', () => {
     h.player = { id: 'p-ana', name: 'Ana', avatar_url: null }
     renderLive()
 
-    await user.click(await screen.findByRole('button', { name: /Estoy fuera — reportar/ }))
+    await user.click(await screen.findByRole('button', { name: /Reportar salida/ }))
     // Confirm sheet is open; no RPC yet.
-    const dialog = screen.getByRole('dialog', { name: /Reportar que quedaste fuera/ })
+    const dialog = screen.getByRole('dialog', { name: /Reportar salida/ })
     expect(h.rpcCalls.find((c) => c.name === 'self_bust')).toBeFalsy()
 
-    await user.click(within(dialog).getByRole('button', { name: /Sí, quedé fuera/ }))
+    await user.click(within(dialog).getByRole('button', { name: /Sí, reportar salida/ }))
 
     const call = h.rpcCalls.find((c) => c.name === 'self_bust')
     expect(call).toBeTruthy()
@@ -472,9 +472,9 @@ describe('Live — self-report bust', () => {
     h.rpcErrors = { self_bust: { message: 'boom' } }
     renderLive()
 
-    await user.click(await screen.findByRole('button', { name: /Estoy fuera — reportar/ }))
-    const dialog = screen.getByRole('dialog', { name: /Reportar que quedaste fuera/ })
-    await user.click(within(dialog).getByRole('button', { name: /Sí, quedé fuera/ }))
+    await user.click(await screen.findByRole('button', { name: /Reportar salida/ }))
+    const dialog = screen.getByRole('dialog', { name: /Reportar salida/ })
+    await user.click(within(dialog).getByRole('button', { name: /Sí, reportar salida/ }))
 
     // The RPC was attempted …
     expect(h.rpcCalls.find((c) => c.name === 'self_bust')).toBeTruthy()
@@ -482,7 +482,7 @@ describe('Live — self-report bust', () => {
     // and the report button remains (server still has Ana playing → retry).
     expect(await screen.findByTestId('bust-error')).toBeInTheDocument()
     expect(screen.queryByTestId('bust-reported')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Estoy fuera — reportar/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Reportar salida/ })).toBeInTheDocument()
   })
 })
 

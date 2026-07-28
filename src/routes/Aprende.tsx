@@ -48,7 +48,7 @@ export default function Aprende() {
       <div className="rule" />
 
       <p className="learn-lead">
-        Texas Hold&apos;em: formá la mejor mano de 5 cartas combinando tus 2 cartas ocultas con
+        Texas Hold&apos;em: formar la mejor mano de 5 cartas combinando 2 cartas ocultas con
         las 5 cartas comunitarias de la mesa.
       </p>
 
@@ -87,7 +87,7 @@ export default function Aprende() {
 
       <div className="section-head" style={{ paddingBottom: 2 }}>
         <div>
-          <span className="overline">En tu turno</span>
+          <span className="overline">En el turno</span>
         </div>
       </div>
       <ul className="learn-actions">

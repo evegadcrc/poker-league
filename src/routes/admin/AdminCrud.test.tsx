@@ -159,6 +159,52 @@ describe('Admin · Nueva fecha (slice 13)', () => {
     expect(stored.rebuyUntil).toBe(8)
   })
 
+  it('"Guardar ajustes" persists the venue geofence and a remount seeds it back', async () => {
+    const user = userEvent.setup()
+    const { unmount } = renderAdmin()
+    await user.click(screen.getByRole('tab', { name: 'Nueva fecha' }))
+    await screen.findByTestId('create-fecha')
+
+    // Enter a venue (usually the same house) + a custom radius, then save.
+    await user.type(screen.getByPlaceholderText('Latitud'), '9.9281')
+    await user.type(screen.getByPlaceholderText('Longitud'), '-84.0907')
+    const radius = screen.getByLabelText('Radio de check-in (m)')
+    await user.clear(radius)
+    await user.type(radius, '150')
+    await user.click(screen.getByRole('button', { name: 'Guardar ajustes' }))
+
+    // The geofence is written into pf-fecha-defaults alongside the money fields.
+    const stored = JSON.parse(localStorage.getItem('pf-fecha-defaults') ?? '{}')
+    expect(stored.lat).toBe('9.9281')
+    expect(stored.lng).toBe('-84.0907')
+    expect(stored.radius).toBe('150')
+
+    // Remount → CreateFecha seeds lat/lng/radius from the saved defaults, so the
+    // venue carries across fechas instead of being re-entered each time.
+    unmount()
+    renderAdmin()
+    await user.click(screen.getByRole('tab', { name: 'Nueva fecha' }))
+    await screen.findByTestId('create-fecha')
+    expect(screen.getByPlaceholderText('Latitud')).toHaveValue('9.9281')
+    expect(screen.getByPlaceholderText('Longitud')).toHaveValue('-84.0907')
+    expect(screen.getByLabelText('Radio de check-in (m)')).toHaveValue('150')
+  })
+
+  it('deep-links straight to the Nueva-fecha panel with ?tab=crear', async () => {
+    // Fechas' "+ Nueva fecha" links to /admin?tab=crear — the crear tab must be
+    // selected and its CreateFecha panel rendered with no extra click.
+    render(<Admin />, {
+      wrapper: ({ children }) => (
+        <MemoryRouter initialEntries={['/admin?tab=crear']}>{children}</MemoryRouter>
+      ),
+    })
+    expect(await screen.findByTestId('create-fecha')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Nueva fecha' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+  })
+
   it('shows a ₡ adornment on the colón money inputs (buy-in / rebuy)', async () => {
     const user = userEvent.setup()
     renderAdmin()

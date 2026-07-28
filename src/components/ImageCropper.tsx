@@ -77,7 +77,7 @@ export default function ImageCropper({
   file,
   aspect,
   outputWidth,
-  title = 'Ajustá la foto',
+  title = 'Ajustar la foto',
   onCancel,
   onCropped,
 }: ImageCropperProps) {

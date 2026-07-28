@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useAuth, useRole } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import {
@@ -57,6 +58,13 @@ import {
 
 type AdminTab = 'consola' | 'crear' | 'jugadores' | 'solicitudes' | 'liga'
 
+const ADMIN_TABS: readonly AdminTab[] = ['consola', 'crear', 'jugadores', 'solicitudes', 'liga']
+
+/** Read the initial tab from `?tab=` (e.g. "+ Nueva fecha" links to ?tab=crear). */
+function tabFromParam(value: string | null): AdminTab {
+  return ADMIN_TABS.includes(value as AdminTab) ? (value as AdminTab) : 'consola'
+}
+
 // ---------------------------------------------------------------------------
 // Admin console (slice 12). Sub-nav: Consola (the live-game control surface,
 // built here) · Nueva fecha · Liga (slice-13 stubs). The Consola panel only
@@ -64,7 +72,10 @@ type AdminTab = 'consola' | 'crear' | 'jugadores' | 'solicitudes' | 'liga'
 // (in timer_mode='auto') advances the level when the local timer reaches 0.
 // ---------------------------------------------------------------------------
 export default function Admin() {
-  const [tab, setTab] = useState<AdminTab>('consola')
+  // Honor a `?tab=` deep-link on first mount (e.g. Fechas' "+ Nueva fecha" →
+  // ?tab=crear opens the Nueva-fecha panel). Tab clicks then drive local state.
+  const [searchParams] = useSearchParams()
+  const [tab, setTab] = useState<AdminTab>(() => tabFromParam(searchParams.get('tab')))
   // Pending access requests power both the "Solicitudes" panel and its tab badge,
   // so the queue is loaded here and shared down. loadPending refreshes after any
   // approve/reject so the badge stays in sync.
@@ -211,7 +222,7 @@ function PlayersPanel() {
     // Confirm only when BLOCKING (locking someone out); unblocking is safe.
     if (!p.blocked) {
       const ok = window.confirm(
-        `¿Bloquear a ${p.name}? No podrá iniciar sesión hasta que lo desbloqueés.`,
+        `¿Bloquear a ${p.name}? No podrá iniciar sesión hasta que se desbloquee.`,
       )
       if (!ok) return
     }
@@ -222,7 +233,7 @@ function PlayersPanel() {
     })
     setBusyId(null)
     if (err) {
-      setError('No se pudo actualizar el estado del jugador. Reintentá.')
+      setError('No se pudo actualizar el estado del jugador. Reintentar.')
       return
     }
     setError(null)
@@ -344,7 +355,7 @@ function AddPlayerPanel({ onAdded }: { onAdded?: () => void }) {
       setError(
         err.code === '23505'
           ? 'Ese correo ya está registrado.'
-          : err.message || 'No se pudo agregar el jugador. Reintentá.',
+          : err.message || 'No se pudo agregar el jugador. Reintentar.',
       )
       return
     }
@@ -360,7 +371,7 @@ function AddPlayerPanel({ onAdded }: { onAdded?: () => void }) {
       <div className="field" style={{ paddingBottom: 2 }}>
         <label>Agregar jugador</label>
         <div className="hintline">
-          Registrá el correo de un amigo para que pueda entrar con su enlace mágico.
+          Registrar el correo de un amigo para que pueda entrar con su enlace mágico.
         </div>
       </div>
       <div className="field">
@@ -456,7 +467,7 @@ function RequestsPanel({
     setAutoBusy(false)
     if (err) {
       setAutoOn(!next) // revert on failure
-      setError('No se pudo cambiar la aprobación automática. Reintentá.')
+      setError('No se pudo cambiar la aprobación automática. Reintentar.')
     }
   }
 
@@ -466,7 +477,7 @@ function RequestsPanel({
     setError(null)
     const { email, error: err } = await approveRequest(r.id)
     if (err) {
-      setError('No se pudo aprobar la solicitud. Reintentá.')
+      setError('No se pudo aprobar la solicitud. Reintentar.')
       setBusyId(null)
       return
     }
@@ -491,7 +502,7 @@ function RequestsPanel({
     setError(null)
     const { error: err } = await rejectRequest(r.id)
     if (err) {
-      setError('No se pudo rechazar la solicitud. Reintentá.')
+      setError('No se pudo rechazar la solicitud. Reintentar.')
       setBusyId(null)
       return
     }
@@ -524,8 +535,8 @@ function RequestsPanel({
       <div className="field" style={{ paddingBottom: 2 }}>
         <label>Solicitudes de acceso</label>
         <div className="hintline">
-          Amigos que intentaron entrar con un correo que aún no está en la liga. Aprobá para
-          crearles el jugador y enviarles el enlace mágico, o rechazá.
+          Amigos que intentaron entrar con un correo que aún no está en la liga. Aprobar para
+          crearles el jugador y enviarles el enlace mágico, o rechazar.
         </div>
       </div>
 
@@ -621,6 +632,7 @@ type Ready = {
   entries: ConsoleEntry[]
   prizes: Prize[]
   scoring: ScoringConfig
+  earlyBirdChips: number
   pot: number
 }
 type State = { phase: 'loading' } | { phase: 'error' } | { phase: 'no-live' } | Ready
@@ -661,7 +673,9 @@ async function fetchConsole(): Promise<State> {
       .eq('tournament_id', tournament.id),
     supabase
       .from('season')
-      .select('points_multiplier, bonus_final_table, bonus_attendance, top_finish_bonuses')
+      .select(
+        'points_multiplier, bonus_final_table, bonus_attendance, top_finish_bonuses, early_bird_bonus_chips',
+      )
       .eq('id', tournament.season_id)
       .maybeSingle(),
     supabase.rpc('fn_pot', { p_tournament_id: tournament.id }),
@@ -677,6 +691,7 @@ async function fetchConsole(): Promise<State> {
     bonus_final_table?: number
     bonus_attendance?: number
     top_finish_bonuses?: unknown
+    early_bird_bonus_chips?: number
   }
   return {
     phase: 'ready',
@@ -690,6 +705,7 @@ async function fetchConsole(): Promise<State> {
       bonus_attendance: s.bonus_attendance ?? 15,
       top_finish_bonuses: parseTopFinishBonuses(s.top_finish_bonuses),
     },
+    earlyBirdChips: s.early_bird_bonus_chips ?? 5000,
     pot: potRes.error ? 0 : Number(potRes.data ?? 0),
   }
 }
@@ -782,7 +798,7 @@ function ConsolePanel() {
       })
       setBusy(false)
       if (error) {
-        setToast('No se pudo actualizar el reloj. Reintentá.')
+        setToast('No se pudo actualizar el reloj. Reintentar.')
         void load() // reconcile to server truth so a retry is safe
         return false
       }
@@ -807,14 +823,14 @@ function ConsolePanel() {
         .eq('id', tid)
       if (upErr) {
         setBusy(false)
-        setToast('No se pudieron guardar los premios. Reintentá.')
+        setToast('No se pudieron guardar los premios. Reintentar.')
         void load()
         return
       }
       const { error: rpcErr } = await supabase.rpc('set_prizes', { p_tournament_id: tid })
       setBusy(false)
       if (rpcErr) {
-        setToast('No se pudieron recalcular los premios. Reintentá.')
+        setToast('No se pudieron recalcular los premios. Reintentar.')
       }
       void load()
     },
@@ -890,11 +906,11 @@ function ConsolePanel() {
   if (state.phase === 'no-live')
     return (
       <div className="fd-note">
-        No hay ninguna fecha en vivo. Abrí una fecha desde su detalle para controlar la consola.
+        No hay ninguna fecha en vivo. Abrir una fecha desde su detalle para controlar la consola.
       </div>
     )
 
-  const { tournament, entries, prizes, scoring, pot } = state
+  const { tournament, entries, prizes, scoring, earlyBirdChips, pot } = state
   const anteVisible = showAnte(level, tournament.ante_enabled)
   const finishersWithPosition = entries.filter((e) => e.final_position != null).length
   const canUndo = entries.some((e) => e.status === 'eliminated' || e.status === 'winner')
@@ -907,7 +923,7 @@ function ConsolePanel() {
     const { error } = await fn()
     setBusy(false)
     if (error) {
-      setToast('No se pudo aplicar el cambio. Reintentá.')
+      setToast('No se pudo aplicar el cambio. Reintentar.')
       void load() // reconcile to server truth so a retry is safe
     } else {
       void load()
@@ -1072,7 +1088,7 @@ function ConsolePanel() {
           <div className="tl">
             Calculadora de probabilidades: {tournament.odds_enabled ? 'Activada' : 'Desactivada'}
           </div>
-          <div className="ts">Apagala para que nadie la use mientras juegan esta fecha</div>
+          <div className="ts">Apagarla para que nadie la use mientras juegan esta fecha</div>
         </div>
         <button
           type="button"
@@ -1115,6 +1131,7 @@ function ConsolePanel() {
             key={e.id}
             entry={e}
             busy={busy}
+            earlyBirdChips={earlyBirdChips}
             onPay={(id) => void runAction(() => supabase.rpc('confirm_payment', { p_entry_id: id }))}
             onRebuy={(id) => void runAction(() => supabase.rpc('add_rebuy', { p_entry_id: id }))}
             onEliminate={() => setConfirmKill(e)}
@@ -1173,7 +1190,7 @@ function ConsolePanel() {
       <Sheet open={confirmKill != null} onClose={() => setConfirmKill(null)} title="Eliminar jugador">
         <p>
           ¿Eliminar a <b>{confirmKill?.player?.name ?? 'este jugador'}</b>? Se le asigna su posición
-          final. Podés deshacerlo con “Deshacer”.
+          final. Se puede deshacer con “Deshacer”.
         </p>
         <div className="btn-row">
           <button type="button" className="btn ghost" style={{ flex: 1 }} onClick={() => setConfirmKill(null)}>
@@ -1198,7 +1215,7 @@ function ConsolePanel() {
       {/* No-show excused / −15 choice */}
       <Sheet open={noShowFor != null} onClose={() => setNoShowFor(null)} title="Marcar no-show">
         <p>
-          <b>{noShowFor?.player?.name ?? 'Este jugador'}</b> confirmó pero no llegó. Elegí el castigo:
+          <b>{noShowFor?.player?.name ?? 'Este jugador'}</b> confirmó pero no llegó. Elegir el castigo:
         </p>
         <div className="btn-row">
           <button
@@ -1396,7 +1413,7 @@ function WhatsSheet({
 
   return (
     <Sheet open={open} onClose={onClose} title="Resumen para WhatsApp">
-      <p>Copiá y pegá en el grupo (etapa 1). El envío directo llega después.</p>
+      <p>Copiar y pegar en el grupo (etapa 1). El envío directo llega después.</p>
 
       <div className="subnav" role="tablist" aria-label="Tipo de resumen" style={{ marginBottom: 10 }}>
         <button
@@ -1434,7 +1451,7 @@ function WhatsSheet({
         <div className="fd-note" role="status" data-testid="wa-status">
           {copied === 'ok'
             ? '📋 Resumen copiado'
-            : 'No se pudo copiar — seleccioná el texto y copialo manualmente.'}
+            : 'No se pudo copiar — seleccionar el texto y copiarlo manualmente.'}
         </div>
       )}
 
@@ -1501,6 +1518,7 @@ function GuestSheet({
 function AdminPlayerRow({
   entry,
   busy,
+  earlyBirdChips,
   onPay,
   onRebuy,
   onEliminate,
@@ -1508,6 +1526,7 @@ function AdminPlayerRow({
 }: {
   entry: ConsoleEntry
   busy: boolean
+  earlyBirdChips: number
   onPay: (id: string) => void
   onRebuy: (id: string) => void
   onEliminate: (id: string) => void
@@ -1552,7 +1571,8 @@ function AdminPlayerRow({
           )}
           {entry.chips != null && entry.chips > 0 && (
             <span className="chips-badge">
-              {entry.chips.toLocaleString('es-CR')} fichas iniciales{entry.early_bird ? ' · +2.000' : ''}
+              {entry.chips.toLocaleString('es-CR')} fichas iniciales
+              {entry.early_bird ? ` · +${earlyBirdChips.toLocaleString('es-CR')}` : ''}
             </span>
           )}
         </div>
@@ -1661,7 +1681,7 @@ function EditPrizesSheet({
   return (
     <Sheet open={open} onClose={onClose} title="Editar premios del torneo">
       <p>
-        Cambiá el reparto de premios de esta fecha. Al guardar se recalculan los montos según el
+        Cambiar el reparto de premios de esta fecha. Al guardar se recalculan los montos según el
         pozo actual.
       </p>
       <PrizeDistributionEditor rows={rows} onChange={setRows} disabled={busy} />
@@ -1742,7 +1762,7 @@ function MultiBustSheet({
   return (
     <Sheet open={open} onClose={onClose} title="Eliminar varios (misma mano)">
       <p>
-        Marcá a los jugadores que salieron en la misma mano. <b>En orden</b>: el de menos fichas
+        Marcar a los jugadores que salieron en la misma mano. <b>En orden</b>: el de menos fichas
         termina más abajo. <b>Empataron</b>: reparten posición, puntos y dinero en partes iguales.
       </p>
 
@@ -1856,7 +1876,7 @@ function CompleteSheet({
   return (
     <Sheet open={open} onClose={onClose} title="Completar fecha">
       <p>
-        Completar calcula los puntos y cierra la fecha. Para un <b>chop</b>, seleccioná a los
+        Completar calcula los puntos y cierra la fecha. Para un <b>chop</b>, seleccionar a los
         jugadores que reparten los primeros lugares (co-campeones).
       </p>
 
