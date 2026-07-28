@@ -260,7 +260,7 @@ export default function Calculadora() {
 
       <div className="calc-slots">
         <div className="calc-group">
-          <span className="calc-cap">Tu mano</span>
+          <span className="calc-cap">Mano</span>
           <div className="calc-slot-row">
             {HOLE.map((i) => (
               <Slot
@@ -268,7 +268,7 @@ export default function Calculadora() {
                 card={slots[i]}
                 active={active === i}
                 testId={`slot-hole-${i}`}
-                label={`Tu mano, carta ${i + 1}`}
+                label={`Mano, carta ${i + 1}`}
                 onTap={() => tapSlot(i)}
               />
             ))}
@@ -298,7 +298,7 @@ export default function Calculadora() {
       <div className="calc-rivals">
         <div>
           <div className="calc-cap">Rivales</div>
-          <div className="calc-subcap">Manos aleatorias contra las tuyas</div>
+          <div className="calc-subcap">Manos aleatorias de los rivales</div>
         </div>
         <div className="calc-stepper">
           <button
@@ -331,7 +331,7 @@ export default function Calculadora() {
 
       <Results status={status} result={result} computable={computable} hole={holeCards.length} board={boardCount} madeHand={madeHand} />
 
-      <div className="calc-picker" role="group" aria-label="Elegí una carta">
+      <div className="calc-picker" role="group" aria-label="Elegir una carta">
         {SUIT_ROWS.map((row) => (
           <div className="calc-prow" key={row.suit}>
             <span className={`calc-suit ${row.red ? 'red' : 'blk'}`} aria-hidden="true">
@@ -439,9 +439,9 @@ function Results({
   const pct = (x: number) => `${Math.round(x * 100)}%`
 
   if (!computable) {
-    let hint = 'Elegí tus 2 cartas para empezar.'
+    let hint = 'Elegir 2 cartas para empezar.'
     if (hole === 2 && (board === 1 || board === 2))
-      hint = 'Completá el flop (3 cartas) para ver las probabilidades.'
+      hint = 'Completar el flop (3 cartas) para ver las probabilidades.'
     return (
       <div className="calc-results empty" data-testid="calc-results">
         <p>{hint}</p>
@@ -482,7 +482,7 @@ function Results({
       </div>
       {madeHand && (
         <div className="calc-hand" data-testid="made-hand">
-          Tu mejor mano: <b>{madeHand}</b>
+          Mejor mano: <b>{madeHand}</b>
         </div>
       )}
     </div>

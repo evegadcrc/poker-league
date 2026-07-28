@@ -104,7 +104,7 @@ export default function Profile() {
     const { error } = await supabase.rpc('update_own_profile', { p_name: next })
     setSavingName(false)
     if (error) {
-      setNameError('No se pudo guardar el nombre. Probá de nuevo.')
+      setNameError('No se pudo guardar el nombre. Intentar de nuevo.')
       return
     }
     updatePlayer({ name: next })
@@ -134,7 +134,7 @@ export default function Profile() {
         .from('avatars')
         .upload(path, blob, { upsert: true, contentType: 'image/jpeg' })
       if (upErr) {
-        setUpload({ status: 'error', message: 'No se pudo subir la foto. Probá de nuevo.' })
+        setUpload({ status: 'error', message: 'No se pudo subir la foto. Intentar de nuevo.' })
         return
       }
 
@@ -152,7 +152,7 @@ export default function Profile() {
         p_avatar_url: bustedUrl,
       })
       if (updErr) {
-        setUpload({ status: 'error', message: 'La foto se subió, pero no se pudo guardar. Probá de nuevo.' })
+        setUpload({ status: 'error', message: 'La foto se subió, pero no se pudo guardar. Intentar de nuevo.' })
         return
       }
 
@@ -188,7 +188,7 @@ export default function Profile() {
           />
         </label>
         <div style={{ minWidth: 0, flex: 1 }}>
-          <span className="overline">Tu perfil</span>
+          <span className="overline">Perfil</span>
           {editingName ? (
             <div className="name-edit" data-testid="name-edit">
               <input
@@ -249,7 +249,7 @@ export default function Profile() {
 
       {state.status === 'error' && (
         <div className="prof-message" role="alert">
-          <p>No se pudo cargar tu perfil.</p>
+          <p>No se pudo cargar el perfil.</p>
           <div className="btn-row" style={{ justifyContent: 'center', padding: '8px 18px' }}>
             <button type="button" className="btn ghost sm" onClick={() => reload()}>
               Reintentar
@@ -308,7 +308,7 @@ export default function Profile() {
             <Sparkline history={profile.points_history} />
           ) : (
             <div className="spark empty prof-message">
-              <p>Aún no tienes historial de puntos. Jugá tu primera fecha para empezar.</p>
+              <p>Aún no hay historial de puntos. Jugar la primera fecha para empezar.</p>
             </div>
           )}
 
@@ -323,7 +323,7 @@ export default function Profile() {
             <FormPills form={profile.form} variant="full" />
           ) : (
             <div className="prof-message">
-              <p>Todavía no hay racha. Tus resultados aparecerán aquí.</p>
+              <p>Todavía no hay racha. Los resultados aparecerán aquí.</p>
             </div>
           )}
         </>
@@ -344,7 +344,7 @@ export default function Profile() {
           file={pendingFile}
           aspect={1}
           outputWidth={512}
-          title="Ajustá tu foto"
+          title="Ajustar la foto"
           onCancel={() => setPendingFile(null)}
           onCropped={uploadBlob}
         />
@@ -374,7 +374,7 @@ function SoundSettings() {
       <div className="toggle-row">
         <div>
           <div className="tl">Silenciar</div>
-          <div className="ts">Apagá los sonidos del torneo</div>
+          <div className="ts">Apagar los sonidos del torneo</div>
         </div>
         <button
           type="button"

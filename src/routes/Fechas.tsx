@@ -191,7 +191,7 @@ export default function Fechas() {
         <div className="lb-message">
           <p>Aún no hay fechas en el calendario.</p>
           {isAdmin && (
-            <Link className="btn primary sm" to="/admin">
+            <Link className="btn primary sm" to="/admin?tab=crear">
               + Nueva fecha
             </Link>
           )}
@@ -207,7 +207,7 @@ export default function Fechas() {
           </div>
           {isAdmin && (
             <div className="btn-row" style={{ padding: '4px 18px 8px' }}>
-              <Link className="btn primary full" to="/admin">
+              <Link className="btn primary full" to="/admin?tab=crear">
                 + Nueva fecha
               </Link>
             </div>

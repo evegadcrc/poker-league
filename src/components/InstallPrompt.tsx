@@ -103,12 +103,12 @@ export default function InstallPrompt() {
         ♠
       </span>
       <div className="install-body">
-        <p className="install-title">Instalá Poker Friends</p>
+        <p className="install-title">Instalar Poker Friends</p>
         {deferred ? (
-          <p className="install-text">Agregala a tu pantalla de inicio para abrirla al toque.</p>
+          <p className="install-text">Agregar a la pantalla de inicio para abrirla al instante.</p>
         ) : (
           <p className="install-text">
-            Para instalar: tocá el ícono Compartir (
+            Para instalar: tocar el ícono Compartir (
             <span className="install-share" aria-hidden="true">
               ⬆️
             </span>

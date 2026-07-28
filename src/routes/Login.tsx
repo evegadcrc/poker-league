@@ -92,8 +92,8 @@ export default function Login() {
         <div className="login-form">
           <p className="login-note err">
             {bindError === 'no-player'
-              ? 'Tu correo no está en la liga todavía. Pedile al admin que te agregue.'
-              : 'No pudimos cargar tu perfil. Intentá de nuevo en un momento.'}
+              ? 'Este correo no está en la liga todavía. Solicitar al admin que lo agregue.'
+              : 'No se pudo cargar el perfil. Intentar de nuevo en un momento.'}
           </p>
           <button
             type="button"
@@ -130,20 +130,20 @@ export default function Login() {
 
           {status === 'idle' && (
             <p className="login-hint">
-              ¿Primera vez? Si tu correo todavía no está en la liga, tu solicitud le llega al
-              admin. Cuando te apruebe, te enviamos el enlace de acceso por correo.
+              ¿Primera vez? Si el correo todavía no está en la liga, la solicitud le llega al
+              admin. Cuando la apruebe, se envía el enlace de acceso por correo.
             </p>
           )}
 
           {status === 'pending' && (
             <p className="login-note ok" role="status">
-              📨 Te anotamos en la lista de solicitudes. <b>El admin tiene que aprobarte primero</b> —
-              apenas lo haga, te llega el enlace de acceso a <b>este correo</b>. (Revisá también spam.)
+              📨 Solicitud anotada en la lista. <b>El admin tiene que aprobarla primero</b> —
+              apenas lo haga, llega el enlace de acceso a <b>este correo</b>. (Revisar también spam.)
             </p>
           )}
           {status === 'rejected' && (
             <p className="login-note err" role="status">
-              No pudimos procesar tu solicitud. Hablá con el admin.{' '}
+              No se pudo procesar la solicitud. Hablar con el admin.{' '}
               <button type="button" className="link-btn" onClick={() => setStatus('idle')}>
                 Reintentar
               </button>
@@ -152,7 +152,7 @@ export default function Login() {
 
           {status === 'sent' && (
             <p className="login-note ok">
-              ✉ Enlace enviado a {email}. Revisá tu correo para entrar.{' '}
+              ✉ Enlace enviado a {email}. Revisar el correo para entrar.{' '}
               <button
                 type="button"
                 className="link-btn"

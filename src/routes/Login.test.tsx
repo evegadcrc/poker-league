@@ -139,7 +139,7 @@ describe('Login — magic link', () => {
     await user.click(screen.getByRole('button', { name: 'Enviar enlace' }))
 
     await waitFor(() => expect(h.requestCalls).toEqual(['desconocido@test.com']))
-    expect(await screen.findByText(/Te anotamos en la lista de solicitudes/i)).toBeInTheDocument()
+    expect(await screen.findByText(/Solicitud anotada en la lista/i)).toBeInTheDocument()
     // Crucially, no magic link is sent for a pending request.
     expect(h.signInCalls).toEqual([])
   })
@@ -152,11 +152,11 @@ describe('Login — magic link', () => {
     await user.type(screen.getByLabelText('Correo electrónico'), 'rechazado@test.com')
     await user.click(screen.getByRole('button', { name: 'Enviar enlace' }))
 
-    expect(await screen.findByText(/No pudimos procesar tu solicitud/i)).toBeInTheDocument()
+    expect(await screen.findByText(/No se pudo procesar la solicitud/i)).toBeInTheDocument()
     expect(h.signInCalls).toEqual([])
   })
 
-  it('unbound (no-player): a session with no league player shows the "pedile al admin" message + sign out', () => {
+  it('unbound (no-player): a session with no league player shows the "solicitar al admin" message + sign out', () => {
     h.session = { user: { id: 'u-1' } }
     h.player = null
     h.bindError = 'no-player'
@@ -168,13 +168,13 @@ describe('Login — magic link', () => {
     expect(screen.queryByLabelText('Correo electrónico')).not.toBeInTheDocument()
   })
 
-  it('unbound (other): a bind RPC failure shows the generic "no pudimos cargar tu perfil" message', () => {
+  it('unbound (other): a bind RPC failure shows the generic "no se pudo cargar el perfil" message', () => {
     h.session = { user: { id: 'u-1' } }
     h.player = null
     h.bindError = 'other'
     renderLogin()
 
-    expect(screen.getByText(/no pudimos cargar tu perfil/i)).toBeInTheDocument()
+    expect(screen.getByText(/no se pudo cargar el perfil/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Cerrar sesión/ })).toBeInTheDocument()
   })
 })

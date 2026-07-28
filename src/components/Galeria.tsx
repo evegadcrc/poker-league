@@ -70,7 +70,7 @@ export default function Galeria({ tournamentId }: { tournamentId: string }) {
         .from('gallery')
         .upload(path, file, { contentType: file.type || undefined })
       if (upErr) {
-        setUpload({ status: 'error', message: 'No se pudo subir la foto. Probá de nuevo.' })
+        setUpload({ status: 'error', message: 'No se pudo subir la foto. Intentar de nuevo.' })
         return
       }
 
