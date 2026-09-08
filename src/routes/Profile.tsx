@@ -340,7 +340,7 @@ export default function Profile() {
 
       <div className="rule faint" />
 
-      {isAdmin && player && <PushSettings playerId={player.id} />}
+      {player && <PushSettings playerId={player.id} isAdmin={isAdmin} />}
 
       <SoundSettings />
 
@@ -477,22 +477,23 @@ function Sparkline({ history }: { history: HistoryPoint[] }) {
 }
 
 // ---------------------------------------------------------------------------
-// "Notificaciones" — Web Push opt-in (admins, v1). ON asks for permission,
+// "Notificaciones" — Web Push opt-in (everyone). ON asks for permission,
 // subscribes this device and stores the subscription (lib/push.ts); the
-// `entry` trigger + push-notify function then send "X confirmó / canceló /
-// hizo check-in". iOS only supports push for an installed PWA, so Safari in
+// triggers + push-notify function then send "Nueva fecha" to everyone and
+// "X confirmó / canceló / hizo check-in" to admins. iOS only supports push for an installed PWA, so Safari in
 // the browser gets an install hint instead of a dead switch.
 // ---------------------------------------------------------------------------
 const PUSH_HELP: Record<PushSupport, string> = {
-  ok: 'Cuando alguien confirma, cancela o hace check-in',
+  ok: 'Cuando se crea una nueva fecha',
   'needs-install':
     'Instalá la app en la pantalla de inicio (Compartir → Agregar a inicio) para recibir avisos',
   unsupported: 'Este navegador no soporta notificaciones push',
 }
+const PUSH_HELP_ADMIN = 'Cuando se crea una fecha y cuando alguien confirma, cancela o hace check-in'
 
 type PushState = 'checking' | 'on' | 'off' | 'busy'
 
-function PushSettings({ playerId }: { playerId: string }) {
+function PushSettings({ playerId, isAdmin }: { playerId: string; isAdmin: boolean }) {
   const support = useMemo(() => pushSupport(), [])
   const [state, setState] = useState<PushState>('checking')
   const [note, setNote] = useState<string | null>(null)
@@ -534,7 +535,9 @@ function PushSettings({ playerId }: { playerId: string }) {
     } else if (res.reason === 'no-sw') {
       setNote('Las notificaciones solo funcionan en la app instalada (no en modo desarrollo).')
     } else {
-      setNote('No se pudo activar. Intentar de nuevo.')
+      // Surface the underlying reason (e.g. the table missing, a push-service
+      // error) so it can be reported instead of a dead end.
+      setNote(`No se pudo activar${res.message ? ` (${res.message})` : ''}. Intentar de nuevo.`)
     }
   }, [state, playerId])
 
@@ -550,7 +553,7 @@ function PushSettings({ playerId }: { playerId: string }) {
       <div className="toggle-row" data-testid="push-settings">
         <div>
           <div className="tl">Avisos de la fecha</div>
-          <div className="ts">{PUSH_HELP[support]}</div>
+          <div className="ts">{support === 'ok' && isAdmin ? PUSH_HELP_ADMIN : PUSH_HELP[support]}</div>
         </div>
         <button
           type="button"

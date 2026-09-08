@@ -104,3 +104,15 @@ USER must run it. Then "ship it" → push 6 commits → Vercel deploys FE + api/
 Verify after: curl -A WhatsApp https://poker-friends-xi.vercel.app/fechas/<id> → OG HTML; admin
 turns on Avisos in Perfil (installed PWA on iPhone) and a test RSVP flips → push arrives.
 Vercel CLI not logged in locally (no preview deploys possible from here).
+
+## 2026-09-07 (later) — follow-ups: copy, "nueva fecha" push for everyone, activation error
+User: "Confirmá acá" → "Confirmar acá" (impersonal); notify when a fecha is created; toggle gave
+"No se pudo activar". ROOT CAUSE of the error: prod still lacks migrations 0032/0033 (user has not run
+`supabase db push`; classifier blocks it from here) → push_subscription table missing → upsert fails.
+Changes: mig 0034 (fn_push_webhook helper reading Vault; entry trigger re-pointed; NEW tournament
+after-insert trigger → event fecha_created); Edge Function v2 deployed to prod (fecha_created →
+ALL subscriptions, RSVP events → admins; impersonal body "Sáb 20 sep · 19:00 · Confirmar asistencia");
+Perfil toggle now for EVERY player (help text by role); subscribePush asks permission FIRST (iOS user
+activation) and the error note includes the underlying message. Local E2E via pg_net: fecha_created →
+audience all / recipients 1; confirmed → audience admins / recipients 0. Prod needs `supabase db push`
+(0032, 0033, 0034) — USER action.

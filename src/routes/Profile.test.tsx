@@ -365,11 +365,12 @@ describe('Profile — Sonido settings', () => {
   })
 })
 
-describe('Profile — Notificaciones (Web Push opt-in, admins)', () => {
-  it('is hidden from non-admins', async () => {
+describe('Profile — Notificaciones (Web Push opt-in)', () => {
+  it('players see it too, with the nueva-fecha help text', async () => {
     render(<Profile />)
     await screen.findByText('Edwin V.')
-    expect(screen.queryByTestId('push-settings')).not.toBeInTheDocument()
+    expect(screen.getByTestId('push-settings')).toBeInTheDocument()
+    expect(screen.getByText('Cuando se crea una nueva fecha')).toBeInTheDocument()
   })
 
   it('admin: switch starts OFF, turning it on calls subscribePush and flips to ON', async () => {
@@ -379,7 +380,7 @@ describe('Profile — Notificaciones (Web Push opt-in, admins)', () => {
     const sw = await screen.findByRole('switch', { name: 'Avisos de la fecha' })
     await waitFor(() => expect(sw).not.toBeDisabled())
     expect(sw).toHaveAttribute('aria-checked', 'false')
-    expect(screen.getByText('Cuando alguien confirma, cancela o hace check-in')).toBeInTheDocument()
+    expect(screen.getByText(/Cuando se crea una fecha y cuando alguien confirma/)).toBeInTheDocument()
 
     await user.click(sw)
 

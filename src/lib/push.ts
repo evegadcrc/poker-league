@@ -110,15 +110,18 @@ export type SubscribeResult =
 
 /** Ask permission, subscribe this device and store the subscription. */
 export async function subscribePush(playerId: string): Promise<SubscribeResult> {
-  const reg = await registration()
-  if (!reg) return { ok: false, reason: 'no-sw' }
+  // Permission FIRST, straight from the tap: iOS Safari only honours
+  // requestPermission / subscribe while the user activation is fresh, so no
+  // unrelated await may run before it.
   let permission: NotificationPermission
   try {
     permission = await Notification.requestPermission()
   } catch {
-    permission = Notification.permission
+    permission = typeof Notification !== 'undefined' ? Notification.permission : 'denied'
   }
   if (permission !== 'granted') return { ok: false, reason: 'denied' }
+  const reg = await registration()
+  if (!reg) return { ok: false, reason: 'no-sw' }
   try {
     const sub =
       (await reg.pushManager.getSubscription()) ??
