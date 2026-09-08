@@ -100,3 +100,36 @@ export async function setAutoApprove(on: boolean): Promise<{ error: string | nul
   const { error } = await supabase.rpc('set_auto_approve', { p_on: on })
   return { error: error?.message ?? null }
 }
+
+// ---------------------------------------------------------------------------
+// Guest self-join (mig 0035). The login screen offers "Voy como invitado" when
+// the visitor arrived through a fecha link whose admin opened it to guests.
+// ---------------------------------------------------------------------------
+export type GuestJoinResult = 'guest' | 'member'
+
+/** The linked fecha, if it currently accepts guests (anon-callable preview). */
+export async function fetchGuestFecha(
+  tournamentId: string,
+): Promise<{ id: string; name: string } | null> {
+  const { data, error } = await supabase.rpc('fecha_preview', { p_id: tournamentId })
+  if (error) return null
+  const row = (data as Array<{ name: string; guests_open: boolean }> | null)?.[0]
+  return row && row.guests_open ? { id: tournamentId, name: row.name } : null
+}
+
+/** Sign up as a guest for a fecha (creates the guest player + confirmed entry);
+ *  'member' means the email already belongs to a league member. The magic link
+ *  is sent by the client afterwards, never from SQL. */
+export async function guestJoin(
+  email: string,
+  name: string,
+  tournamentId: string,
+): Promise<{ result: GuestJoinResult | null; error: string | null }> {
+  const { data, error } = await supabase.rpc('guest_join', {
+    p_email: email,
+    p_name: name,
+    p_tournament_id: tournamentId,
+  })
+  if (error) return { result: null, error: error.message.replace(/^invitado:\s*/i, '') }
+  return { result: (data as GuestJoinResult) ?? null, error: null }
+}

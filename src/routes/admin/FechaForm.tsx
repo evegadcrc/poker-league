@@ -124,6 +124,8 @@ export type FechaFormValues = {
   anteEnabled: boolean
   countsForLeague: boolean
   oddsEnabled: boolean
+  /** Guests may sign themselves up with the shared link (mig 0035). */
+  guestsOpen: boolean
   distRows: PctRow[]
 }
 
@@ -154,6 +156,8 @@ export function createInitialValues(
     // Odds-calculator toggle (Phase-2 step 7). ON by default → the Calculadora is
     // available while THIS fecha is live (the admin can also flip it mid-game).
     oddsEnabled: true,
+    // OFF by default: only fechas the admin opts in accept guests via the link.
+    guestsOpen: false,
     distRows,
   }
 }
@@ -243,6 +247,7 @@ export default function FechaForm({
   const [anteEnabled, setAnteEnabled] = useState(initial.anteEnabled)
   const [countsForLeague, setCountsForLeague] = useState(initial.countsForLeague)
   const [oddsEnabled, setOddsEnabled] = useState(initial.oddsEnabled)
+  const [guestsOpen, setGuestsOpen] = useState(initial.guestsOpen)
   const [distRows, setDistRows] = useState<PctRow[]>(initial.distRows)
   const [savedDefaults, setSavedDefaults] = useState(false)
   const [locating, setLocating] = useState(false)
@@ -327,6 +332,7 @@ export default function FechaForm({
       anteEnabled,
       countsForLeague,
       oddsEnabled,
+      guestsOpen,
       distRows,
     })
   }, [
@@ -347,6 +353,7 @@ export default function FechaForm({
     anteEnabled,
     countsForLeague,
     oddsEnabled,
+    guestsOpen,
     distRows,
   ])
 
@@ -551,6 +558,23 @@ export default function FechaForm({
           aria-label="Permitir calculadora de probabilidades"
           className={`switch${oddsEnabled ? ' on' : ''}`}
           onClick={() => setOddsEnabled((v) => !v)}
+        />
+      </div>
+
+      <div className="toggle-row">
+        <div>
+          <div className="tl">Invitados pueden unirse con el enlace</div>
+          <div className="ts">
+            Quien reciba el enlace puede anotarse como invitado: juega, pero no suma a la tabla
+          </div>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={guestsOpen}
+          aria-label="Invitados pueden unirse con el enlace"
+          className={`switch${guestsOpen ? ' on' : ''}`}
+          onClick={() => setGuestsOpen((v) => !v)}
         />
       </div>
 

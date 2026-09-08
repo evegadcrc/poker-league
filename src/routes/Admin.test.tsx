@@ -787,3 +787,46 @@ describe('Admin — Agregar invitado (guest, Phase 3)', () => {
     expect(tags[0]).toHaveTextContent('Invitado')
   })
 })
+
+describe('Admin — Jugadores: hacer miembro a un invitado (mig 0035)', () => {
+  function setRosterWithGuest() {
+    h.authPlayer = { id: 'p-self', is_admin: true }
+    h.list.player = {
+      data: [
+        { id: 'p-self', name: 'Yo Admin', email: 'self@ex.com', is_admin: true, is_guest: false, blocked: false },
+        { id: 'p-gst', name: 'Primo Pepe', email: 'primo@example.com', is_admin: false, is_guest: true, blocked: false },
+      ],
+      error: null,
+    }
+  }
+
+  it('guest rows get "Hacer miembro" (no Bloquear); confirming calls promote_guest and reloads', async () => {
+    const user = userEvent.setup()
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    setRosterWithGuest()
+    renderAdmin()
+    await user.click(screen.getByRole('tab', { name: 'Jugadores' }))
+    await screen.findByTestId('players-roster')
+
+    expect(screen.queryAllByTestId('block-toggle')).toHaveLength(0)
+    await user.click(screen.getByRole('button', { name: 'Hacer miembro' }))
+
+    expect(confirmSpy).toHaveBeenCalledTimes(1)
+    const call = h.rpcCalls.find((c) => c.name === 'promote_guest')
+    expect(call).toBeTruthy()
+    expect(call!.args).toMatchObject({ p_player_id: 'p-gst' })
+    confirmSpy.mockRestore()
+  })
+
+  it('dismissing the confirm does nothing', async () => {
+    const user = userEvent.setup()
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    setRosterWithGuest()
+    renderAdmin()
+    await user.click(screen.getByRole('tab', { name: 'Jugadores' }))
+    await screen.findByTestId('players-roster')
+    await user.click(screen.getByRole('button', { name: 'Hacer miembro' }))
+    expect(h.rpcCalls.find((c) => c.name === 'promote_guest')).toBeUndefined()
+    confirmSpy.mockRestore()
+  })
+})

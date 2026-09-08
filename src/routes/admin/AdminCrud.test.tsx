@@ -347,3 +347,18 @@ describe('Admin · Liga · temporada (slice 13)', () => {
     await waitFor(() => expect(rpc('close_season')).toBeTruthy())
   })
 })
+
+describe('Admin · Nueva fecha — invitados por enlace (mig 0035)', () => {
+  it('the toggle is OFF by default and, when turned on, guests_open=true is persisted after create', async () => {
+    const user = userEvent.setup()
+    renderAdmin()
+    await user.click(screen.getByRole('tab', { name: 'Nueva fecha' }))
+    await screen.findByTestId('create-fecha')
+    const sw = screen.getByRole('switch', { name: 'Invitados pueden unirse con el enlace' })
+    expect(sw).toHaveAttribute('aria-checked', 'false')
+    await user.click(sw)
+    await user.click(screen.getByRole('button', { name: 'Crear fecha' }))
+    await waitFor(() => expect(h.updates.length).toBeGreaterThan(0))
+    expect(h.updates[0]!.payload).toMatchObject({ guests_open: true })
+  })
+})

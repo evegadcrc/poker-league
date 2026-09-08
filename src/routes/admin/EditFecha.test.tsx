@@ -66,6 +66,7 @@ function setTournament(over: Record<string, unknown> = {}) {
       ],
       counts_for_league: true,
       odds_enabled: false,
+      guests_open: true,
       ...over,
     },
     error: null,
@@ -130,6 +131,9 @@ describe('EditFecha — seeding from the stored row', () => {
     expect(
       screen.getByRole('switch', { name: 'Permitir calculadora de probabilidades' }),
     ).toHaveAttribute('aria-checked', 'false')
+    expect(
+      screen.getByRole('switch', { name: 'Invitados pueden unirse con el enlace' }),
+    ).toHaveAttribute('aria-checked', 'true')
     expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeInTheDocument()
   })
 
@@ -186,6 +190,7 @@ describe('EditFecha — saving', () => {
       blind_structure_id: 'bs-2',
       counts_for_league: true,
       odds_enabled: true,
+      guests_open: true,
       payout_distribution: [
         { place: 1, pct: 0.5 },
         { place: 2, pct: 0.3 },

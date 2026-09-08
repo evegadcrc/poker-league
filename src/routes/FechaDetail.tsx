@@ -47,6 +47,7 @@ type TournamentRow = {
   geofence_radius_m: number
   cover_url: string | null
   counts_for_league: boolean
+  guests_open: boolean
   prizes: unknown
   buy_in: number
   rebuy_amount: number | null
@@ -70,7 +71,7 @@ type EntryRow = {
   chopped: boolean
   chop_group: number | null
   rebuys_count: number
-  player: { name: string; avatar_url: string | null } | null
+  player: { name: string; avatar_url: string | null; is_guest?: boolean } | null
 }
 
 /** Where the caller's own check-in attempt currently sits (drives banner + button). */
@@ -116,7 +117,7 @@ async function fetchDetail(id: string): Promise<State> {
   const { data: t, error: tErr } = await supabase
     .from('tournament')
     .select(
-      'id, season_id, name, scheduled_at, status, geofence_radius_m, cover_url, counts_for_league, prizes, buy_in, rebuy_amount, starting_stack, cancelled_at',
+      'id, season_id, name, scheduled_at, status, geofence_radius_m, cover_url, counts_for_league, guests_open, prizes, buy_in, rebuy_amount, starting_stack, cancelled_at',
     )
     .eq('id', id)
     .maybeSingle()
@@ -129,7 +130,7 @@ async function fetchDetail(id: string): Promise<State> {
     supabase
       .from('entry')
       .select(
-        'id, player_id, status, rsvp_at, cancelled_at, checked_in_at, early_bird, chips, points_earned, final_position, paid, made_final_table, chopped, chop_group, rebuys_count, player:player_id(name, avatar_url)',
+        'id, player_id, status, rsvp_at, cancelled_at, checked_in_at, early_bird, chips, points_earned, final_position, paid, made_final_table, chopped, chop_group, rebuys_count, player:player_id(name, avatar_url, is_guest)',
       )
       .eq('tournament_id', id),
     supabase
@@ -1007,6 +1008,7 @@ function ShareFecha({ tournament, entries }: { tournament: TournamentRow; entrie
       buyIn: tournament.buy_in,
       entries: entries.map((e) => ({ name: e.player?.name ?? 'Jugador', status: e.status })),
       link,
+      guestsOpen: tournament.guests_open,
     })
     window.open(whatsappShareUrl(text), '_blank', 'noopener,noreferrer')
   }, [tournament, entries, link])
@@ -1040,6 +1042,11 @@ function ShareFecha({ tournament, entries }: { tournament: TournamentRow; entrie
       {copied && (
         <div className="fd-note" role="status">
           <p>{copied === 'ok' ? '✓ Enlace copiado' : 'No se pudo copiar el enlace.'}</p>
+        </div>
+      )}
+      {tournament.guests_open && (
+        <div className="fd-note" data-testid="fd-guests-open">
+          <p>Invitados pueden anotarse con este enlace («Voy como invitado»).</p>
         </div>
       )}
     </div>
@@ -1257,6 +1264,7 @@ function PlayerAttendanceRow({
           <b>
             {name}
             {isMe ? ' · tú' : ''}
+            {entry.player?.is_guest ? ' · invitado' : ''}
           </b>
           {onTime && (
             <span className="mini-badge ontime" data-testid="ontime-badge">

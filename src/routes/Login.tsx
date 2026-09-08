@@ -1,7 +1,9 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
 import logo from '@/assets/poker-friends.jpg'
+import { fetchGuestFecha, guestJoin } from '@/lib/access'
 import { useAuth } from '@/lib/auth'
+import { peekNext } from '@/lib/next'
 import { THEME_ICONS, THEME_LABELS, useTheme } from '@/lib/theme'
 
 type Status = 'idle' | 'sending' | 'sent' | 'error' | 'pending' | 'rejected'
@@ -23,6 +25,24 @@ export default function Login() {
   const [status, setStatus] = useState<Status>('idle')
   const [error, setError] = useState<string | null>(null)
 
+  // Guest self-join (mig 0035): when the visitor came through a fecha link and
+  // that fecha accepts guests, offer "Voy como invitado" (email + name → a guest
+  // player, confirmed for that fecha, then the same magic link).
+  const [guestFecha, setGuestFecha] = useState<{ id: string; name: string } | null>(null)
+  const [guestMode, setGuestMode] = useState(false)
+  const [guestName, setGuestName] = useState('')
+  useEffect(() => {
+    const m = /^\/fechas\/([0-9a-f-]{36})(?:[/?#]|$)/i.exec(peekNext() ?? '')
+    if (!m) return
+    let alive = true
+    void fetchGuestFecha(m[1]!).then((f) => {
+      if (alive) setGuestFecha(f)
+    })
+    return () => {
+      alive = false
+    }
+  }, [])
+
   // Already signed in AND bound → nothing to do here; go home.
   if (session && player) return <Navigate to="/" replace />
 
@@ -43,6 +63,22 @@ export default function Login() {
     e.preventDefault()
     const target = email.trim()
     if (!target) return
+    if (guestMode && guestFecha) {
+      const gname = guestName.trim()
+      if (!gname) return
+      setStatus('sending')
+      setError(null)
+      // Creates the guest player + confirmed entry (or recognises a member),
+      // then the usual magic link — the deep link brings them back to the fecha.
+      const { result, error: gErr } = await guestJoin(target, gname, guestFecha.id)
+      if (gErr || !result) {
+        setError(gErr ?? 'No se pudo anotar como invitado.')
+        setStatus('error')
+        return
+      }
+      await sendLink(target)
+      return
+    }
     setStatus('sending')
     setError(null)
     // Gate on membership before sending any link.
@@ -117,18 +153,63 @@ export default function Login() {
             onChange={(e) => setEmail(e.target.value)}
             disabled={status === 'sending' || status === 'sent' || status === 'pending'}
           />
+          {guestMode && guestFecha && (
+            <input
+              className="login-in"
+              style={{ marginTop: 10 }}
+              type="text"
+              autoComplete="name"
+              maxLength={40}
+              placeholder="Tu nombre"
+              aria-label="Tu nombre"
+              value={guestName}
+              onChange={(e) => setGuestName(e.target.value)}
+              disabled={status === 'sending' || status === 'sent'}
+              data-testid="guest-name"
+            />
+          )}
           <button
             type="submit"
             className="btn blood full"
             style={{ marginTop: 14 }}
             disabled={
-              status === 'sending' || status === 'sent' || status === 'pending' || !email.trim()
+              status === 'sending' ||
+              status === 'sent' ||
+              status === 'pending' ||
+              !email.trim() ||
+              (guestMode && !guestName.trim())
             }
           >
-            {status === 'sending' ? 'Enviando…' : 'Enviar enlace'}
+            {status === 'sending'
+              ? 'Enviando…'
+              : guestMode && guestFecha
+                ? 'Anotarme como invitado'
+                : 'Enviar enlace'}
           </button>
 
-          {status === 'idle' && (
+          {status === 'idle' && guestFecha && !guestMode && (
+            <p className="login-hint" data-testid="guest-offer">
+              ¿Venís de invitado a <b>{guestFecha.name}</b>?{' '}
+              <button
+                type="button"
+                className="link-btn"
+                onClick={() => setGuestMode(true)}
+                data-testid="guest-mode"
+              >
+                Voy como invitado
+              </button>
+            </p>
+          )}
+          {status === 'idle' && guestFecha && guestMode && (
+            <p className="login-hint" data-testid="guest-explainer">
+              Como invitado en <b>{guestFecha.name}</b> jugás esa fecha con todo (check-in,
+              avisos), pero no sumás puntos en la tabla.{' '}
+              <button type="button" className="link-btn" onClick={() => setGuestMode(false)}>
+                Soy miembro
+              </button>
+            </p>
+          )}
+          {status === 'idle' && !(guestFecha && guestMode) && (
             <p className="login-hint">
               ¿Primera vez? Si el correo todavía no está en la liga, la solicitud le llega al
               admin. Cuando la apruebe, se envía el enlace de acceso por correo.
@@ -152,6 +233,11 @@ export default function Login() {
 
           {status === 'sent' && (
             <p className="login-note ok">
+              {guestMode && guestFecha ? (
+                <>
+                  🙋 Quedaste anotado en <b>{guestFecha.name}</b>.{' '}
+                </>
+              ) : null}
               ✉ Enlace enviado a {email}. Revisar el correo para entrar.{' '}
               <button
                 type="button"

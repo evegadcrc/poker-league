@@ -143,3 +143,20 @@ states in Chrome DevTools MCP (iPhone viewport) by moving the local Fecha 3 to +
 NOTE: full-suite runs while the dev server + browser hammer the local stack intermittently fail
 integration tests with "An invalid response was received from the upstream server" (Kong); they pass
 when re-run on a quiet stack — run the gate with nothing else hitting 55321.
+
+## 2026-09-08 — prod data: merged duplicate player accounts (Santi)
+Two player rows for the same person: OLD stg.sh.s@outlook.com (Santi, created 2026-07-25, Fecha 1
+2nd place = 100 pts) and NEW stg.ch.s@outlook.com (Santi 420, created 2026-09-08, Fecha 2 confirmed).
+Kept the NEW row/login (valid account), moved the OLD row's entries (+ any photos/subs/refs) onto it,
+copied the old name ("Santi") and kept the new avatar, deleted the OLD player row and the OLD auth
+user. Leaderboard: Santi once, 100 pts, 1 game. Pre-merge snapshot: .harness/audit/2026-09-08-santi-
+account-merge-before.json (gitignored). Done via `supabase db query --linked` in one transaction.
+
+## 2026-09-08 — guest self-join ("option 1") — BUILT, committed locally, NOT pushed
+mig 0035 (guests_open, guest_join anon RPC, promote_guest, fecha_preview+guests_open) + FE (form
+toggle, Login "Voy como invitado", roster "· invitado" tag, share hint, convocatoria hint, Admin
+"Hacer miembro"). Suite 596 pass / 1 skip (incl. new guest_join integration). Browser E2E (Chrome
+DevTools, iPhone viewport): logged-out fecha link → login shows the offer → email+name → guest
+player + confirmed entry created, magic link sent → link lands on the fecha confirmed, in roster.
+ORDER MATTERS FOR PROD: run `supabase db push` (0035) BEFORE the FE deploys — the edit page now
+writes guests_open and would fail on a DB without the column. Push code after the migration.

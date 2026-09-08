@@ -19,7 +19,7 @@ type Props = {
   onClose: () => void
   title?: string
   intro?: string
-  fecha: { id: string; name: string; scheduled_at: string; buy_in: number | null }
+  fecha: { id: string; name: string; scheduled_at: string; buy_in: number | null; guests_open?: boolean }
   entries: readonly ConvocatoriaEntry[]
 }
 
@@ -44,8 +44,9 @@ export default function ConvocatoriaSheet({
         buyIn: fecha.buy_in,
         entries,
         link: `${window.location.origin}/fechas/${fecha.id}`,
+        guestsOpen: fecha.guests_open ?? false,
       }),
-    [fecha.name, fecha.scheduled_at, fecha.buy_in, fecha.id, entries],
+    [fecha.name, fecha.scheduled_at, fecha.buy_in, fecha.id, fecha.guests_open, entries],
   )
 
   const share = () => {

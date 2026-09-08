@@ -240,6 +240,23 @@ function PlayersPanel() {
     await loadRoster()
   }
 
+  // Guest → full member (mig 0035). Their past nights start counting on the Tabla.
+  const promote = async (p: RosterPlayer) => {
+    const ok = window.confirm(
+      `¿Hacer miembro a ${p.name}? Podrá entrar con su correo y sus fechas jugadas contarán en la tabla.`,
+    )
+    if (!ok) return
+    setBusyId(p.id)
+    const { error: err } = await supabase.rpc('promote_guest', { p_player_id: p.id })
+    setBusyId(null)
+    if (err) {
+      setError('No se pudo hacer miembro al invitado. Reintentar.')
+      return
+    }
+    setError(null)
+    await loadRoster()
+  }
+
   return (
     <div data-testid="players-panel">
       <AddPlayerPanel onAdded={loadRoster} />
@@ -271,6 +288,7 @@ function PlayersPanel() {
               key={p.id}
               player={p}
               isSelf={p.id === player?.id}
+              onPromote={() => void promote(p)}
               busy={busyId === p.id}
               onToggle={() => void toggleBlock(p)}
             />
@@ -286,11 +304,13 @@ function RosterRow({
   isSelf,
   busy,
   onToggle,
+  onPromote,
 }: {
   player: RosterPlayer
   isSelf: boolean
   busy: boolean
   onToggle: () => void
+  onPromote: () => void
 }) {
   // Admins are peers and you can't block yourself → no toggle. Guests are
   // throwaway per-fecha players that never log in → blocking is meaningless.
@@ -315,6 +335,19 @@ function RosterRow({
           )}
         </div>
       </div>
+      {p.is_guest && (
+        <div className="prow-actions">
+          <button
+            type="button"
+            className="btn sm ghost"
+            data-testid="promote-guest"
+            disabled={busy}
+            onClick={onPromote}
+          >
+            Hacer miembro
+          </button>
+        </div>
+      )}
       {canBlock && (
         <div className="prow-actions">
           <button

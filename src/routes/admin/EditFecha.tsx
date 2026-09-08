@@ -46,10 +46,11 @@ type Row = Pick<
   | 'payout_distribution'
   | 'counts_for_league'
   | 'odds_enabled'
+  | 'guests_open'
 >
 
 const SELECT =
-  'id, name, scheduled_at, status, cancelled_at, venue_lat, venue_lng, geofence_radius_m, buy_in, rebuy_amount, rebuy_until_level, starting_stack, ante_enabled, blind_structure_id, payout_distribution, counts_for_league, odds_enabled'
+  'id, name, scheduled_at, status, cancelled_at, venue_lat, venue_lng, geofence_radius_m, buy_in, rebuy_amount, rebuy_until_level, starting_stack, ante_enabled, blind_structure_id, payout_distribution, counts_for_league, odds_enabled, guests_open'
 
 type State =
   | { phase: 'loading' }
@@ -94,6 +95,7 @@ function rowToValues(row: Row, structures: Structure[]): FechaFormValues {
     anteEnabled: row.ante_enabled,
     countsForLeague: row.counts_for_league ?? true,
     oddsEnabled: row.odds_enabled ?? true,
+    guestsOpen: row.guests_open ?? false,
     distRows: payoutRows(row.payout_distribution),
   }
 }
@@ -166,6 +168,7 @@ export default function EditFecha() {
         blind_structure_id: v.structureId || null,
         counts_for_league: v.countsForLeague,
         odds_enabled: v.oddsEnabled,
+        guests_open: v.guestsOpen,
       }
       if (isValidDist(v.distRows)) {
         update.payout_distribution = rowsToDist(v.distRows) as unknown as Json

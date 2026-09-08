@@ -185,3 +185,19 @@ describe('whatsappShareUrl', () => {
     )
   })
 })
+
+describe('convocatoriaText — guests', () => {
+  it('adds the guest hint after the link only when the fecha accepts guests', () => {
+    const base = {
+      fechaName: 'F',
+      scheduledAt: new Date(2026, 8, 20, 19, 0).toISOString(),
+      buyIn: null,
+      entries: [] as ConvocatoriaEntry[],
+      link: 'https://x/fechas/1',
+    }
+    expect(convocatoriaText({ ...base, guestsOpen: true })).toMatch(
+      /👉 Confirmar acá: https:\/\/x\/fechas\/1\n🙋 ¿Invitado\? Mismo enlace → «Voy como invitado»$/,
+    )
+    expect(convocatoriaText(base)).not.toContain('Invitado')
+  })
+})

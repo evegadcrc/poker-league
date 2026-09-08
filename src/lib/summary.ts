@@ -202,8 +202,10 @@ export function convocatoriaText(opts: {
   buyIn: number | null | undefined
   entries: readonly ConvocatoriaEntry[]
   link: string
+  /** The fecha accepts guests through the link (mig 0035) → add the hint. */
+  guestsOpen?: boolean
 }): string {
-  const { fechaName, scheduledAt, buyIn, entries, link } = opts
+  const { fechaName, scheduledAt, buyIn, entries, link, guestsOpen = false } = opts
   const coming = entries.filter((e) => COMING.has(e.status)).map((e) => e.name)
   const declined = entries.filter((e) => e.status === 'declined').map((e) => e.name)
 
@@ -220,7 +222,9 @@ export function convocatoriaText(opts: {
   ].filter((l): l is string => l != null)
 
   // Blank line between groups, and around the roster.
-  return [...head, '', roster.join('\n\n'), '', `👉 Confirmar acá: ${link}`].join('\n')
+  const tail = [`👉 Confirmar acá: ${link}`]
+  if (guestsOpen) tail.push('🙋 ¿Invitado? Mismo enlace → «Voy como invitado»')
+  return [...head, '', roster.join('\n\n'), '', ...tail].join('\n')
 }
 
 /** WhatsApp "share this text" deep link — opens WhatsApp with the message

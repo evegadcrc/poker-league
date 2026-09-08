@@ -45,3 +45,15 @@ WhatsApp preview. Decision: automatic WhatsApp *group* posting is not possible w
 ## Gates
 - `npm run build`, `npm run lint`, `npm test` (local stack running) after every slice.
 - One commit per slice, local; push on "ship it" (user convention) → Vercel deploys.
+
+## Slice 4 (2026-09-08) — guest self-join through the shared link ("option 1")
+- mig 0035: tournament.guests_open (default false); fecha_preview +guests_open; guest_join(email,
+  name, tournament) ANON → creates guest player (is_guest, real email) + confirmed entry, 'member'
+  for known members, idempotent; promote_guest(player) admin-only (past nights start counting).
+- FechaForm toggle "Invitados pueden unirse con el enlace" (create + edit); FechaDetail: "· invitado"
+  tag, admin hint under the share row, convocatoria gets "🙋 ¿Invitado? Mismo enlace → «Voy como
+  invitado»" when open; Login: when the pending deep link is an open fecha → "Voy como invitado"
+  (email + name → guest_join → magic link → lands confirmed on the fecha); Admin › Jugadores:
+  "Hacer miembro" on guest rows.
+- Tests: Login (6), Admin (2), AdminCrud (1), EditFecha (fixture), FechaDetail.admin (2), summary (1),
+  guest_join.integration (5). Prod: `supabase db push` (0035) is the USER's step; FE ships on push.

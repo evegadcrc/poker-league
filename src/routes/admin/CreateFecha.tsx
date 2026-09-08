@@ -106,6 +106,7 @@ export default function CreateFecha() {
         const update: Database['public']['Tables']['tournament']['Update'] = {
           counts_for_league: v.countsForLeague,
           odds_enabled: v.oddsEnabled,
+          guests_open: v.guestsOpen,
         }
         if (isValidDist(v.distRows)) {
           update.payout_distribution = rowsToDist(v.distRows) as unknown as Json

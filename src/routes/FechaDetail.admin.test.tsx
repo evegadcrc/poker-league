@@ -458,3 +458,27 @@ describe('FechaDetail — admin share row (convocatoria → WhatsApp, copiar enl
     expect(screen.queryByTestId('fd-share')).not.toBeInTheDocument()
   })
 })
+
+describe('FechaDetail — guests (mig 0035)', () => {
+  it('tags guest players in the roster and tells the admin the link admits guests', async () => {
+    setTournament({ guests_open: true })
+    h.list.entry = {
+      data: [
+        { id: 'e-me', player_id: 'p-me', status: 'confirmed', rsvp_at: null, cancelled_at: null, checked_in_at: null, early_bird: false, points_earned: null, final_position: null, rebuys_count: 0, player: { name: 'Edwin V.', avatar_url: null, is_guest: false } },
+        { id: 'e-g', player_id: 'p-g', status: 'confirmed', rsvp_at: null, cancelled_at: null, checked_in_at: null, early_bird: false, points_earned: null, final_position: null, rebuys_count: 0, player: { name: 'Primo Pepe', avatar_url: null, is_guest: true } },
+      ],
+      error: null,
+    }
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+    expect(screen.getByText(/Primo Pepe · invitado/)).toBeInTheDocument()
+    expect(screen.getByTestId('fd-guests-open')).toHaveTextContent('Invitados pueden anotarse')
+  })
+
+  it('no guest hint when the fecha is closed to guests', async () => {
+    setTournament({ guests_open: false })
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+    expect(screen.queryByTestId('fd-guests-open')).toBeNull()
+  })
+})

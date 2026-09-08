@@ -406,6 +406,7 @@ export type Database = {
           current_level: number
           final_table_size: number | null
           geofence_radius_m: number
+          guests_open: boolean
           id: string
           is_paused: boolean
           level_started_at: string | null
@@ -437,6 +438,7 @@ export type Database = {
           current_level?: number
           final_table_size?: number | null
           geofence_radius_m?: number
+          guests_open?: boolean
           id?: string
           is_paused?: boolean
           level_started_at?: string | null
@@ -468,6 +470,7 @@ export type Database = {
           current_level?: number
           final_table_size?: number | null
           geofence_radius_m?: number
+          guests_open?: boolean
           id?: string
           is_paused?: boolean
           level_started_at?: string | null
@@ -677,6 +680,7 @@ export type Database = {
           current_level: number
           final_table_size: number | null
           geofence_radius_m: number
+          guests_open: boolean
           id: string
           is_paused: boolean
           level_started_at: string | null
@@ -744,6 +748,7 @@ export type Database = {
           current_level: number
           final_table_size: number | null
           geofence_radius_m: number
+          guests_open: boolean
           id: string
           is_paused: boolean
           level_started_at: string | null
@@ -834,6 +839,7 @@ export type Database = {
           current_level: number
           final_table_size: number | null
           geofence_radius_m: number
+          guests_open: boolean
           id: string
           is_paused: boolean
           level_started_at: string | null
@@ -921,6 +927,17 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      fecha_preview: {
+        Args: { p_id: string }
+        Returns: {
+          cancelled: boolean
+          confirmed: number
+          guests_open: boolean
+          name: string
+          scheduled_at: string
+          status: Database["public"]["Enums"]["tournament_status"]
+        }[]
+      }
       fn_eliminate_entry: { Args: { p_entry_id: string }; Returns: string }
       fn_final_table_size: {
         Args: { p_checked_in: number; p_season_id: string }
@@ -931,9 +948,17 @@ export type Database = {
         Returns: boolean
       }
       fn_pot: { Args: { p_tournament_id: string }; Returns: number }
+      fn_push_webhook: {
+        Args: { p_event: string; p_subject: string; p_tournament: string }
+        Returns: undefined
+      }
       fn_tournament_points: {
         Args: { p_tournament_id: string }
         Returns: undefined
+      }
+      guest_join: {
+        Args: { p_email: string; p_name: string; p_tournament_id: string }
+        Returns: string
       }
       leaderboard: {
         Args: { p_season_id: string }
@@ -993,6 +1018,7 @@ export type Database = {
           current_level: number
           final_table_size: number | null
           geofence_radius_m: number
+          guests_open: boolean
           id: string
           is_paused: boolean
           level_started_at: string | null
@@ -1033,6 +1059,7 @@ export type Database = {
           wins: number
         }[]
       }
+      promote_guest: { Args: { p_player_id: string }; Returns: undefined }
       recompute_final_table_size: {
         Args: { p_tournament_id: string }
         Returns: number
