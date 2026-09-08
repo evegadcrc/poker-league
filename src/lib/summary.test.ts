@@ -113,7 +113,7 @@ describe('convocatoriaText', () => {
   const WHEN = new Date(2026, 8, 20, 19, 0).toISOString()
   const LINK = 'https://poker-friends-xi.vercel.app/fechas/t-1'
 
-  it('lists confirmados / sin responder / cancelaron with counts, the date, buy-in and join link', () => {
+  it('lists confirmados / cancelaron (one per line) with counts, the date, buy-in and join link — never sin responder', () => {
     const out = convocatoriaText({
       fechaName: 'Fecha 10 — Casa de José',
       scheduledAt: WHEN,
@@ -131,10 +131,6 @@ describe('convocatoriaText', () => {
         'Carlos',
         'María',
         '',
-        '⏳ Sin responder (2):',
-        'Ana',
-        'Luis',
-        '',
         '❌ Cancelaron (1):',
         'Andrés',
         '',
@@ -143,7 +139,7 @@ describe('convocatoriaText', () => {
     )
   })
 
-  it('omits empty pending/cancelled groups and the buy-in line, keeps Confirmados at zero', () => {
+  it('omits an empty Cancelaron group and the buy-in line, keeps Confirmados at zero', () => {
     const out = convocatoriaText({
       fechaName: 'Fecha 1',
       scheduledAt: WHEN,
@@ -177,6 +173,7 @@ describe('convocatoriaText', () => {
       link: LINK,
     })
     expect(out).toContain('✅ Confirmados (3):\nA\nB\nC')
+    expect(out).not.toContain('Sin responder')
     expect(out).not.toContain('Zoe-NoShow')
   })
 })

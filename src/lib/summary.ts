@@ -186,18 +186,15 @@ function namesBlock(emoji: string, label: string, names: readonly string[], empt
  *   Carlos
  *   María
  *
- *   ⏳ Sin responder (1):
- *   Ana
- *
  *   ❌ Cancelaron (1):
  *   Andrés
  *
  *   👉 Confirmar acá: https://…/fechas/<id>
  *
- * One name per line so the list scans quickly in the chat. "Sin responder" /
- * "Cancelaron" are omitted when empty; "Confirmados" always shows (with "nadie
- * todavía" at zero) because that is the number people ask. The buy-in line is
- * omitted when there is none.
+ * One name per line so the list scans quickly in the chat. "Cancelaron" is
+ * omitted when empty; "Confirmados" always shows (with "nadie todavía" at zero)
+ * because that is the number people ask. Players who haven't answered are not
+ * listed — the link is the nudge. The buy-in line is omitted when there is none.
  */
 export function convocatoriaText(opts: {
   fechaName: string
@@ -208,7 +205,6 @@ export function convocatoriaText(opts: {
 }): string {
   const { fechaName, scheduledAt, buyIn, entries, link } = opts
   const coming = entries.filter((e) => COMING.has(e.status)).map((e) => e.name)
-  const pending = entries.filter((e) => e.status === 'invited').map((e) => e.name)
   const declined = entries.filter((e) => e.status === 'declined').map((e) => e.name)
 
   const when = formatWhen(scheduledAt)
@@ -216,9 +212,10 @@ export function convocatoriaText(opts: {
   if (when) head.push(`📅 ${when}`)
   if (buyIn != null && buyIn > 0) head.push(`💰 Buy-in: ${colonesFull(buyIn)}`)
 
+  // Confirmados + Cancelaron only: the people who haven't answered are exactly
+  // the ones the link is for, so listing them adds length without information.
   const roster = [
     namesBlock('✅', 'Confirmados', coming, 'nadie todavía'),
-    namesBlock('⏳', 'Sin responder', pending),
     namesBlock('❌', 'Cancelaron', declined),
   ].filter((l): l is string => l != null)
 
