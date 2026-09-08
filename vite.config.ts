@@ -54,6 +54,9 @@ export default defineConfig(({ mode }) => {
           // The link-preview card is only ever fetched by chat apps' crawlers —
           // keep it out of every user's precache.
           globIgnores: ['**/og/**'],
+          // Web Push: push + notificationclick handlers live in public/sw-push.js
+          // and are imported into the generated SW (keeps generateSW mode).
+          importScripts: ['sw-push.js'],
           navigateFallback: '/index.html',
           // Never let the SW intercept Supabase (auth/rest/realtime/storage) —
           // those must always hit the network for live truth.

@@ -44,3 +44,6 @@ supabase/.temp/
 # --- os / editor ---
 .DS_Store
 *.log
+# Edge Function local env (VAPID private key, webhook secret)
+supabase/functions/.env
+supabase/functions/**/.env

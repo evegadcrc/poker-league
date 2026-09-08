@@ -14,6 +14,12 @@ import { getSoundSettings, setMuted, setVolume } from '@/lib/sound'
 // ---------------------------------------------------------------------------
 const h = vi.hoisted(() => ({
   pending: false,
+  isAdmin: false,
+  pushSupport: 'ok' as 'ok' | 'unsupported' | 'needs-install',
+  pushSub: null as unknown,
+  subscribeResult: { ok: true } as unknown,
+  subscribeCalls: [] as string[],
+  unsubscribeCalls: 0,
   rpcResult: { data: null as unknown, error: null as unknown },
   uploadResult: { data: { path: 'p/avatar' } as unknown, error: null as unknown },
   updateResult: { data: null as unknown, error: null as unknown },
@@ -30,6 +36,22 @@ const h = vi.hoisted(() => ({
 
 vi.mock('@/lib/auth', () => ({
   useAuth: () => ({ player: h.player, updatePlayer: h.updatePlayer, signOut: h.signOut }),
+  useRole: () => ({ isAdmin: h.isAdmin }),
+}))
+
+// Web Push client (lib/push.ts) — controllable support / subscription state.
+vi.mock('@/lib/push', () => ({
+  pushSupport: () => h.pushSupport,
+  getPushSubscription: () => Promise.resolve(h.pushSub),
+  subscribePush: (playerId: string) => {
+    h.subscribeCalls.push(playerId)
+    return Promise.resolve(h.subscribeResult)
+  },
+  unsubscribePush: () => {
+    h.unsubscribeCalls += 1
+    return Promise.resolve()
+  },
+  syncPushSubscription: () => Promise.resolve(),
 }))
 
 vi.mock('@/lib/supabase', () => ({
@@ -105,6 +127,12 @@ function tierClasses(el: HTMLElement): string[] {
 
 beforeEach(() => {
   h.pending = false
+  h.isAdmin = false
+  h.pushSupport = 'ok'
+  h.pushSub = null
+  h.subscribeResult = { ok: true }
+  h.subscribeCalls = []
+  h.unsubscribeCalls = 0
   h.rpcResult = { data: [FIXTURE], error: null }
   h.uploadResult = { data: { path: 'p-edw/avatar' }, error: null }
   h.updateResult = { data: null, error: null }
@@ -334,5 +362,63 @@ describe('Profile — Sonido settings', () => {
     expect(toggle).toHaveAttribute('aria-checked', 'true')
     // Muted disables the volume slider.
     expect(screen.getByLabelText('Volumen')).toBeDisabled()
+  })
+})
+
+describe('Profile — Notificaciones (Web Push opt-in, admins)', () => {
+  it('is hidden from non-admins', async () => {
+    render(<Profile />)
+    await screen.findByText('Edwin V.')
+    expect(screen.queryByTestId('push-settings')).not.toBeInTheDocument()
+  })
+
+  it('admin: switch starts OFF, turning it on calls subscribePush and flips to ON', async () => {
+    h.isAdmin = true
+    const user = userEvent.setup()
+    render(<Profile />)
+    const sw = await screen.findByRole('switch', { name: 'Avisos de la fecha' })
+    await waitFor(() => expect(sw).not.toBeDisabled())
+    expect(sw).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByText('Cuando alguien confirma, cancela o hace check-in')).toBeInTheDocument()
+
+    await user.click(sw)
+
+    await waitFor(() => expect(sw).toHaveAttribute('aria-checked', 'true'))
+    expect(h.subscribeCalls).toEqual(['p-edw'])
+  })
+
+  it('admin with an existing subscription: switch starts ON and turning it off unsubscribes', async () => {
+    h.isAdmin = true
+    h.pushSub = { endpoint: 'https://push.example/x' }
+    const user = userEvent.setup()
+    render(<Profile />)
+    const sw = await screen.findByRole('switch', { name: 'Avisos de la fecha' })
+    await waitFor(() => expect(sw).toHaveAttribute('aria-checked', 'true'))
+
+    await user.click(sw)
+
+    await waitFor(() => expect(sw).toHaveAttribute('aria-checked', 'false'))
+    expect(h.unsubscribeCalls).toBe(1)
+  })
+
+  it('shows the permission-denied note and stays OFF', async () => {
+    h.isAdmin = true
+    h.subscribeResult = { ok: false, reason: 'denied' }
+    const user = userEvent.setup()
+    render(<Profile />)
+    const sw = await screen.findByRole('switch', { name: 'Avisos de la fecha' })
+    await waitFor(() => expect(sw).not.toBeDisabled())
+    await user.click(sw)
+    expect(await screen.findByText(/Permiso denegado/)).toBeInTheDocument()
+    expect(sw).toHaveAttribute('aria-checked', 'false')
+  })
+
+  it('iOS Safari (not installed): install hint + disabled switch', async () => {
+    h.isAdmin = true
+    h.pushSupport = 'needs-install'
+    render(<Profile />)
+    const sw = await screen.findByRole('switch', { name: 'Avisos de la fecha' })
+    expect(sw).toBeDisabled()
+    expect(screen.getByText(/Instalá la app en la pantalla de inicio/)).toBeInTheDocument()
   })
 })

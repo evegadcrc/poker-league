@@ -1,8 +1,16 @@
-import { useCallback, useState } from 'react'
-import { useAuth } from '@/lib/auth'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useAuth, useRole } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { useLoadable } from '@/lib/useLoadable'
 import { useSound } from '@/lib/sound'
+import {
+  getPushSubscription,
+  pushSupport,
+  subscribePush,
+  syncPushSubscription,
+  unsubscribePush,
+  type PushSupport,
+} from '@/lib/push'
 import Avatar from '@/components/Avatar'
 import FormPills from '@/components/FormPills'
 import ImageCropper from '@/components/ImageCropper'
@@ -66,6 +74,7 @@ async function fetchProfile(playerId: string): Promise<State> {
  */
 export default function Profile() {
   const { player, updatePlayer, signOut } = useAuth()
+  const { isAdmin } = useRole()
   const { state, reload } = useLoadable<State>(
     { status: 'loading' },
     () => fetchProfile(player!.id),
@@ -331,6 +340,8 @@ export default function Profile() {
 
       <div className="rule faint" />
 
+      {isAdmin && player && <PushSettings playerId={player.id} />}
+
       <SoundSettings />
 
       <div className="btn-row">
@@ -462,5 +473,103 @@ function Sparkline({ history }: { history: HistoryPoint[] }) {
         ))}
       </svg>
     </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// "Notificaciones" — Web Push opt-in (admins, v1). ON asks for permission,
+// subscribes this device and stores the subscription (lib/push.ts); the
+// `entry` trigger + push-notify function then send "X confirmó / canceló /
+// hizo check-in". iOS only supports push for an installed PWA, so Safari in
+// the browser gets an install hint instead of a dead switch.
+// ---------------------------------------------------------------------------
+const PUSH_HELP: Record<PushSupport, string> = {
+  ok: 'Cuando alguien confirma, cancela o hace check-in',
+  'needs-install':
+    'Instalá la app en la pantalla de inicio (Compartir → Agregar a inicio) para recibir avisos',
+  unsupported: 'Este navegador no soporta notificaciones push',
+}
+
+type PushState = 'checking' | 'on' | 'off' | 'busy'
+
+function PushSettings({ playerId }: { playerId: string }) {
+  const support = useMemo(() => pushSupport(), [])
+  const [state, setState] = useState<PushState>('checking')
+  const [note, setNote] = useState<string | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    if (support !== 'ok') {
+      setState('off')
+      return
+    }
+    void getPushSubscription().then((sub) => {
+      if (!alive) return
+      setState(sub ? 'on' : 'off')
+      // Re-save an existing subscription so a server-side prune heals itself.
+      if (sub) void syncPushSubscription(playerId)
+    })
+    return () => {
+      alive = false
+    }
+  }, [support, playerId])
+
+  const toggle = useCallback(async () => {
+    if (state === 'busy' || state === 'checking') return
+    setNote(null)
+    setState('busy')
+    if (state === 'on') {
+      await unsubscribePush()
+      setState('off')
+      return
+    }
+    const res = await subscribePush(playerId)
+    if (res.ok) {
+      setState('on')
+      return
+    }
+    setState('off')
+    if (res.reason === 'denied') {
+      setNote('Permiso denegado. Activá las notificaciones para esta app en los ajustes del teléfono.')
+    } else if (res.reason === 'no-sw') {
+      setNote('Las notificaciones solo funcionan en la app instalada (no en modo desarrollo).')
+    } else {
+      setNote('No se pudo activar. Intentar de nuevo.')
+    }
+  }, [state, playerId])
+
+  const on = state === 'on'
+  return (
+    <>
+      <div className="section-head" style={{ paddingBottom: 2 }}>
+        <div>
+          <span className="overline">Notificaciones</span>
+        </div>
+      </div>
+
+      <div className="toggle-row" data-testid="push-settings">
+        <div>
+          <div className="tl">Avisos de la fecha</div>
+          <div className="ts">{PUSH_HELP[support]}</div>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={on}
+          aria-label="Avisos de la fecha"
+          aria-busy={state === 'busy' || state === 'checking'}
+          className={`switch${on ? ' on' : ''}`}
+          disabled={support !== 'ok' || state === 'busy' || state === 'checking'}
+          onClick={() => void toggle()}
+        />
+      </div>
+      {note && (
+        <div className="fd-note" role="status">
+          <p>{note}</p>
+        </div>
+      )}
+
+      <div className="rule faint" />
+    </>
   )
 }

@@ -104,45 +104,6 @@ export type Database = {
           },
         ]
       }
-      gallery_photo: {
-        Row: {
-          created_at: string
-          id: string
-          storage_path: string
-          tournament_id: string
-          uploader_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          storage_path: string
-          tournament_id: string
-          uploader_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          storage_path?: string
-          tournament_id?: string
-          uploader_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "gallery_photo_tournament_id_fkey"
-            columns: ["tournament_id"]
-            isOneToOne: false
-            referencedRelation: "tournament"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gallery_photo_uploader_id_fkey"
-            columns: ["uploader_id"]
-            isOneToOne: false
-            referencedRelation: "player"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       entry: {
         Row: {
           cancelled_at: string | null
@@ -224,6 +185,45 @@ export type Database = {
           },
         ]
       }
+      gallery_photo: {
+        Row: {
+          created_at: string
+          id: string
+          storage_path: string
+          tournament_id: string
+          uploader_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          storage_path: string
+          tournament_id: string
+          uploader_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          storage_path?: string
+          tournament_id?: string
+          uploader_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gallery_photo_tournament_id_fkey"
+            columns: ["tournament_id"]
+            isOneToOne: false
+            referencedRelation: "tournament"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gallery_photo_uploader_id_fkey"
+            columns: ["uploader_id"]
+            isOneToOne: false
+            referencedRelation: "player"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       player: {
         Row: {
           auth_user_id: string | null
@@ -259,6 +259,44 @@ export type Database = {
           name?: string
         }
         Relationships: []
+      }
+      push_subscription: {
+        Row: {
+          auth: string
+          created_at: string
+          endpoint: string
+          id: string
+          p256dh: string
+          player_id: string
+          user_agent: string | null
+        }
+        Insert: {
+          auth: string
+          created_at?: string
+          endpoint: string
+          id?: string
+          p256dh: string
+          player_id: string
+          user_agent?: string | null
+        }
+        Update: {
+          auth?: string
+          created_at?: string
+          endpoint?: string
+          id?: string
+          p256dh?: string
+          player_id?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "push_subscription_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "player"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       season: {
         Row: {
@@ -631,6 +669,7 @@ export type Database = {
           ante_enabled: boolean
           blind_structure_id: string | null
           buy_in: number
+          cancelled_at: string | null
           counts_for_league: boolean
           cover_url: string | null
           created_at: string
@@ -667,6 +706,7 @@ export type Database = {
       close_season: {
         Args: never
         Returns: {
+          auto_approve_signups: boolean
           bonus_attendance: number
           bonus_final_table: number
           bonus_top3: number
@@ -696,6 +736,7 @@ export type Database = {
           ante_enabled: boolean
           blind_structure_id: string | null
           buy_in: number
+          cancelled_at: string | null
           counts_for_league: boolean
           cover_url: string | null
           created_at: string
@@ -785,6 +826,7 @@ export type Database = {
           ante_enabled: boolean
           blind_structure_id: string | null
           buy_in: number
+          cancelled_at: string | null
           counts_for_league: boolean
           cover_url: string | null
           created_at: string
@@ -943,6 +985,7 @@ export type Database = {
           ante_enabled: boolean
           blind_structure_id: string | null
           buy_in: number
+          cancelled_at: string | null
           counts_for_league: boolean
           cover_url: string | null
           created_at: string
@@ -1119,6 +1162,7 @@ export type Database = {
       update_season_config: {
         Args: { p_payload: Json }
         Returns: {
+          auto_approve_signups: boolean
           bonus_attendance: number
           bonus_final_table: number
           bonus_top3: number
