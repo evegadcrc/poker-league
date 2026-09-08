@@ -88,3 +88,65 @@ describe('route guards', () => {
     expect(screen.queryByText('LOGIN PAGE')).not.toBeInTheDocument()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Deep links through login (lib/next.ts): a logged-out visitor's destination is
+// remembered when RequireAuth bounces them to /login and consumed once they are
+// signed in — including the magic-link case where they land back on `/`.
+// ---------------------------------------------------------------------------
+function renderDeep(path: string) {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route path="/login" element={<div>LOGIN PAGE</div>} />
+        <Route element={<RequireAuth />}>
+          <Route path="/" element={<div>HOME PAGE</div>} />
+          <Route path="/fechas/:id" element={<div>FECHA PAGE</div>} />
+        </Route>
+      </Routes>
+    </MemoryRouter>,
+  )
+}
+
+describe('route guards — deep link through login', () => {
+  afterEach(() => {
+    localStorage.clear()
+  })
+
+  it('remembers the fecha a logged-out visitor asked for and sends them there after login', () => {
+    const first = renderDeep('/fechas/t-1')
+    expect(screen.getByText('LOGIN PAGE')).toBeInTheDocument()
+    first.unmount()
+
+    // Magic link lands on `/` with a bound session.
+    mockAuth.session = { user: { id: 'u1' } }
+    mockAuth.player = { id: 'p1', is_admin: false }
+    renderDeep('/')
+    expect(screen.getByText('FECHA PAGE')).toBeInTheDocument()
+    expect(screen.queryByText('HOME PAGE')).not.toBeInTheDocument()
+  })
+
+  it('consumes the remembered destination only once', () => {
+    renderDeep('/fechas/t-1').unmount()
+    mockAuth.session = { user: { id: 'u1' } }
+    mockAuth.player = { id: 'p1', is_admin: false }
+    renderDeep('/').unmount()
+    renderDeep('/')
+    expect(screen.getByText('HOME PAGE')).toBeInTheDocument()
+  })
+
+  it('does not remember the home screen itself', () => {
+    renderDeep('/').unmount()
+    mockAuth.session = { user: { id: 'u1' } }
+    mockAuth.player = { id: 'p1', is_admin: false }
+    renderDeep('/')
+    expect(screen.getByText('HOME PAGE')).toBeInTheDocument()
+  })
+
+  it('lands directly on the fecha when the visitor is already signed in', () => {
+    mockAuth.session = { user: { id: 'u1' } }
+    mockAuth.player = { id: 'p1', is_admin: false }
+    renderDeep('/fechas/t-1')
+    expect(screen.getByText('FECHA PAGE')).toBeInTheDocument()
+  })
+})
