@@ -1,0 +1,44 @@
+# Keeps the free-tier prod Supabase project from auto-pausing.
+#
+# Supabase pauses free projects after ~7 days without API traffic; a paused project
+# drops its DNS and the PWA fails at login with "TypeError: Failed to fetch". One real
+# PostgREST query per day counts as activity. If the project is already paused this
+# job fails (non-200), which surfaces as a failed-workflow email.
+#
+# Secrets (repo settings → Actions): SUPABASE_URL, SUPABASE_ANON_KEY (publishable key —
+# safe client-side, but kept out of the repo anyway).
+name: Supabase keep-alive
+
+on:
+  schedule:
+    # Daily at 09:17 UTC (03:17 Costa Rica). Off-the-hour to avoid GitHub's peak-load skips.
+    - cron: "17 9 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Query prod REST endpoint
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_ANON_KEY:-}" ]; then
+            echo "::error::SUPABASE_URL / SUPABASE_ANON_KEY secrets are not set"
+            exit 1
+          fi
+          code=$(curl -sS -o body.json -w '%{http_code}' --max-time 30 \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            "${SUPABASE_URL}/rest/v1/season?select=id&limit=1")
+          echo "HTTP ${code}"
+          if [ "${code}" != "200" ]; then
+            cat body.json || true
+            echo "::error::Supabase ping returned HTTP ${code} — project paused or key rotated?"
+            exit 1
+          fi
