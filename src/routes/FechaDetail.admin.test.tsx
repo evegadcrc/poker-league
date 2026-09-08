@@ -415,7 +415,7 @@ describe('FechaDetail — admin share row (convocatoria → WhatsApp, copiar enl
     const text = decodeURIComponent(url.slice('https://wa.me/?text='.length))
     expect(text).toContain('🃏 POKER FRIENDS · Fecha 9')
     expect(text).toContain('✅ Confirmados (1): Edwin V.')
-    expect(text).toContain(`👉 Confirmá acá: ${window.location.origin}/fechas/t-1`)
+    expect(text).toContain(`👉 Confirmar acá: ${window.location.origin}/fechas/t-1`)
     open.mockRestore()
   })
 

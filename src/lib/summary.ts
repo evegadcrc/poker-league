@@ -185,7 +185,7 @@ function namesLine(emoji: string, label: string, names: readonly string[], empty
  *   ⏳ Sin responder (4): Ana, Luis, Fernando, Ricardo
  *   ❌ Cancelaron (2): Andrés, Laura
  *
- *   👉 Confirmá acá: https://…/fechas/<id>
+ *   👉 Confirmar acá: https://…/fechas/<id>
  *
  * "Sin responder" / "Cancelaron" are omitted when empty; "Confirmados" always
  * shows (with "nadie todavía" at zero) because that is the number people ask.
@@ -214,7 +214,7 @@ export function convocatoriaText(opts: {
     namesLine('❌', 'Cancelaron', declined),
   ].filter((l): l is string => l != null)
 
-  return [...head, '', ...roster, '', `👉 Confirmá acá: ${link}`].join('\n')
+  return [...head, '', ...roster, '', `👉 Confirmar acá: ${link}`].join('\n')
 }
 
 /** WhatsApp "share this text" deep link — opens WhatsApp with the message

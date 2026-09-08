@@ -131,7 +131,7 @@ describe('convocatoriaText', () => {
         '⏳ Sin responder (2): Ana, Luis',
         '❌ Cancelaron (1): Andrés',
         '',
-        `👉 Confirmá acá: ${LINK}`,
+        `👉 Confirmar acá: ${LINK}`,
       ].join('\n'),
     )
   })
@@ -151,7 +151,7 @@ describe('convocatoriaText', () => {
         '',
         '✅ Confirmados (0): nadie todavía',
         '',
-        `👉 Confirmá acá: ${LINK}`,
+        `👉 Confirmar acá: ${LINK}`,
       ].join('\n'),
     )
   })
