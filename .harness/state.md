@@ -62,3 +62,19 @@ SHIP. Everything on feat/poker-friends-phase2 (NOT pushed): Track A + B + 2.1, a
 350/1skip green. Ship as ONE Phase-2 PR (or stacked). Then go-live (hosted Supabase + SMTP + FE deploy).
 Deferred followups (all optional): profile-racha numbers, gallery mobile-upload (HEIC+downscale), private
 bucket, wire máx-recompras/bonus-stack, FormPills co-champ number + Pendiente-Pago-alive-only (product calls).
+
+## 2026-09-07 — Editar fecha (admin edit page) — BUILT + verified, NOT committed
+User could not edit a created (scheduled) fecha beyond the icon-only date editor; asked for an edit
+button covering the geofence too. Built: `src/routes/admin/FechaForm.tsx` (form extracted from
+CreateFecha, shared), `CreateFecha.tsx` now a thin wrapper (loads structures + season template, seeds
+from pf-fecha-defaults, RPC create_tournament), NEW `src/routes/admin/EditFecha.tsx` at
+`/fechas/:id/editar` (RequireAdmin route in App.tsx): seeds every field from the row (name, date/time,
+venue lat/lng/radius, buy-in, rebuy, stacks, rebuy cutoff, blinds, payout split, toggles); saves via
+direct tournament UPDATE filtered by status='scheduled' AND cancelled_at IS NULL (0 rows → friendly
+error); venue validation (half-entered venue / bad coords / radius ≤ 0). Locked note for live /
+completed / cancelled. FechaDetail: "Editar fecha" ghost button in AdminFechaActions (same gate as
+Abrir). Inline date editor KEPT. Tests: +14 EditFecha.test.tsx, +5 FechaDetail.admin.test.tsx;
+full suite 517 pass / 1 skip on local stack. Verify-ui (Playwright, admin Carlos via minted magic
+link): button → edit page → changed lng/radius → saved → DB row + detail "Radio 150 m" confirmed,
+console clean; seed row restored. Same day: prod Supabase found PAUSED (free tier) → user restored;
+keep-alive workflow shipped (4472af9).

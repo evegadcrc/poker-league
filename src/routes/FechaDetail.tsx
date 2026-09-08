@@ -664,6 +664,7 @@ export default function FechaDetail() {
           busy={busy}
           openError={openError}
           onOpen={doOpenFecha}
+          onEdit={() => navigate(`/fechas/${tournament.id}/editar`)}
           onCancel={doCancelFecha}
           onDelete={doDeleteFecha}
         />
@@ -860,6 +861,7 @@ function AdminFechaActions({
   busy,
   openError,
   onOpen,
+  onEdit,
   onCancel,
   onDelete,
 }: {
@@ -868,11 +870,16 @@ function AdminFechaActions({
   busy: boolean
   openError: string | null
   onOpen: () => void
+  onEdit: () => void
   onCancel: () => void
   onDelete: () => void
 }) {
   // Opening is only for a scheduled, uncancelled fecha (the RPC also enforces this).
   const canOpen = status === 'scheduled' && !cancelled
+  // Editing (→ /fechas/:id/editar) has the same window: once live the clock,
+  // entries and check-ins depend on the fecha's settings; a completed fecha holds
+  // results. Same rule as the inline date editor up top.
+  const canEdit = status === 'scheduled' && !cancelled
   const canCancel = (status === 'scheduled' || status === 'live') && !cancelled
   // Delete is only for mistakes: a scheduled fecha, or any already-cancelled one.
   // A COMPLETED fecha holds real results + gallery, and a LIVE (uncancelled) fecha
@@ -895,6 +902,17 @@ function AdminFechaActions({
         <div className="fd-note" role="alert">
           <p>{openError}</p>
         </div>
+      )}
+      {canEdit && (
+        <button
+          type="button"
+          className="btn ghost full"
+          disabled={busy}
+          onClick={onEdit}
+          data-testid="fd-edit-fecha"
+        >
+          Editar fecha
+        </button>
       )}
       {(canCancel || canDelete) && (
         <div className="fd-admin-row">

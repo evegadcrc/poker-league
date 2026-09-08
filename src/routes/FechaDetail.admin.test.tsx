@@ -128,6 +128,7 @@ const renderDetail = () =>
         <Route path="/fechas/:id" element={<FechaDetail />} />
         <Route path="/fechas" element={<div>FECHAS LIST</div>} />
         <Route path="/vivo" element={<div>EN VIVO</div>} />
+        <Route path="/fechas/:id/editar" element={<div>EDITAR FECHA</div>} />
       </Routes>
     </MemoryRouter>,
   )
@@ -353,5 +354,47 @@ describe('FechaDetail — admin cancel/delete + PRÓXIMA buy-in + calendar trigg
     expect(trigger).toHaveAttribute('aria-label', 'Editar fecha y hora')
     // Icon, not a text label: it renders an inline SVG glyph.
     expect(trigger.querySelector('svg')).not.toBeNull()
+  })
+})
+
+describe('FechaDetail — admin "Editar fecha" entry point (→ /fechas/:id/editar)', () => {
+  it('admin sees Editar fecha on a scheduled fecha and it navigates to the edit page', async () => {
+    const user = userEvent.setup()
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    const btn = screen.getByTestId('fd-edit-fecha')
+    expect(btn).toHaveTextContent('Editar fecha')
+    await user.click(btn)
+
+    expect(await screen.findByText('EDITAR FECHA')).toBeInTheDocument()
+  })
+
+  it('hides Editar fecha from a non-admin', async () => {
+    h.isAdmin = false
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+    expect(screen.queryByTestId('fd-edit-fecha')).not.toBeInTheDocument()
+  })
+
+  it('hides Editar fecha on a LIVE fecha', async () => {
+    setTournament({ status: 'live' })
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+    expect(screen.queryByTestId('fd-edit-fecha')).not.toBeInTheDocument()
+  })
+
+  it('hides Editar fecha on a COMPLETED fecha', async () => {
+    setTournament({ status: 'completed' })
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+    expect(screen.queryByTestId('fd-edit-fecha')).not.toBeInTheDocument()
+  })
+
+  it('hides Editar fecha on a CANCELLED (scheduled) fecha', async () => {
+    setTournament({ cancelled_at: new Date().toISOString() })
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+    expect(screen.queryByTestId('fd-edit-fecha')).not.toBeInTheDocument()
   })
 })

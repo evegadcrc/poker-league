@@ -3,6 +3,7 @@ import './App.css'
 import AppLayout from '@/components/AppLayout'
 import { RequireAdmin, RequireAuth } from '@/components/guards'
 import Admin from '@/routes/Admin'
+import EditFecha from '@/routes/admin/EditFecha'
 import Aprende from '@/routes/Aprende'
 import Calculadora from '@/routes/Calculadora'
 import Fechas from '@/routes/Fechas'
@@ -36,6 +37,7 @@ export default function App() {
             {/* Admin-only */}
             <Route element={<RequireAdmin />}>
               <Route path="/admin" element={<Admin />} />
+              <Route path="/fechas/:id/editar" element={<EditFecha />} />
             </Route>
 
             {/* Unknown authed path → Liga home */}
