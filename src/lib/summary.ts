@@ -1,4 +1,4 @@
-import { colonesFull, playedCount, type EntryStatus } from '@/lib/fechas'
+import { colonesFull, formatWhen, playedCount, type EntryStatus } from '@/lib/fechas'
 
 // ---------------------------------------------------------------------------
 // WhatsApp summary (slice 15) — pure, testable Spanish text builders.
@@ -151,6 +151,76 @@ export function seasonSummaryText(opts: {
     '',
     `📊 Mirá la tabla completa → ${APP_LINK}`,
   ].join('\n')
+}
+
+// ---------------------------------------------------------------------------
+// Convocatoria — the roster of an upcoming (or just-opened) fecha, for the
+// admin to drop in the group chat with the join link. Built client-side from
+// the entries the fecha view already holds (same rationale as above).
+// ---------------------------------------------------------------------------
+export type ConvocatoriaEntry = { name: string; status: EntryStatus }
+
+/** Statuses that mean "is coming / is here" for the convocatoria. */
+const COMING: ReadonlySet<EntryStatus> = new Set([
+  'confirmed',
+  'checked_in',
+  'playing',
+  'eliminated',
+  'winner',
+])
+
+function namesLine(emoji: string, label: string, names: readonly string[], empty?: string): string | null {
+  if (names.length === 0) return empty ? `${emoji} ${label} (0): ${empty}` : null
+  return `${emoji} ${label} (${names.length}): ${names.join(', ')}`
+}
+
+/**
+ * Roster for the group chat:
+ *
+ *   🃏 POKER FRIENDS · Fecha 10 — Casa de José
+ *   📅 Sáb 20 sep · 19:00
+ *   💰 Buy-in: ₡10.000
+ *
+ *   ✅ Confirmados (6): Carlos, María, José, Gabriela, Diego, Edwin
+ *   ⏳ Sin responder (4): Ana, Luis, Fernando, Ricardo
+ *   ❌ Cancelaron (2): Andrés, Laura
+ *
+ *   👉 Confirmá acá: https://…/fechas/<id>
+ *
+ * "Sin responder" / "Cancelaron" are omitted when empty; "Confirmados" always
+ * shows (with "nadie todavía" at zero) because that is the number people ask.
+ * The buy-in line is omitted when there is none.
+ */
+export function convocatoriaText(opts: {
+  fechaName: string
+  scheduledAt: string
+  buyIn: number | null | undefined
+  entries: readonly ConvocatoriaEntry[]
+  link: string
+}): string {
+  const { fechaName, scheduledAt, buyIn, entries, link } = opts
+  const coming = entries.filter((e) => COMING.has(e.status)).map((e) => e.name)
+  const pending = entries.filter((e) => e.status === 'invited').map((e) => e.name)
+  const declined = entries.filter((e) => e.status === 'declined').map((e) => e.name)
+
+  const when = formatWhen(scheduledAt)
+  const head = [`${HEADER} · ${fechaName}`]
+  if (when) head.push(`📅 ${when}`)
+  if (buyIn != null && buyIn > 0) head.push(`💰 Buy-in: ${colonesFull(buyIn)}`)
+
+  const roster = [
+    namesLine('✅', 'Confirmados', coming, 'nadie todavía'),
+    namesLine('⏳', 'Sin responder', pending),
+    namesLine('❌', 'Cancelaron', declined),
+  ].filter((l): l is string => l != null)
+
+  return [...head, '', ...roster, '', `👉 Confirmá acá: ${link}`].join('\n')
+}
+
+/** WhatsApp "share this text" deep link — opens WhatsApp with the message
+ *  pre-filled and lets the sender pick the chat (works on phones and desktop). */
+export function whatsappShareUrl(text: string): string {
+  return `https://wa.me/?text=${encodeURIComponent(text)}`
 }
 
 // ---------------------------------------------------------------------------

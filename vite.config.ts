@@ -51,6 +51,9 @@ export default defineConfig(({ mode }) => {
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+          // The link-preview card is only ever fetched by chat apps' crawlers —
+          // keep it out of every user's precache.
+          globIgnores: ['**/og/**'],
           navigateFallback: '/index.html',
           // Never let the SW intercept Supabase (auth/rest/realtime/storage) —
           // those must always hit the network for live truth.

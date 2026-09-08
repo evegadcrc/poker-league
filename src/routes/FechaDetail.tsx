@@ -16,6 +16,7 @@ import { chopAdjustedPrizes, pointsBreakdown, type PointsBreakdown, type Scoring
 import { classifyCheckInError, requestPosition, type Coords } from '@/lib/checkin'
 import { formatMiles } from '@/lib/format'
 import { parsePrizes, type Prize } from '@/lib/live'
+import { convocatoriaText, whatsappShareUrl, writeClipboard } from '@/lib/summary'
 import {
   attendanceCounts,
   attendanceSort,
@@ -670,6 +671,13 @@ export default function FechaDetail() {
         />
       )}
 
+      {/* (3) Admin share row — convocatoria for the group chat + the plain join
+          link. Not for a completed fecha (results go out from the Consola's
+          "Resumen para WhatsApp") nor a cancelled one. */}
+      {isAdmin && !completed && !cancelled && (
+        <ShareFecha tournament={tournament} entries={entries} />
+      )}
+
       <FechaInfo tournament={tournament} config={config} />
 
       {isAdmin && (
@@ -938,6 +946,61 @@ function AdminFechaActions({
               Eliminar fecha
             </button>
           )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Admin share row. "Compartir en WhatsApp" opens WhatsApp with the convocatoria
+// (roster + join link) pre-filled via wa.me — the admin picks the group there,
+// since no API can post into a WhatsApp group. "Copiar enlace" copies the plain
+// deep link; a logged-out player who taps it is brought back to this fecha after
+// the magic link (lib/next.ts).
+function ShareFecha({ tournament, entries }: { tournament: TournamentRow; entries: EntryRow[] }) {
+  const [copied, setCopied] = useState<'ok' | 'fail' | null>(null)
+  const link = `${window.location.origin}/fechas/${tournament.id}`
+
+  const shareWhatsApp = useCallback(() => {
+    const text = convocatoriaText({
+      fechaName: tournament.name,
+      scheduledAt: tournament.scheduled_at,
+      buyIn: tournament.buy_in,
+      entries: entries.map((e) => ({ name: e.player?.name ?? 'Jugador', status: e.status })),
+      link,
+    })
+    window.open(whatsappShareUrl(text), '_blank', 'noopener,noreferrer')
+  }, [tournament, entries, link])
+
+  const copyLink = useCallback(async () => {
+    const ok = await writeClipboard(link)
+    setCopied(ok ? 'ok' : 'fail')
+    window.setTimeout(() => setCopied(null), 2500)
+  }, [link])
+
+  return (
+    <div className="fd-admin-actions" data-testid="fd-share">
+      <div className="fd-admin-row">
+        <button
+          type="button"
+          className="btn ghost sm"
+          onClick={shareWhatsApp}
+          data-testid="fd-share-whatsapp"
+        >
+          Compartir en WhatsApp
+        </button>
+        <button
+          type="button"
+          className="btn ghost sm"
+          onClick={() => void copyLink()}
+          data-testid="fd-copy-link"
+        >
+          Copiar enlace
+        </button>
+      </div>
+      {copied && (
+        <div className="fd-note" role="status">
+          <p>{copied === 'ok' ? '✓ Enlace copiado' : 'No se pudo copiar el enlace.'}</p>
         </div>
       )}
     </div>

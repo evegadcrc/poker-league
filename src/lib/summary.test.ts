@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { colonesFull } from './fechas'
+import { colonesFull, formatWhen } from './fechas'
 import {
+  convocatoriaText,
   fechaSummaryText,
   seasonSummaryText,
+  type ConvocatoriaEntry,
   type FechaSummaryEntry,
   type SeasonStandingRow,
+  whatsappShareUrl,
 } from './summary'
 
 const ENTRIES: FechaSummaryEntry[] = [
@@ -96,5 +99,85 @@ describe('seasonSummaryText', () => {
   it('handles an empty leaderboard', () => {
     const out = seasonSummaryText({ seasonName: 'Liga 2027', rows: [] })
     expect(out).toContain('Aún no hay puntos en la tabla.')
+  })
+})
+
+describe('convocatoriaText', () => {
+  const ROSTER: ConvocatoriaEntry[] = [
+    { name: 'Carlos', status: 'confirmed' },
+    { name: 'María', status: 'checked_in' },
+    { name: 'Ana', status: 'invited' },
+    { name: 'Luis', status: 'invited' },
+    { name: 'Andrés', status: 'declined' },
+  ]
+  const WHEN = new Date(2026, 8, 20, 19, 0).toISOString()
+  const LINK = 'https://poker-friends-xi.vercel.app/fechas/t-1'
+
+  it('lists confirmados / sin responder / cancelaron with counts, the date, buy-in and join link', () => {
+    const out = convocatoriaText({
+      fechaName: 'Fecha 10 — Casa de José',
+      scheduledAt: WHEN,
+      buyIn: 10_000,
+      entries: ROSTER,
+      link: LINK,
+    })
+    expect(out).toBe(
+      [
+        '🃏 POKER FRIENDS · Fecha 10 — Casa de José',
+        `📅 ${formatWhen(WHEN)}`,
+        `💰 Buy-in: ${colonesFull(10_000)}`,
+        '',
+        '✅ Confirmados (2): Carlos, María',
+        '⏳ Sin responder (2): Ana, Luis',
+        '❌ Cancelaron (1): Andrés',
+        '',
+        `👉 Confirmá acá: ${LINK}`,
+      ].join('\n'),
+    )
+  })
+
+  it('omits empty pending/cancelled groups and the buy-in line, keeps Confirmados at zero', () => {
+    const out = convocatoriaText({
+      fechaName: 'Fecha 1',
+      scheduledAt: WHEN,
+      buyIn: 0,
+      entries: [],
+      link: LINK,
+    })
+    expect(out).toBe(
+      [
+        '🃏 POKER FRIENDS · Fecha 1',
+        `📅 ${formatWhen(WHEN)}`,
+        '',
+        '✅ Confirmados (0): nadie todavía',
+        '',
+        `👉 Confirmá acá: ${LINK}`,
+      ].join('\n'),
+    )
+  })
+
+  it('counts playing / eliminated / winner as coming (live fecha) and ignores no-shows', () => {
+    const out = convocatoriaText({
+      fechaName: 'F',
+      scheduledAt: WHEN,
+      buyIn: null,
+      entries: [
+        { name: 'A', status: 'playing' },
+        { name: 'B', status: 'eliminated' },
+        { name: 'C', status: 'winner' },
+        { name: 'Zoe-NoShow', status: 'no_show' },
+      ],
+      link: LINK,
+    })
+    expect(out).toContain('✅ Confirmados (3): A, B, C')
+    expect(out).not.toContain('Zoe-NoShow')
+  })
+})
+
+describe('whatsappShareUrl', () => {
+  it('builds a wa.me deep link with the text URL-encoded', () => {
+    expect(whatsappShareUrl('hola\n👉 https://x.y/z?a=1')).toBe(
+      `https://wa.me/?text=${encodeURIComponent('hola\n👉 https://x.y/z?a=1')}`,
+    )
   })
 })

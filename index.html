@@ -5,6 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Poker Friends</title>
     <meta name="description" content="Liga de póker — tabla, fechas, check-in y torneo en vivo." />
+    <!-- Link previews (WhatsApp / iMessage / Telegram read these without running JS).
+         The SPA rewrite serves this file for every route, so every shared link gets the
+         card. og:image must be absolute; per-fecha titles come from /api/preview. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Poker Friends" />
+    <meta property="og:title" content="Poker Friends" />
+    <meta property="og:description" content="Liga de póker — tabla, fechas, check-in y torneo en vivo." />
+    <meta property="og:image" content="https://poker-friends-xi.vercel.app/og/fecha-card.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:type" content="image/png" />
+    <meta name="twitter:card" content="summary_large_image" />
     <!-- PWA: theme + iOS install affordances (manifest link + SW are injected by vite-plugin-pwa) -->
     <meta name="theme-color" content="#7b1e22" />
     <meta name="mobile-web-app-capable" content="yes" />

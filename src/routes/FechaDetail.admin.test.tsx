@@ -398,3 +398,63 @@ describe('FechaDetail — admin "Editar fecha" entry point (→ /fechas/:id/edit
     expect(screen.queryByTestId('fd-edit-fecha')).not.toBeInTheDocument()
   })
 })
+
+describe('FechaDetail — admin share row (convocatoria → WhatsApp, copiar enlace)', () => {
+  it('Compartir en WhatsApp opens wa.me with the roster + join link pre-filled', async () => {
+    const user = userEvent.setup()
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null)
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    await user.click(screen.getByTestId('fd-share-whatsapp'))
+
+    expect(open).toHaveBeenCalledTimes(1)
+    const [url, target] = open.mock.calls[0]! as [string, string]
+    expect(url.startsWith('https://wa.me/?text=')).toBe(true)
+    expect(target).toBe('_blank')
+    const text = decodeURIComponent(url.slice('https://wa.me/?text='.length))
+    expect(text).toContain('🃏 POKER FRIENDS · Fecha 9')
+    expect(text).toContain('✅ Confirmados (1): Edwin V.')
+    expect(text).toContain(`👉 Confirmá acá: ${window.location.origin}/fechas/t-1`)
+    open.mockRestore()
+  })
+
+  it('Copiar enlace writes the fecha deep link to the clipboard and confirms', async () => {
+    const user = userEvent.setup()
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    await user.click(screen.getByTestId('fd-copy-link'))
+
+    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/fechas/t-1`)
+    expect(await screen.findByText('✓ Enlace copiado')).toBeInTheDocument()
+  })
+
+  it('shows the share row on a LIVE fecha too, but not on COMPLETED or CANCELLED', async () => {
+    setTournament({ status: 'live' })
+    const live = renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+    expect(screen.getByTestId('fd-share')).toBeInTheDocument()
+    live.unmount()
+
+    setTournament({ status: 'completed' })
+    const done = renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+    expect(screen.queryByTestId('fd-share')).not.toBeInTheDocument()
+    done.unmount()
+
+    setTournament({ cancelled_at: new Date().toISOString() })
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+    expect(screen.queryByTestId('fd-share')).not.toBeInTheDocument()
+  })
+
+  it('hides the share row from a non-admin', async () => {
+    h.isAdmin = false
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+    expect(screen.queryByTestId('fd-share')).not.toBeInTheDocument()
+  })
+})
