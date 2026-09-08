@@ -120,3 +120,16 @@ audience all / recipients 1; confirmed → audience admins / recipients 0. Prod 
 present (table, 4 fns, 2 triggers, pg_net, vault ×2); WhatsApp crawler on real Fecha 2 → "Fecha 2 ·
 Poker Friends / Sáb 12 sept · 18:00 · 1 confirmado"; prod push-notify fecha_created → 200 audience all,
 recipients 0 (no subscriptions yet). Remaining: user tests on phone (install PWA → Perfil → Avisos).
+
+## 2026-09-08 — install walkthrough + post-"Voy" convocatoria sheet — BUILT
+User: (1) a tour teaching how to install the PWA (Share → Agregar a inicio; push only from the installed
+app); (2) after a player joins, pop a screen to copy/share the WhatsApp roster.
+- lib/install.ts (isStandalone / installPlatform / tour bookkeeping `pf-install-tour` seen|done);
+  components/InstallTour.tsx (Sheet, numbered steps per platform ios-safari / ios-other / android
+  (native "Instalar ahora" when beforeinstallprompt captured) / desktop + 🔔 note); InstallPrompt now
+  auto-opens the tour ONCE on phones not running standalone, banner gets "Cómo instalar", ✕ closes both;
+  Perfil › Notificaciones "Ver cómo instalar" (needs-install) opens it.
+- components/ConvocatoriaSheet.tsx (preview textarea + Compartir en WhatsApp + Copiar texto);
+  FechaDetail opens it after a successful rsvp confirm (optimistic roster).
+- Verified in Chrome DevTools MCP: iPhone UA emulation → tour auto-opened with 4 steps; as player Ana
+  → "Voy — confirmar asistencia" → "¡Confirmado! 🎉" sheet with 6 confirmados incl. Ana. Seed restored.

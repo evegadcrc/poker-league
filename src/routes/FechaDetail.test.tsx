@@ -731,3 +731,43 @@ describe('FechaDetail', () => {
     expect(within(byName('Alicia')).queryByTestId('fd-result')).toBeNull()
   })
 })
+
+describe('FechaDetail — post-"Voy" convocatoria sheet', () => {
+  it('after confirming, offers the updated roster to share/copy (me included), and closes', async () => {
+    const user = userEvent.setup()
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    setEntries('invited')
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    // The silent reload after the RPC re-reads the entries: serve the server
+    // truth (me confirmed) so the reconcile keeps me on the confirmados line.
+    setEntries('confirmed')
+    await user.click(screen.getByRole('button', { name: 'Voy' }))
+
+    const sheet = await screen.findByTestId('convocatoria-sheet')
+    const text = (within(sheet).getByTestId('convocatoria-text') as HTMLTextAreaElement).value
+    // Optimistic confirm already applied → I'm in the confirmados line.
+    expect(text).toContain('✅ Confirmados (2)')
+    expect(text).toContain('Edwin V.')
+    expect(text).toContain('María R.')
+    expect(text).toContain('/fechas/t-1')
+
+    await user.click(within(sheet).getByRole('button', { name: 'Copiar texto' }))
+    expect(writeText).toHaveBeenCalledWith(text)
+
+    await user.click(within(sheet).getByRole('button', { name: 'Cerrar' }))
+    expect(screen.queryByTestId('convocatoria-sheet')).toBeNull()
+  })
+
+  it('does NOT open the sheet on "No voy"', async () => {
+    const user = userEvent.setup()
+    setEntries('invited')
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+    await user.click(screen.getByRole('button', { name: 'No voy' }))
+    expect(h.rpcCalls).toContainEqual(['rsvp', { p_tournament_id: 't-1', p_choice: 'decline' }])
+    expect(screen.queryByTestId('convocatoria-sheet')).toBeNull()
+  })
+})

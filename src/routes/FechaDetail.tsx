@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { useLoadable } from '@/lib/useLoadable'
 import Avatar from '@/components/Avatar'
 import AvatarLightbox from '@/components/AvatarLightbox'
+import ConvocatoriaSheet from '@/components/ConvocatoriaSheet'
 import PhotoLightbox from '@/components/PhotoLightbox'
 import ImageCropper from '@/components/ImageCropper'
 import PlayerStatsSheet from '@/components/PlayerStatsSheet'
@@ -226,6 +227,9 @@ export default function FechaDetail() {
     [player],
   )
 
+  // After a successful "Voy": offer the updated roster for the group chat.
+  const [shareOpen, setShareOpen] = useState(false)
+
   const doRsvp = useCallback(
     async (choice: 'confirm' | 'decline') => {
       setBusy(true)
@@ -233,6 +237,7 @@ export default function FechaDetail() {
       const { error } = await supabase.rpc('rsvp', { p_tournament_id: id, p_choice: choice })
       setBusy(false)
       if (error) console.error('rsvp failed', error.message)
+      else if (choice === 'confirm') setShareOpen(true)
       // Silent reconcile: keep the optimistic patch on screen (no skeleton
       // flash) while the refetch confirms/corrects it against server truth.
       reload({ silent: true })
@@ -697,6 +702,15 @@ export default function FechaDetail() {
         onConfirm={doCancel}
         bands={bands}
         scheduledAt={tournament.scheduled_at}
+      />
+
+      {/* Post-"Voy": the roster (with the optimistic confirm already applied)
+          ready to paste in the group. */}
+      <ConvocatoriaSheet
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        fecha={tournament}
+        entries={entries.map((e) => ({ name: e.player?.name ?? 'Jugador', status: e.status }))}
       />
 
       <CheckInCelebration
