@@ -169,9 +169,10 @@ const COMING: ReadonlySet<EntryStatus> = new Set([
   'winner',
 ])
 
-function namesLine(emoji: string, label: string, names: readonly string[], empty?: string): string | null {
+/** One group: header line, then one name per line (easier to scan in the chat). */
+function namesBlock(emoji: string, label: string, names: readonly string[], empty?: string): string | null {
   if (names.length === 0) return empty ? `${emoji} ${label} (0): ${empty}` : null
-  return `${emoji} ${label} (${names.length}): ${names.join(', ')}`
+  return [`${emoji} ${label} (${names.length}):`, ...names].join('\n')
 }
 
 /**
@@ -181,15 +182,22 @@ function namesLine(emoji: string, label: string, names: readonly string[], empty
  *   📅 Sáb 20 sep · 19:00
  *   💰 Buy-in: ₡10.000
  *
- *   ✅ Confirmados (6): Carlos, María, José, Gabriela, Diego, Edwin
- *   ⏳ Sin responder (4): Ana, Luis, Fernando, Ricardo
- *   ❌ Cancelaron (2): Andrés, Laura
+ *   ✅ Confirmados (2):
+ *   Carlos
+ *   María
+ *
+ *   ⏳ Sin responder (1):
+ *   Ana
+ *
+ *   ❌ Cancelaron (1):
+ *   Andrés
  *
  *   👉 Confirmar acá: https://…/fechas/<id>
  *
- * "Sin responder" / "Cancelaron" are omitted when empty; "Confirmados" always
- * shows (with "nadie todavía" at zero) because that is the number people ask.
- * The buy-in line is omitted when there is none.
+ * One name per line so the list scans quickly in the chat. "Sin responder" /
+ * "Cancelaron" are omitted when empty; "Confirmados" always shows (with "nadie
+ * todavía" at zero) because that is the number people ask. The buy-in line is
+ * omitted when there is none.
  */
 export function convocatoriaText(opts: {
   fechaName: string
@@ -209,12 +217,13 @@ export function convocatoriaText(opts: {
   if (buyIn != null && buyIn > 0) head.push(`💰 Buy-in: ${colonesFull(buyIn)}`)
 
   const roster = [
-    namesLine('✅', 'Confirmados', coming, 'nadie todavía'),
-    namesLine('⏳', 'Sin responder', pending),
-    namesLine('❌', 'Cancelaron', declined),
+    namesBlock('✅', 'Confirmados', coming, 'nadie todavía'),
+    namesBlock('⏳', 'Sin responder', pending),
+    namesBlock('❌', 'Cancelaron', declined),
   ].filter((l): l is string => l != null)
 
-  return [...head, '', ...roster, '', `👉 Confirmar acá: ${link}`].join('\n')
+  // Blank line between groups, and around the roster.
+  return [...head, '', roster.join('\n\n'), '', `👉 Confirmar acá: ${link}`].join('\n')
 }
 
 /** WhatsApp "share this text" deep link — opens WhatsApp with the message

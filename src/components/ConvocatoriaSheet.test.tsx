@@ -26,8 +26,8 @@ describe('ConvocatoriaSheet', () => {
     expect(screen.getByRole('dialog', { name: '¡Confirmado! 🎉' })).toBeInTheDocument()
     const text = (screen.getByTestId('convocatoria-text') as HTMLTextAreaElement).value
     expect(text).toContain('🃏 POKER FRIENDS · Fecha 9')
-    expect(text).toContain('✅ Confirmados (2): Edwin V., María R.')
-    expect(text).toContain('⏳ Sin responder (1): José V.')
+    expect(text).toContain('✅ Confirmados (2):\nEdwin V.\nMaría R.')
+    expect(text).toContain('⏳ Sin responder (1):\nJosé V.')
     expect(text).toContain(`👉 Confirmar acá: ${window.location.origin}/fechas/t-1`)
 
     fireEvent.click(screen.getByTestId('convocatoria-whatsapp'))

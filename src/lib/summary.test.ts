@@ -127,9 +127,16 @@ describe('convocatoriaText', () => {
         `📅 ${formatWhen(WHEN)}`,
         `💰 Buy-in: ${colonesFull(10_000)}`,
         '',
-        '✅ Confirmados (2): Carlos, María',
-        '⏳ Sin responder (2): Ana, Luis',
-        '❌ Cancelaron (1): Andrés',
+        '✅ Confirmados (2):',
+        'Carlos',
+        'María',
+        '',
+        '⏳ Sin responder (2):',
+        'Ana',
+        'Luis',
+        '',
+        '❌ Cancelaron (1):',
+        'Andrés',
         '',
         `👉 Confirmar acá: ${LINK}`,
       ].join('\n'),
@@ -169,7 +176,7 @@ describe('convocatoriaText', () => {
       ],
       link: LINK,
     })
-    expect(out).toContain('✅ Confirmados (3): A, B, C')
+    expect(out).toContain('✅ Confirmados (3):\nA\nB\nC')
     expect(out).not.toContain('Zoe-NoShow')
   })
 })
