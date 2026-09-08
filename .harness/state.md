@@ -116,3 +116,7 @@ Perfil toggle now for EVERY player (help text by role); subscribePush asks permi
 activation) and the error note includes the underlying message. Local E2E via pg_net: fecha_created →
 audience all / recipients 1; confirmed → audience admins / recipients 0. Prod needs `supabase db push`
 (0032, 0033, 0034) — USER action.
+2026-09-08: USER ran `supabase db push` → 0032/0033/0034 applied in prod. Verified from here: objects
+present (table, 4 fns, 2 triggers, pg_net, vault ×2); WhatsApp crawler on real Fecha 2 → "Fecha 2 ·
+Poker Friends / Sáb 12 sept · 18:00 · 1 confirmado"; prod push-notify fecha_created → 200 audience all,
+recipients 0 (no subscriptions yet). Remaining: user tests on phone (install PWA → Perfil → Avisos).
