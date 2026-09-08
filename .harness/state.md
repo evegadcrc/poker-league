@@ -78,3 +78,29 @@ full suite 517 pass / 1 skip on local stack. Verify-ui (Playwright, admin Carlos
 link): button → edit page → changed lng/radius → saved → DB row + detail "Radio 150 m" confirmed,
 console clean; seed row restored. Same day: prod Supabase found PAUSED (free tier) → user restored;
 keep-alive workflow shipped (4472af9).
+
+## 2026-09-07 — share links + WhatsApp convocatoria + Web Push + per-fecha preview — BUILT, local commits, NOT pushed
+User: "WhatsApp updates with the player list / push when someone confirms or cancels / a join link with
+WhatsApp preview" → "go with the 3". Decision: no official API can post into a WhatsApp group →
+one-tap share instead. Plan: .harness/plan/share-and-push.md. Commits (local, on main):
+- 9ab465e feat(auth): deep link through login (lib/next.ts peek/clear, RequireAuth). E2E-verified with
+  Playwright: logged-out /fechas/:id → login → magic link → lands on the fecha. Caught + fixed a
+  StrictMode double-render bug (read-and-clear in render consumed the value).
+- c8a1c65 feat(share): OG/Twitter tags + public/og/fecha-card.png (1200×630, rsvg from SVG+logo,
+  excluded from SW precache); FechaDetail admin "Compartir en WhatsApp" (wa.me + convocatoriaText
+  roster) + "Copiar enlace".
+- 2fbf662 feat(push): mig 0032 push_subscription + entry trigger → pg_net → Edge Function
+  push-notify (npm:web-push; verify_jwt=false; shared secret); lib/push.ts; public/sw-push.js via
+  workbox importScripts; Perfil "Notificaciones" switch (admins). Local E2E: trigger fired twice →
+  net._http_response 200 ×2, recipients=1.
+- b88f328 feat(share): mig 0033 fecha_preview(uuid) anon RPC; api/preview.ts Vercel fn; vercel.json
+  UA-gated rewrite /fechas/:id → /api/preview. Handler verified locally via tsx against local stack.
+Suite 560 pass / 1 skip. Build OK (sw.js imports sw-push.js).
+PROD SIDE DONE: `supabase secrets set` (VAPID_*, PUSH_WEBHOOK_SECRET from .env.production.local —
+VAPID keys generated 2026-09-07, stored there), `supabase functions deploy push-notify` (v1 ACTIVE),
+Vault push_webhook_url/secret via `supabase db query --linked`.
+PROD SIDE PENDING (classifier blocked reading the DB password): `supabase db push` for 0032 + 0033 —
+USER must run it. Then "ship it" → push 6 commits → Vercel deploys FE + api/preview + rewrite.
+Verify after: curl -A WhatsApp https://poker-friends-xi.vercel.app/fechas/<id> → OG HTML; admin
+turns on Avisos in Perfil (installed PWA on iPhone) and a test RSVP flips → push arrives.
+Vercel CLI not logged in locally (no preview deploys possible from here).

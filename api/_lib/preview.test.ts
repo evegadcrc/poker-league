@@ -6,7 +6,7 @@ import {
   formatWhenCR,
   previewHtml,
   previewMeta,
-} from './preview'
+} from './preview.mjs'
 
 const URL = 'https://poker-friends-xi.vercel.app/fechas/t-1'
 const IMG = 'https://poker-friends-xi.vercel.app/og/fecha-card.png'
@@ -38,9 +38,9 @@ describe('previewMeta', () => {
 
   it('prefixes live / completed / cancelled and pluralises one confirmado', () => {
     const base = { name: 'F', scheduled_at: WHEN, confirmed: 1 }
-    expect(previewMeta({ ...base, status: 'live', cancelled: false }, URL, IMG).description).toMatch(
-      /^🔴 En vivo · .* · 1 confirmado$/,
-    )
+    expect(
+      previewMeta({ ...base, status: 'live', cancelled: false }, URL, IMG).description,
+    ).toMatch(/^🔴 En vivo · .* · 1 confirmado$/)
     expect(
       previewMeta({ ...base, status: 'completed', cancelled: false }, URL, IMG).description,
     ).toMatch(/^Jugada · /)

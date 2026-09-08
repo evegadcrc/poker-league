@@ -1,34 +1,27 @@
+// @ts-check
 // ---------------------------------------------------------------------------
 // Link-preview (Open Graph) content for a shared /fechas/:id — PURE helpers
-// used by the Vercel function api/preview.ts. Runs on the server (Node), so
-// no Vite / browser globals here; dates are rendered in Costa Rica time
-// explicitly instead of relying on the machine's zone.
+// used by the Vercel function api/preview.mjs. Plain ESM on purpose: Vercel
+// runs .mjs functions directly (no TypeScript compile / import-resolution step
+// to go wrong), and `_lib/` is not treated as a function. Dates render in
+// Costa Rica time explicitly instead of relying on the server's zone.
+// Tested by api/_lib/preview.test.ts.
 // ---------------------------------------------------------------------------
 
-export type FechaPreviewRow = {
-  name: string
-  scheduled_at: string
-  status: 'scheduled' | 'live' | 'completed'
-  cancelled: boolean
-  confirmed: number
-}
-
-export type PreviewMeta = {
-  title: string
-  description: string
-  url: string
-  image: string
-  /** Where a human (not a crawler) should end up. */
-  redirect: string
-}
+/**
+ * @typedef {{ name: string, scheduled_at: string, status: 'scheduled'|'live'|'completed',
+ *             cancelled: boolean, confirmed: number }} FechaPreviewRow
+ * @typedef {{ title: string, description: string, url: string, image: string, redirect: string }} PreviewMeta
+ */
 
 export const DEFAULT_TITLE = 'Poker Friends'
 export const DEFAULT_DESCRIPTION = 'Liga de póker — tabla, fechas, check-in y torneo en vivo.'
 
 const TZ = 'America/Costa_Rica'
 
-/** "Sáb 20 sep · 19:00" in Costa Rica time; "" for an unparseable input. */
-export function formatWhenCR(iso: string): string {
+/** "Sáb 20 sep · 19:00" in Costa Rica time; "" for an unparseable input.
+ *  @param {string} iso @returns {string} */
+export function formatWhenCR(iso) {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return ''
   const day = new Intl.DateTimeFormat('es-CR', {
@@ -47,17 +40,20 @@ export function formatWhenCR(iso: string): string {
   return `${pretty.charAt(0).toUpperCase()}${pretty.slice(1)} · ${time}`
 }
 
-function confirmados(n: number): string {
+/** @param {number} n */
+function confirmados(n) {
   return `${n} ${n === 1 ? 'confirmado' : 'confirmados'}`
 }
 
-/** Title + description for the card. `row` null → the generic app card. */
-export function previewMeta(
-  row: FechaPreviewRow | null,
-  url: string,
-  image: string,
-  redirect: string = url,
-): PreviewMeta {
+/**
+ * Title + description for the card. `row` null → the generic app card.
+ * @param {FechaPreviewRow | null} row
+ * @param {string} url
+ * @param {string} image
+ * @param {string} [redirect]
+ * @returns {PreviewMeta}
+ */
+export function previewMeta(row, url, image, redirect = url) {
   if (!row) {
     return { title: DEFAULT_TITLE, description: DEFAULT_DESCRIPTION, url, image, redirect }
   }
@@ -76,7 +72,8 @@ export function previewMeta(
   }
 }
 
-export function escapeHtml(s: string): string {
+/** @param {string} s */
+export function escapeHtml(s) {
   return s
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -86,8 +83,9 @@ export function escapeHtml(s: string): string {
 }
 
 /** Minimal HTML document carrying the OG/Twitter tags (crawlers never run JS).
- *  A human who somehow lands here is sent on to the app. */
-export function previewHtml(meta: PreviewMeta): string {
+ *  A human who somehow lands here is sent on to the app.
+ *  @param {PreviewMeta} meta */
+export function previewHtml(meta) {
   const t = escapeHtml(meta.title)
   const d = escapeHtml(meta.description)
   const u = escapeHtml(meta.url)
