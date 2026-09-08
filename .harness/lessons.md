@@ -18,3 +18,15 @@ Prevention: `.github/workflows/supabase-keepalive.yml` runs one anon PostgREST q
 (secrets SUPABASE_URL / SUPABASE_ANON_KEY on evegadcrc/poker-league). A paused project makes the
 job fail, which emails the repo owner. Repo is private, so GitHub's 60-day schedule auto-disable
 for inactive public repos does not apply.
+
+## Vercel functions in this repo must be plain .mjs with explicit import extensions
+2026-09-07 · task:share-and-push · tags: vercel, api, esm, deploy
+Problem: `api/preview.ts` importing `../src/lib/preview` (no extension) deployed fine but every
+invocation failed with FUNCTION_INVOCATION_FAILED. package.json has `"type": "module"`, so Vercel ran
+the compiled file as ESM and Node could not resolve the extensionless import at runtime.
+Fix: `api/preview.mjs` + `api/_lib/preview.mjs` (plain ESM, `./_lib/preview.mjs` import, JSDoc types);
+tests live next to them (`api/_lib/preview.test.ts`, vitest picks up `api/**`).
+Prevention: keep serverless code under `api/` self-contained and extension-explicit; never import from
+`src/` (Vite-only globals, alias paths, no extension). Verify after deploy with
+`curl -A WhatsApp https://poker-friends-xi.vercel.app/fechas/<id>` — the Vercel CLI here is not logged in,
+so there is no preview deploy or function log access from this machine.
