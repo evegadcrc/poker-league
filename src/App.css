@@ -3013,3 +3013,26 @@
   text-underline-offset: 2px;
   cursor: pointer;
 }
+
+/* ---- fecha countdown chip (top action bar) ---- */
+.fd-countdown {
+  margin: 8px 18px 0;
+  font: 800 11px 'Archivo';
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.fd-countdown.hot {
+  color: var(--oxblood);
+  animation: fd-countdown-pulse 1.6s ease-in-out infinite;
+}
+@keyframes fd-countdown-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}

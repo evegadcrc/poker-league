@@ -325,3 +325,29 @@ export function toDatetimeLocal(iso: string): string {
   const pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
+
+// ---------------------------------------------------------------------------
+// Check-in window + countdown formatting. Check-in (and payments) open one hour
+// before the scheduled start; the fecha view counts down to that moment, then
+// to the start itself.
+// ---------------------------------------------------------------------------
+export const CHECKIN_WINDOW_MS = 3_600_000
+
+/**
+ * Compact remaining-time label for a countdown:
+ *   ≥ 1 day  → "2d 4h"
+ *   ≥ 1 hour → "4h 12m"
+ *   < 1 hour → "12:05" (mm:ss)
+ *   ≤ 0      → "ahora"
+ */
+export function formatCountdown(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return 'ahora'
+  const totalSec = Math.floor(ms / 1000)
+  const d = Math.floor(totalSec / 86_400)
+  const h = Math.floor((totalSec % 86_400) / 3600)
+  const m = Math.floor((totalSec % 3600) / 60)
+  const s = totalSec % 60
+  if (d > 0) return `${d}d ${h}h`
+  if (h > 0) return `${h}h ${m}m`
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+}

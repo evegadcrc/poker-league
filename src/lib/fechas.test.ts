@@ -4,6 +4,7 @@ import {
   attendanceSort,
   aliveCount,
   colonesCompact,
+  formatCountdown,
   computePot,
   parseBands,
   parseLeagueConfig,
@@ -167,5 +168,18 @@ describe('fechas helpers', () => {
     for (const status of Object.keys(expected) as EntryStatus[]) {
       expect(statusPill(status)).toEqual(expected[status])
     }
+  })
+})
+
+describe('formatCountdown', () => {
+  it('uses days+hours, hours+minutes, then mm:ss, and "ahora" at zero', () => {
+    const H = 3_600_000
+    expect(formatCountdown(2 * 86_400_000 + 4 * H + 30 * 60_000)).toBe('2d 4h')
+    expect(formatCountdown(4 * H + 12 * 60_000 + 59_000)).toBe('4h 12m')
+    expect(formatCountdown(12 * 60_000 + 5_000)).toBe('12:05')
+    expect(formatCountdown(59_000)).toBe('00:59')
+    expect(formatCountdown(0)).toBe('ahora')
+    expect(formatCountdown(-5_000)).toBe('ahora')
+    expect(formatCountdown(Number.NaN)).toBe('ahora')
   })
 })

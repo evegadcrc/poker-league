@@ -133,3 +133,13 @@ app); (2) after a player joins, pop a screen to copy/share the WhatsApp roster.
   FechaDetail opens it after a successful rsvp confirm (optimistic roster).
 - Verified in Chrome DevTools MCP: iPhone UA emulation → tour auto-opened with 4 steps; as player Ana
   → "Voy — confirmar asistencia" → "¡Confirmado! 🎉" sheet with 6 confirmados incl. Ana. Seed restored.
+
+## 2026-09-08 — check-in countdown (replaces "próximamente")
+Confirmed player before the window: disabled button "📍 Check-in · abre en 7h 59m" (counts down to
+scheduled_at − 1h; formatCountdown: "2d 4h" / "4h 12m" / "mm:ss" / "ahora"). Pre-live (check-in open):
+red pulsing chip "🔴 Empieza en 24:38" above the enabled "Hacer check-in" (past start → "🔴 ¡Ya es la
+hora!"). Tick is 1s once check-in opens within the hour, 30s otherwise (needsFastTick). Verified both
+states in Chrome DevTools MCP (iPhone viewport) by moving the local Fecha 3 to +9h / +25min; restored.
+NOTE: full-suite runs while the dev server + browser hammer the local stack intermittently fail
+integration tests with "An invalid response was received from the upstream server" (Kong); they pass
+when re-run on a quiet stack — run the gate with nothing else hitting 55321.

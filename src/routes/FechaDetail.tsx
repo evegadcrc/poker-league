@@ -19,9 +19,11 @@ import { formatMiles } from '@/lib/format'
 import { parsePrizes, type Prize } from '@/lib/live'
 import { convocatoriaText, whatsappShareUrl, writeClipboard } from '@/lib/summary'
 import {
+  CHECKIN_WINDOW_MS,
   attendanceCounts,
   attendanceSort,
   bandLabel,
+  formatCountdown,
   formatWhen,
   hoursUntil,
   parseBands,
@@ -155,6 +157,16 @@ async function fetchDetail(id: string): Promise<State> {
   }
 }
 
+/** A seconds-precision countdown is visible: scheduled, not cancelled, and
+ *  check-in opens within the hour (or already did — the pre-live window). */
+function needsFastTick(state: State, now: number): boolean {
+  if (state.phase !== 'ready') return false
+  const t = state.tournament
+  if (t.status !== 'scheduled' || t.cancelled_at != null) return false
+  const opensAt = new Date(t.scheduled_at).getTime() - CHECKIN_WINDOW_MS
+  return Number.isFinite(opensAt) && opensAt - now < CHECKIN_WINDOW_MS
+}
+
 export default function FechaDetail() {
   const { id = '' } = useParams()
   const { player } = useAuth()
@@ -183,10 +195,13 @@ export default function FechaDetail() {
   // flips on its own without a manual reload. Mirrors Live.tsx's clock tick, but
   // coarser (30s) — the only boundary that matters here is the 1h mark.
   const [now, setNow] = useState(() => Date.now())
+  // 1s while a countdown with seconds is on screen (check-in opens within the
+  // hour, or the pre-live run-up to the start); 30s otherwise.
+  const fastTick = needsFastTick(state, now)
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 30_000)
+    const timer = setInterval(() => setNow(Date.now()), fastTick ? 1_000 : 30_000)
     return () => clearInterval(timer)
-  }, [])
+  }, [fastTick])
 
   // Optimistically patch the signed-in player's entry, then refetch to reconcile.
   const patchMine = useCallback(
@@ -469,7 +484,7 @@ export default function FechaDetail() {
   // DB status — it's a purely time-derived UI state (reactive via the `now` tick).
   const scheduledAtMs = new Date(tournament.scheduled_at).getTime()
   const preLive =
-    scheduled && runnable && Number.isFinite(scheduledAtMs) && now >= scheduledAtMs - 3_600_000
+    scheduled && runnable && Number.isFinite(scheduledAtMs) && now >= scheduledAtMs - CHECKIN_WINDOW_MS
   // Check-in is gated to the pre-live window (or once live): a confirmed player
   // sees it only within the 1h run-up or after open — not days early.
   const canCheckIn = (preLive || live) && runnable && myEntry?.status === 'confirmed'
@@ -586,6 +601,15 @@ export default function FechaDetail() {
             </div>
           ) : canCheckIn ? (
             <>
+              {/* Check-in is open (pre-live): the timer goes red and counts down
+                  to the start itself; past the start it just says so. */}
+              {preLive && (
+                <div className="fd-countdown hot" role="timer" data-testid="fecha-countdown">
+                  {scheduledAtMs - now > 0
+                    ? `🔴 Empieza en ${formatCountdown(scheduledAtMs - now)}`
+                    : '🔴 ¡Ya es la hora!'}
+                </div>
+              )}
               <GeoBanner state={checkIn} radius={tournament.geofence_radius_m} />
               <div className="btn-row">
                 <button
@@ -619,6 +643,7 @@ export default function FechaDetail() {
               <RsvpActions
                 status={myEntry?.status}
                 busy={busy}
+                checkInOpensInMs={scheduledAtMs - CHECKIN_WINDOW_MS - now}
                 onRsvp={doRsvp}
                 onCancel={() => setCancelOpen(true)}
               />
@@ -1076,19 +1101,28 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 function RsvpActions({
   status,
   busy,
+  checkInOpensInMs,
   onRsvp,
   onCancel,
 }: {
   status: EntryStatus | undefined
   busy: boolean
+  /** Time until check-in opens (1h before the start); drives the countdown label. */
+  checkInOpensInMs: number
   onRsvp: (choice: 'confirm' | 'decline') => void
   onCancel: () => void
 }) {
   if (status === 'confirmed') {
     return (
       <>
-        <button type="button" className="btn full" disabled title="Check-in disponible cuando el torneo abra">
-          📍 Check-in (próximamente)
+        <button
+          type="button"
+          className="btn full"
+          disabled
+          title="El check-in abre 1 hora antes de la fecha"
+          data-testid="checkin-countdown"
+        >
+          📍 Check-in · abre en {formatCountdown(checkInOpensInMs)}
         </button>
         <button type="button" className="btn ghost" disabled={busy} onClick={onCancel}>
           Cancelar

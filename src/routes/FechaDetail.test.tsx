@@ -771,3 +771,36 @@ describe('FechaDetail — post-"Voy" convocatoria sheet', () => {
     expect(screen.queryByTestId('convocatoria-sheet')).toBeNull()
   })
 })
+
+describe('FechaDetail — check-in countdown', () => {
+  it('confirmed player, hours before: the disabled check-in button counts down to when check-in opens (1h before)', async () => {
+    setEntries('confirmed')
+    renderDetail() // scheduled 9h out → check-in opens in ~8h
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+    const btn = screen.getByTestId('checkin-countdown')
+    expect(btn).toBeDisabled()
+    expect(btn).toHaveTextContent(/Check-in · abre en (7h 59m|8h 0m|8h 00m)/)
+    expect(screen.queryByText(/próximamente/)).not.toBeInTheDocument()
+    expect(screen.queryByTestId('fecha-countdown')).not.toBeInTheDocument()
+  })
+
+  it('pre-live (check-in open): the timer turns red and counts down to the start', async () => {
+    setTournament('scheduled', new Date(Date.now() + 30 * 60_000).toISOString())
+    setEntries('confirmed')
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+    const timer = screen.getByTestId('fecha-countdown')
+    expect(timer).toHaveClass('hot')
+    expect(timer).toHaveTextContent(/🔴 Empieza en (29:5\d|30:00)/)
+    expect(screen.getByRole('button', { name: /Hacer check-in/i })).toBeEnabled()
+    expect(screen.queryByTestId('checkin-countdown')).not.toBeInTheDocument()
+  })
+
+  it('pre-live past the start time (admin has not opened yet): says it is time', async () => {
+    setTournament('scheduled', new Date(Date.now() - 5 * 60_000).toISOString())
+    setEntries('confirmed')
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+    expect(screen.getByTestId('fecha-countdown')).toHaveTextContent('🔴 ¡Ya es la hora!')
+  })
+})
