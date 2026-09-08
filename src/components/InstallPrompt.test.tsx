@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { render, screen, fireEvent, act } from '@testing-library/react'
+import { render, screen, fireEvent, act, within } from '@testing-library/react'
 // Inject App.css so the .install-prompt layout is computable in jsdom.
 import '@/App.css'
 import InstallPrompt from './InstallPrompt'
@@ -82,9 +82,11 @@ describe('InstallPrompt', () => {
   it('shows add-to-home instructions on iOS Safari and no Instalar button', () => {
     setUserAgent(IOS_SAFARI_UA)
     render(<InstallPrompt />)
-    expect(screen.getByText(/Compartir/i)).toBeInTheDocument()
-    expect(screen.getByText(/Añadir a pantalla de inicio/i)).toBeInTheDocument()
+    const banner = screen.getByRole('dialog', { name: 'Instalar Poker Friends' })
+    expect(within(banner).getByText(/Compartir/i)).toBeInTheDocument()
+    expect(within(banner).getByText(/Añadir a pantalla de inicio/i)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Instalar' })).toBeNull()
+    expect(within(banner).getByRole('button', { name: 'Cómo instalar' })).toBeInTheDocument()
   })
 
   it('dismiss (✕) hides the prompt and remembers it in localStorage', async () => {
@@ -104,6 +106,50 @@ describe('InstallPrompt', () => {
     localStorage.setItem(DISMISS_KEY, '1')
     setUserAgent(IOS_SAFARI_UA)
     const { container } = render(<InstallPrompt />)
+    expect(container).toBeEmptyDOMElement()
+  })
+})
+
+describe('InstallPrompt — install tour', () => {
+  it('auto-opens the tour once on a phone that is not installed, and remembers it', () => {
+    setUserAgent(IOS_SAFARI_UA)
+    const first = render(<InstallPrompt />)
+    expect(screen.getByTestId('install-tour')).toHaveAttribute('data-platform', 'ios-safari')
+    expect(localStorage.getItem('pf-install-tour')).toBe('seen')
+    first.unmount()
+
+    render(<InstallPrompt />)
+    expect(screen.queryByTestId('install-tour')).toBeNull()
+  })
+
+  it('does not auto-open on desktop', () => {
+    setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) Chrome/120 Safari/537.36')
+    render(<InstallPrompt />)
+    expect(screen.queryByTestId('install-tour')).toBeNull()
+  })
+
+  it('"Listo" marks the tour done; "Cómo instalar" reopens it', async () => {
+    setUserAgent(IOS_SAFARI_UA)
+    render(<InstallPrompt />)
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Listo' }))
+    })
+    expect(screen.queryByTestId('install-tour')).toBeNull()
+    expect(localStorage.getItem('pf-install-tour')).toBe('done')
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Cómo instalar' }))
+    })
+    expect(screen.getByTestId('install-tour')).toBeInTheDocument()
+  })
+
+  it('dismissing the banner (✕) also closes the tour', async () => {
+    setUserAgent(IOS_SAFARI_UA)
+    const { container } = render(<InstallPrompt />)
+    expect(screen.getByTestId('install-tour')).toBeInTheDocument()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Cerrar' }))
+    })
     expect(container).toBeEmptyDOMElement()
   })
 })

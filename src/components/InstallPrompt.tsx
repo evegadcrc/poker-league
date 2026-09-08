@@ -1,44 +1,16 @@
 import { useEffect, useState } from 'react'
+import InstallTour from '@/components/InstallTour'
+import {
+  installPlatform,
+  isMobilePlatform,
+  isStandalone,
+  markTour,
+  tourStatus,
+  type BeforeInstallPromptEvent,
+} from '@/lib/install'
 
 /** localStorage flag — a permanent dismiss so the banner doesn't nag every load. */
 const DISMISS_KEY = 'pf-install-dismissed'
-
-/**
- * The `beforeinstallprompt` event (Chromium/Android). Not in lib.dom, so declare
- * the shape we use: capture it, `preventDefault()`, and later call `.prompt()`.
- */
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>
-}
-
-/** iOS Safari exposes the legacy standalone flag on navigator. */
-type IosNavigator = Navigator & { standalone?: boolean }
-
-/** Running as an installed PWA (Android/desktop display-mode, or iOS standalone). */
-function isStandalone(): boolean {
-  try {
-    if (
-      typeof window.matchMedia === 'function' &&
-      window.matchMedia('(display-mode: standalone)').matches
-    ) {
-      return true
-    }
-    return (navigator as IosNavigator).standalone === true
-  } catch {
-    return false
-  }
-}
-
-/** iOS Safari can't install programmatically — we show add-to-home instructions. */
-function isIosSafari(): boolean {
-  const ua = navigator.userAgent
-  const isIos = /iphone|ipad|ipod/i.test(ua)
-  // Chrome (CriOS), Firefox (FxiOS), Edge (EdgiOS) etc. on iOS also match "Safari"
-  // in their UA but aren't real Safari — exclude the known in-app/other browsers.
-  const isSafari = /safari/i.test(ua) && !/crios|fxios|edgios|opios|mercury/i.test(ua)
-  return isIos && isSafari
-}
 
 function readDismissed(): boolean {
   try {
@@ -53,11 +25,14 @@ function readDismissed(): boolean {
  * previously dismissed. On Android/Chromium it captures `beforeinstallprompt` and
  * shows an "Instalar" button that triggers the native install flow; on iOS Safari
  * (no programmatic install) it shows add-to-home-screen instructions instead.
- * Global banner — mounted once in AppLayout; styled from the design tokens.
+ * Both offer "Cómo instalar", the step-by-step InstallTour, which also opens by
+ * itself ONCE on a phone that isn't running the installed app. Global — mounted
+ * once in AppLayout; styled from the design tokens.
  */
 export default function InstallPrompt() {
   const [dismissed, setDismissed] = useState(readDismissed)
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null)
+  const [tourOpen, setTourOpen] = useState(false)
 
   useEffect(() => {
     if (isStandalone()) return
@@ -70,12 +45,19 @@ export default function InstallPrompt() {
     return () => window.removeEventListener('beforeinstallprompt', onBeforeInstall)
   }, [])
 
+  // First visit on a phone, not installed, not dismissed → walk them through once.
+  useEffect(() => {
+    if (isStandalone() || readDismissed()) return
+    if (isMobilePlatform(installPlatform()) && tourStatus() === 'none') {
+      markTour('seen')
+      setTourOpen(true)
+    }
+  }, [])
+
   if (dismissed) return null
   if (isStandalone()) return null
 
-  const iosSafari = isIosSafari()
-  // Nothing installable to surface: no captured native prompt and not iOS Safari.
-  if (!deferred && !iosSafari) return null
+  const iosSafari = installPlatform() === 'ios-safari'
 
   function dismiss() {
     try {
@@ -83,6 +65,7 @@ export default function InstallPrompt() {
     } catch {
       // Ignore storage failures — just hide for this session.
     }
+    setTourOpen(false)
     setDismissed(true)
   }
 
@@ -97,33 +80,48 @@ export default function InstallPrompt() {
     setDeferred(null)
   }
 
+  const tour = (
+    <InstallTour open={tourOpen} onClose={() => setTourOpen(false)} nativePrompt={deferred} />
+  )
+
+  // Nothing installable to surface in the banner: no captured native prompt and
+  // not iOS Safari. The tour can still be open (first visit on iOS Chrome etc.).
+  if (!deferred && !iosSafari) return tour
+
   return (
-    <div className="install-prompt" role="dialog" aria-label="Instalar Poker Friends">
-      <span className="install-ic" aria-hidden="true">
-        ♠
-      </span>
-      <div className="install-body">
-        <p className="install-title">Instalar Poker Friends</p>
+    <>
+      <div className="install-prompt" role="dialog" aria-label="Instalar Poker Friends">
+        <span className="install-ic" aria-hidden="true">
+          ♠
+        </span>
+        <div className="install-body">
+          <p className="install-title">Instalar Poker Friends</p>
+          {deferred ? (
+            <p className="install-text">Agregar a la pantalla de inicio para abrirla al instante.</p>
+          ) : (
+            <p className="install-text">
+              Para instalar: tocar el ícono Compartir (
+              <span className="install-share" aria-hidden="true">
+                ⬆️
+              </span>
+              ) y luego “Añadir a pantalla de inicio”.
+            </p>
+          )}
+        </div>
         {deferred ? (
-          <p className="install-text">Agregar a la pantalla de inicio para abrirla al instante.</p>
+          <button type="button" className="btn blood sm" onClick={install}>
+            Instalar
+          </button>
         ) : (
-          <p className="install-text">
-            Para instalar: tocar el ícono Compartir (
-            <span className="install-share" aria-hidden="true">
-              ⬆️
-            </span>
-            ) y luego “Añadir a pantalla de inicio”.
-          </p>
+          <button type="button" className="btn ghost sm" onClick={() => setTourOpen(true)}>
+            Cómo instalar
+          </button>
         )}
-      </div>
-      {deferred && (
-        <button type="button" className="btn blood sm" onClick={install}>
-          Instalar
+        <button type="button" className="install-close" aria-label="Cerrar" onClick={dismiss}>
+          ✕
         </button>
-      )}
-      <button type="button" className="install-close" aria-label="Cerrar" onClick={dismiss}>
-        ✕
-      </button>
-    </div>
+      </div>
+      {tour}
+    </>
   )
 }

@@ -423,3 +423,16 @@ describe('Profile — Notificaciones (Web Push opt-in)', () => {
     expect(screen.getByText(/Instalá la app en la pantalla de inicio/)).toBeInTheDocument()
   })
 })
+
+describe('Profile — install tour from the push hint', () => {
+  it('iOS Safari (not installed): "Ver cómo instalar" opens the walkthrough', async () => {
+    h.isAdmin = false
+    h.pushSupport = 'needs-install'
+    const user = userEvent.setup()
+    render(<Profile />)
+    await screen.findByRole('switch', { name: 'Avisos de la fecha' })
+    await user.click(screen.getByTestId('push-install-tour'))
+    expect(screen.getByRole('dialog', { name: 'Instalá Poker Friends' })).toBeInTheDocument()
+    expect(screen.getByTestId('install-tour')).toBeInTheDocument()
+  })
+})

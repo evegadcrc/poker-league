@@ -11,6 +11,7 @@ import {
   unsubscribePush,
   type PushSupport,
 } from '@/lib/push'
+import InstallTour from '@/components/InstallTour'
 import Avatar from '@/components/Avatar'
 import FormPills from '@/components/FormPills'
 import ImageCropper from '@/components/ImageCropper'
@@ -497,6 +498,7 @@ function PushSettings({ playerId, isAdmin }: { playerId: string; isAdmin: boolea
   const support = useMemo(() => pushSupport(), [])
   const [state, setState] = useState<PushState>('checking')
   const [note, setNote] = useState<string | null>(null)
+  const [tourOpen, setTourOpen] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -553,7 +555,22 @@ function PushSettings({ playerId, isAdmin }: { playerId: string; isAdmin: boolea
       <div className="toggle-row" data-testid="push-settings">
         <div>
           <div className="tl">Avisos de la fecha</div>
-          <div className="ts">{support === 'ok' && isAdmin ? PUSH_HELP_ADMIN : PUSH_HELP[support]}</div>
+          <div className="ts">
+            {support === 'ok' && isAdmin ? PUSH_HELP_ADMIN : PUSH_HELP[support]}
+            {support === 'needs-install' && (
+              <>
+                {' '}
+                <button
+                  type="button"
+                  className="linklike"
+                  onClick={() => setTourOpen(true)}
+                  data-testid="push-install-tour"
+                >
+                  Ver cómo instalar
+                </button>
+              </>
+            )}
+          </div>
         </div>
         <button
           type="button"
@@ -571,6 +588,7 @@ function PushSettings({ playerId, isAdmin }: { playerId: string; isAdmin: boolea
           <p>{note}</p>
         </div>
       )}
+      <InstallTour open={tourOpen} onClose={() => setTourOpen(false)} />
 
       <div className="rule faint" />
     </>
