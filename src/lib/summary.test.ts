@@ -20,18 +20,19 @@ const ENTRIES: FechaSummaryEntry[] = [
 ]
 
 describe('fechaSummaryText', () => {
-  it('formats the podium, pot and counts with the POKER FRIENDS header', () => {
+  it('formats places 1º–4º, pot and player count with the POKER FRIENDS header', () => {
     const out = fechaSummaryText({ fechaName: 'Fecha 8 — El Sótano', entries: ENTRIES, pot: 140_000, link: 'poker-friends.app' })
     expect(out).toBe(
       [
         '🃏 POKER FRIENDS · Fecha 8 — El Sótano',
         '',
-        '🏆 Campeón: Mauricio A.',
+        '🥇 1º: Mauricio A.',
         '🥈 2º: Andrés R.',
         '🥉 3º: Edwin V.',
+        '4º: Sofía M.',
         '',
         `💰 Pozo: ${colonesFull(140_000)}`,
-        '👥 4 jugadores · 2 recompras',
+        '👥 4 jugadores',
         '',
         '📊 Tabla general → poker-friends.app',
       ].join('\n'),
@@ -44,8 +45,9 @@ describe('fechaSummaryText', () => {
       { name: 'Beto', status: 'winner', final_position: 1, rebuys_count: 0 },
     ]
     const out = fechaSummaryText({ fechaName: 'Fecha 9', entries: chopped, pot: 100_000 })
-    expect(out).toContain('🏆 Campeón: Ana, Beto')
-    expect(out).toContain('👥 2 jugadores · 0 recompras')
+    expect(out).toContain('🥇 1º: Ana, Beto')
+    expect(out).toContain('👥 2 jugadores')
+    expect(out).not.toContain('recompra')
   })
 
   it('is defensive mid-game when nobody has a final position yet', () => {
@@ -57,12 +59,12 @@ describe('fechaSummaryText', () => {
     expect(out).toContain('🎲 Resultados en juego…')
   })
 
-  it('uses singular for one player / one rebuy', () => {
+  it('uses singular for one player', () => {
     const one: FechaSummaryEntry[] = [
       { name: 'Ana', status: 'winner', final_position: 1, rebuys_count: 1 },
     ]
     expect(fechaSummaryText({ fechaName: 'F', entries: one, pot: 0 })).toContain(
-      '👥 1 jugador · 1 recompra',
+      '👥 1 jugador',
     )
   })
 })

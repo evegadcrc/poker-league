@@ -505,12 +505,13 @@ describe('FechaDetail — admin share of a COMPLETED fecha result', () => {
 
     const text = (screen.getByTestId('resultado-text') as HTMLTextAreaElement).value
     expect(text).toContain('🃏 POKER FRIENDS · Fecha 9')
-    expect(text).toContain('🏆 Campeón: Mauricio A.')
+    expect(text).toContain('🥇 1º: Mauricio A.')
     expect(text).toContain('🥈 2º: Andrés R.')
     expect(text).toContain('🥉 3º: Sofía M.')
     // Pot = the materialized prizes (60.000 + 40.000).
     expect(text).toContain('💰 Pozo: ₡100')
-    expect(text).toContain('👥 3 jugadores · 1 recompra')
+    expect(text).toContain('👥 3 jugadores')
+    expect(text).not.toContain('recompra')
     expect(text).toContain(`📊 Tabla general → ${window.location.origin}/fechas/t-1`)
   })
 

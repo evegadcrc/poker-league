@@ -129,30 +129,6 @@ export default function Leaderboard() {
           )}
         </div>
       </div>
-      {isAdmin && state.status === 'ready' && state.rows.length > 0 && (
-        <div className="btn-row" style={{ padding: '0 18px 8px' }}>
-          <button
-            type="button"
-            className="btn ghost sm full"
-            onClick={() => setShareOpen(true)}
-            data-testid="lb-share-whatsapp"
-          >
-            Compartir tabla en WhatsApp
-          </button>
-          <ShareSheet
-            open={shareOpen}
-            onClose={() => setShareOpen(false)}
-            title="Tabla general"
-            intro="Compartir la tabla en el grupo:"
-            text={seasonSummaryText({
-              seasonName: state.seasonName,
-              rows: state.rows.map((r) => ({ player_name: r.player_name, total_points: r.total_points })),
-              link: `${window.location.origin}/`,
-            })}
-            testId="tabla"
-          />
-        </div>
-      )}
       <div className="rule" />
 
       <div className="lb-legend">
@@ -204,6 +180,32 @@ export default function Leaderboard() {
       <Legend />
 
       {state.status === 'ready' && <LigaScoring config={state.config} />}
+
+      {/* Admin: share the standings — at the very bottom, after the table. */}
+      {isAdmin && state.status === 'ready' && state.rows.length > 0 && (
+        <div className="btn-row" style={{ padding: '12px 18px 8px' }}>
+          <button
+            type="button"
+            className="btn ghost sm full"
+            onClick={() => setShareOpen(true)}
+            data-testid="lb-share-whatsapp"
+          >
+            Compartir tabla en WhatsApp
+          </button>
+          <ShareSheet
+            open={shareOpen}
+            onClose={() => setShareOpen(false)}
+            title="Tabla general"
+            intro="Compartir la tabla en el grupo:"
+            text={seasonSummaryText({
+              seasonName: state.seasonName,
+              rows: state.rows.map((r) => ({ player_name: r.player_name, total_points: r.total_points })),
+              link: `${window.location.origin}/`,
+            })}
+            testId="tabla"
+          />
+        </div>
+      )}
     </>
   )
 }

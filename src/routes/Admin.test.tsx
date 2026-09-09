@@ -548,7 +548,7 @@ describe('Admin — WhatsApp summary (slice 15)', () => {
     expect(text.value).toContain('🥉 3º: Dee')
     expect(text.value).toContain(`💰 Pozo: ${colonesFull(140_000)}`)
     // 4 players took a seat (2 playing + 2 eliminated); Cid had 1 rebuy.
-    expect(text.value).toContain('👥 4 jugadores · 1 recompra')
+    expect(text.value).toContain('👥 4 jugadores')
   })
 
   it('switches to the season standings summary from the leaderboard RPC', async () => {

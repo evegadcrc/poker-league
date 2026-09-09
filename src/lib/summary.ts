@@ -22,12 +22,9 @@ function defaultLink(): string {
   return typeof window !== 'undefined' && window.location?.origin ? window.location.origin : APP_LINK
 }
 
-/** Spanish pluralization for the two counts the summaries surface. */
+/** Spanish pluralization for the player count. */
 function jugadores(n: number): string {
   return `${n} ${n === 1 ? 'jugador' : 'jugadores'}`
-}
-function recompras(n: number): string {
-  return `${n} ${n === 1 ? 'recompra' : 'recompras'}`
 }
 
 // ---------------------------------------------------------------------------
@@ -40,23 +37,26 @@ export type FechaSummaryEntry = {
   rebuys_count: number | null
 }
 
+// Same shape for every place (1º like the rest, no "Campeón" callout); 4º included.
 const PODIUM_LABEL: Record<number, string> = {
-  1: '🏆 Campeón',
+  1: '🥇 1º',
   2: '🥈 2º',
   3: '🥉 3º',
+  4: '4º',
 }
+const PODIUM_PLACES = [1, 2, 3, 4] as const
 
-/** Podium lines for positions 1..3; co-finishers (a chop) share one line. */
+/** Result lines for positions 1..4; co-finishers (a chop) share one line. */
 function podiumLines(entries: readonly FechaSummaryEntry[]): string[] {
   const byPos = new Map<number, string[]>()
   for (const e of entries) {
     const p = e.final_position
-    if (p != null && p >= 1 && p <= 3) {
+    if (p != null && p >= 1 && p <= 4) {
       byPos.set(p, [...(byPos.get(p) ?? []), e.name])
     }
   }
   const lines: string[] = []
-  for (const pos of [1, 2, 3]) {
+  for (const pos of PODIUM_PLACES) {
     const names = byPos.get(pos)
     if (names && names.length > 0) lines.push(`${PODIUM_LABEL[pos]}: ${names.join(', ')}`)
   }
@@ -68,12 +68,13 @@ function podiumLines(entries: readonly FechaSummaryEntry[]): string[] {
  *
  *   🃏 POKER FRIENDS · Fecha 8 — El Sótano
  *
- *   🏆 Campeón: Mauricio A.
+ *   🥇 1º: Mauricio A.
  *   🥈 2º: Andrés R.
  *   🥉 3º: Edwin V.
+ *   4º: Sofía M.
  *
  *   💰 Pozo: ₡140.000
- *   👥 11 jugadores · 2 recompras
+ *   👥 11 jugadores
  *
  *   📊 Tabla general → poker-friends.app
  *
@@ -89,7 +90,6 @@ export function fechaSummaryText(opts: {
   const { fechaName, entries, pot, link = defaultLink() } = opts
   const podium = podiumLines(entries)
   const players = playedCount(entries)
-  const rebuys = entries.reduce((sum, e) => sum + (e.rebuys_count ?? 0), 0)
 
   const podiumBlock = podium.length > 0 ? podium.join('\n') : '🎲 Resultados en juego…'
 
@@ -99,7 +99,7 @@ export function fechaSummaryText(opts: {
     podiumBlock,
     '',
     `💰 Pozo: ${colonesFull(pot)}`,
-    `👥 ${jugadores(players)} · ${recompras(rebuys)}`,
+    `👥 ${jugadores(players)}`,
     '',
     `📊 Tabla general → ${link}`,
   ].join('\n')
