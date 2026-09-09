@@ -482,3 +482,43 @@ describe('FechaDetail — guests (mig 0035)', () => {
     expect(screen.queryByTestId('fd-guests-open')).toBeNull()
   })
 })
+
+describe('FechaDetail — admin share of a COMPLETED fecha result', () => {
+  it('shows "Compartir resultado en WhatsApp" and the sheet carries podium, pot, players and the fecha link', async () => {
+    const user = userEvent.setup()
+    setTournament({ status: 'completed', prizes: [{ position: 1, pct: 0.6, amount: 60000 }, { position: 2, pct: 0.4, amount: 40000 }] })
+    const base = { rsvp_at: null, cancelled_at: null, checked_in_at: null, early_bird: false, rebuys_count: 0, chopped: false, paid: true }
+    h.list.entry = {
+      data: [
+        { id: 'w', player_id: 'pw', status: 'winner', points_earned: 45, final_position: 1, ...base, player: { name: 'Mauricio A.', avatar_url: null } },
+        { id: 'e2', player_id: 'p2', status: 'eliminated', points_earned: 34, final_position: 2, ...base, player: { name: 'Andrés R.', avatar_url: null } },
+        { id: 'e3', player_id: 'p3', status: 'eliminated', points_earned: 20, final_position: 3, ...base, rebuys_count: 1, player: { name: 'Sofía M.', avatar_url: null } },
+      ],
+      error: null,
+    }
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+
+    // No convocatoria share on a completed fecha; the result share instead.
+    expect(screen.queryByTestId('fd-share')).toBeNull()
+    await user.click(screen.getByTestId('fd-share-result-open'))
+
+    const text = (screen.getByTestId('resultado-text') as HTMLTextAreaElement).value
+    expect(text).toContain('🃏 POKER FRIENDS · Fecha 9')
+    expect(text).toContain('🏆 Campeón: Mauricio A.')
+    expect(text).toContain('🥈 2º: Andrés R.')
+    expect(text).toContain('🥉 3º: Sofía M.')
+    // Pot = the materialized prizes (60.000 + 40.000).
+    expect(text).toContain('💰 Pozo: ₡100')
+    expect(text).toContain('👥 3 jugadores · 1 recompra')
+    expect(text).toContain(`📊 Tabla general → ${window.location.origin}/fechas/t-1`)
+  })
+
+  it('hides the result share from non-admins', async () => {
+    h.isAdmin = false
+    setTournament({ status: 'completed' })
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Fecha 9' })
+    expect(screen.queryByTestId('fd-share-result-open')).toBeNull()
+  })
+})

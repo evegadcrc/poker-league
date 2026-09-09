@@ -17,6 +17,11 @@ import { colonesFull, formatWhen, playedCount, type EntryStatus } from '@/lib/fe
 const HEADER = '🃏 POKER FRIENDS'
 const APP_LINK = 'poker-friends.app'
 
+/** Where the summaries point: the running app's origin, or the placeholder off-browser. */
+function defaultLink(): string {
+  return typeof window !== 'undefined' && window.location?.origin ? window.location.origin : APP_LINK
+}
+
 /** Spanish pluralization for the two counts the summaries surface. */
 function jugadores(n: number): string {
   return `${n} ${n === 1 ? 'jugador' : 'jugadores'}`
@@ -78,8 +83,10 @@ export function fechaSummaryText(opts: {
   fechaName: string
   entries: readonly FechaSummaryEntry[]
   pot: number
+  /** Where "Tabla general" points (defaults to the app origin). */
+  link?: string
 }): string {
-  const { fechaName, entries, pot } = opts
+  const { fechaName, entries, pot, link = defaultLink() } = opts
   const podium = podiumLines(entries)
   const players = playedCount(entries)
   const rebuys = entries.reduce((sum, e) => sum + (e.rebuys_count ?? 0), 0)
@@ -94,7 +101,7 @@ export function fechaSummaryText(opts: {
     `💰 Pozo: ${colonesFull(pot)}`,
     `👥 ${jugadores(players)} · ${recompras(rebuys)}`,
     '',
-    `📊 Tabla general → ${APP_LINK}`,
+    `📊 Tabla general → ${link}`,
   ].join('\n')
 }
 
@@ -129,8 +136,10 @@ export function seasonSummaryText(opts: {
   seasonName: string
   rows: readonly SeasonStandingRow[]
   topN?: number
+  /** Where "la tabla completa" points (defaults to the app origin). */
+  link?: string
 }): string {
-  const { seasonName, rows, topN = 5 } = opts
+  const { seasonName, rows, topN = 5, link = defaultLink() } = opts
   const top = rows.slice(0, topN)
 
   const body =
@@ -149,7 +158,7 @@ export function seasonSummaryText(opts: {
     '',
     body,
     '',
-    `📊 Mirá la tabla completa → ${APP_LINK}`,
+    `📊 Mirá la tabla completa → ${link}`,
   ].join('\n')
 }
 

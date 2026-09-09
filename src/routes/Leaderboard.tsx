@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { useAuth } from '@/lib/auth'
+import { useAuth, useRole } from '@/lib/auth'
 import { supabase } from '@/lib/supabase'
 import { parseLeagueConfig, type LeagueConfig } from '@/lib/fechas'
 import { useLoadable } from '@/lib/useLoadable'
 import Legend from '@/components/Legend'
 import PlayerRow, { type LeaderboardRow } from '@/components/PlayerRow'
+import ShareSheet from '@/components/ShareSheet'
+import { seasonSummaryText } from '@/lib/summary'
 
 type State =
   | { status: 'loading' }
@@ -87,7 +89,10 @@ async function fetchState(seasonId: string | undefined): Promise<State> {
 
 export default function Leaderboard() {
   const { player } = useAuth()
+  const { isAdmin } = useRole()
   const { seasonId } = useParams()
+  // Admin: share the standings (top 5 + link) in the group chat.
+  const [shareOpen, setShareOpen] = useState(false)
   const { state, reload } = useLoadable<State>(
     { status: 'loading' },
     () => fetchState(seasonId),
@@ -124,6 +129,30 @@ export default function Leaderboard() {
           )}
         </div>
       </div>
+      {isAdmin && state.status === 'ready' && state.rows.length > 0 && (
+        <div className="btn-row" style={{ padding: '0 18px 8px' }}>
+          <button
+            type="button"
+            className="btn ghost sm full"
+            onClick={() => setShareOpen(true)}
+            data-testid="lb-share-whatsapp"
+          >
+            Compartir tabla en WhatsApp
+          </button>
+          <ShareSheet
+            open={shareOpen}
+            onClose={() => setShareOpen(false)}
+            title="Tabla general"
+            intro="Compartir la tabla en el grupo:"
+            text={seasonSummaryText({
+              seasonName: state.seasonName,
+              rows: state.rows.map((r) => ({ player_name: r.player_name, total_points: r.total_points })),
+              link: `${window.location.origin}/`,
+            })}
+            testId="tabla"
+          />
+        </div>
+      )}
       <div className="rule" />
 
       <div className="lb-legend">

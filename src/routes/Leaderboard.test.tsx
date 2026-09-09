@@ -12,10 +12,12 @@ const h = vi.hoisted(() => ({
   seasonByIdResult: { data: null as unknown, error: null as unknown },
   rpcResult: { data: null as unknown, error: null as unknown },
   player: null as { id: string } | null,
+  isAdmin: false,
 }))
 
 vi.mock('@/lib/auth', () => ({
   useAuth: () => ({ player: h.player }),
+  useRole: () => ({ isAdmin: h.isAdmin }),
 }))
 
 vi.mock('@/lib/supabase', () => ({
@@ -120,6 +122,7 @@ beforeEach(() => {
   h.seasonByIdResult = { data: null, error: null }
   h.rpcResult = { data: FIXTURE, error: null }
   h.player = { id: 'p-edw' } // Edwin is the signed-in player.
+  h.isAdmin = false
 })
 
 describe('Leaderboard (Tabla)', () => {
@@ -295,5 +298,30 @@ describe('Leaderboard (Tabla)', () => {
     expect(screen.getByText('Liga 2025')).toBeInTheDocument()
     expect(screen.getAllByTestId('lb-row')).toHaveLength(3)
     expect(screen.queryByText(/no hay una temporada activa/i)).not.toBeInTheDocument()
+  })
+})
+
+describe('Leaderboard — admin "Compartir tabla en WhatsApp"', () => {
+  it('admin: the button opens a sheet with the top standings and the app link', async () => {
+    const user = userEvent.setup()
+    h.isAdmin = true
+    renderLb()
+    await screen.findByText('Mauricio A.')
+
+    await user.click(screen.getByTestId('lb-share-whatsapp'))
+
+    const text = (screen.getByTestId('tabla-text') as HTMLTextAreaElement).value
+    expect(text).toContain('🃏 POKER FRIENDS · Liga 2026 — Tabla general')
+    expect(text).toContain('🥇 1º Mauricio A. — 420 pts')
+    expect(text).toContain('🥈 2º Edwin V. — 350 pts')
+    expect(text).toContain('🥉 3º Randall Q. — 160 pts')
+    expect(text).toContain(`📊 Mirá la tabla completa → ${window.location.origin}/`)
+    expect(screen.getByTestId('tabla-whatsapp')).toBeInTheDocument()
+  })
+
+  it('non-admin: no share button', async () => {
+    renderLb()
+    await screen.findByText('Mauricio A.')
+    expect(screen.queryByTestId('lb-share-whatsapp')).toBeNull()
   })
 })

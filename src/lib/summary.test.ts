@@ -21,7 +21,7 @@ const ENTRIES: FechaSummaryEntry[] = [
 
 describe('fechaSummaryText', () => {
   it('formats the podium, pot and counts with the POKER FRIENDS header', () => {
-    const out = fechaSummaryText({ fechaName: 'Fecha 8 — El Sótano', entries: ENTRIES, pot: 140_000 })
+    const out = fechaSummaryText({ fechaName: 'Fecha 8 — El Sótano', entries: ENTRIES, pot: 140_000, link: 'poker-friends.app' })
     expect(out).toBe(
       [
         '🃏 POKER FRIENDS · Fecha 8 — El Sótano',
@@ -78,7 +78,7 @@ describe('seasonSummaryText', () => {
   ]
 
   it('formats the top 5 with medals + ranks and the header', () => {
-    const out = seasonSummaryText({ seasonName: 'Liga 2026', rows: ROWS })
+    const out = seasonSummaryText({ seasonName: 'Liga 2026', rows: ROWS, link: 'poker-friends.app' })
     expect(out).toBe(
       [
         '🃏 POKER FRIENDS · Liga 2026 — Tabla general',
@@ -199,5 +199,15 @@ describe('convocatoriaText — guests', () => {
       /👉 Confirmar acá: https:\/\/x\/fechas\/1\n🙋 ¿Invitado\? Mismo enlace → «Voy como invitado»$/,
     )
     expect(convocatoriaText(base)).not.toContain('Invitado')
+  })
+})
+
+describe('summaries — link defaults to the app origin', () => {
+  it('fecha result and standings point at window.location.origin unless a link is given', () => {
+    const fecha = fechaSummaryText({ fechaName: 'F', entries: [], pot: 0 })
+    expect(fecha).toContain(`📊 Tabla general → ${window.location.origin}`)
+    const season = seasonSummaryText({ seasonName: 'S', rows: [] })
+    expect(season).toContain(`📊 Mirá la tabla completa → ${window.location.origin}`)
+    expect(seasonSummaryText({ seasonName: 'S', rows: [], link: 'https://x/' })).toContain('→ https://x/')
   })
 })

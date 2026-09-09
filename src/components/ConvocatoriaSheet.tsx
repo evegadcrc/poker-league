@@ -1,17 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
-import Sheet from '@/components/Sheet'
-import {
-  convocatoriaText,
-  whatsappShareUrl,
-  writeClipboard,
-  type ConvocatoriaEntry,
-} from '@/lib/summary'
+import { useMemo } from 'react'
+import ShareSheet from '@/components/ShareSheet'
+import { convocatoriaText, type ConvocatoriaEntry } from '@/lib/summary'
 
 // ---------------------------------------------------------------------------
-// Convocatoria sheet — the roster message for the group chat, with a preview,
-// "Compartir en WhatsApp" (wa.me; the sender picks the chat) and "Copiar texto".
-// Shown to a player right after they confirm ("Voy") so the group gets the
-// updated list from whoever just joined, not only from the admin.
+// Convocatoria sheet — the roster message for the group chat (ShareSheet with
+// the convocatoria text). Shown to a player right after they confirm ("Voy") so
+// the group gets the updated list from whoever just joined, not only the admin.
 // ---------------------------------------------------------------------------
 
 type Props = {
@@ -31,11 +25,6 @@ export default function ConvocatoriaSheet({
   fecha,
   entries,
 }: Props) {
-  const [copied, setCopied] = useState<'ok' | 'fail' | null>(null)
-  useEffect(() => {
-    if (open) setCopied(null)
-  }, [open])
-
   const text = useMemo(
     () =>
       convocatoriaText({
@@ -49,56 +38,14 @@ export default function ConvocatoriaSheet({
     [fecha.name, fecha.scheduled_at, fecha.buy_in, fecha.id, fecha.guests_open, entries],
   )
 
-  const share = () => {
-    window.open(whatsappShareUrl(text), '_blank', 'noopener,noreferrer')
-  }
-  const copy = async () => {
-    const ok = await writeClipboard(text)
-    setCopied(ok ? 'ok' : 'fail')
-  }
-
   return (
-    <Sheet open={open} onClose={onClose} title={title}>
-      <div data-testid="convocatoria-sheet">
-        <p>{intro}</p>
-        <div className="field">
-          <label htmlFor="convocatoria-text">Mensaje</label>
-          <textarea
-            id="convocatoria-text"
-            rows={10}
-            readOnly
-            value={text}
-            data-testid="convocatoria-text"
-          />
-        </div>
-        {copied && (
-          <div className="fd-note" role="status">
-            <p>
-              {copied === 'ok'
-                ? '📋 Texto copiado'
-                : 'No se pudo copiar — seleccionar el texto y copiarlo a mano.'}
-            </p>
-          </div>
-        )}
-        <div className="btn-row">
-          <button
-            type="button"
-            className="btn blood full"
-            onClick={share}
-            data-testid="convocatoria-whatsapp"
-          >
-            Compartir en WhatsApp
-          </button>
-        </div>
-        <div className="btn-row">
-          <button type="button" className="btn ghost" style={{ flex: 1 }} onClick={() => void copy()}>
-            Copiar texto
-          </button>
-          <button type="button" className="btn ghost" style={{ flex: 1 }} onClick={onClose}>
-            Cerrar
-          </button>
-        </div>
-      </div>
-    </Sheet>
+    <ShareSheet
+      open={open}
+      onClose={onClose}
+      title={title}
+      intro={intro}
+      text={text}
+      testId="convocatoria"
+    />
   )
 }

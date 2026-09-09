@@ -17,12 +17,14 @@ import { chopAdjustedPrizes, pointsBreakdown, type PointsBreakdown, type Scoring
 import { classifyCheckInError, requestPosition, type Coords } from '@/lib/checkin'
 import { formatMiles } from '@/lib/format'
 import { parsePrizes, type Prize } from '@/lib/live'
-import { convocatoriaText, whatsappShareUrl, writeClipboard } from '@/lib/summary'
+import ShareSheet from '@/components/ShareSheet'
+import { convocatoriaText, fechaSummaryText, whatsappShareUrl, writeClipboard } from '@/lib/summary'
 import {
   CHECKIN_WINDOW_MS,
   attendanceCounts,
   attendanceSort,
   bandLabel,
+  computePot,
   formatCountdown,
   formatWhen,
   hoursUntil,
@@ -708,6 +710,10 @@ export default function FechaDetail() {
       {isAdmin && !completed && !cancelled && (
         <ShareFecha tournament={tournament} entries={entries} />
       )}
+      {/* (3b) Completed fecha: the result (podium, pot, players) for the group. */}
+      {isAdmin && completed && (
+        <ShareResultado tournament={tournament} entries={entries} prizes={finalPrizes} />
+      )}
 
       <FechaInfo tournament={tournament} config={config} />
 
@@ -1049,6 +1055,56 @@ function ShareFecha({ tournament, entries }: { tournament: TournamentRow; entrie
           <p>Invitados pueden anotarse con este enlace («Voy como invitado»).</p>
         </div>
       )}
+    </div>
+  )
+}
+
+// Admin share for a COMPLETED fecha: podium, pot and player count, with the
+// link back to the fecha. Pot = the materialized prizes when present (they
+// reflect any manual override), else recomputed from paid entries + rebuys.
+function ShareResultado({
+  tournament,
+  entries,
+  prizes,
+}: {
+  tournament: TournamentRow
+  entries: EntryRow[]
+  prizes: Prize[]
+}) {
+  const [open, setOpen] = useState(false)
+  const pot =
+    prizes.length > 0
+      ? prizes.reduce((sum, p) => sum + p.amount, 0)
+      : computePot(entries, tournament.buy_in, tournament.rebuy_amount, null)
+  const text = fechaSummaryText({
+    fechaName: tournament.name,
+    pot,
+    entries: entries.map((e) => ({
+      name: e.player?.name ?? 'Jugador',
+      status: e.status,
+      final_position: e.final_position,
+      rebuys_count: e.rebuys_count,
+    })),
+    link: `${window.location.origin}/fechas/${tournament.id}`,
+  })
+  return (
+    <div className="fd-admin-actions" data-testid="fd-share-result">
+      <button
+        type="button"
+        className="btn ghost full"
+        onClick={() => setOpen(true)}
+        data-testid="fd-share-result-open"
+      >
+        Compartir resultado en WhatsApp
+      </button>
+      <ShareSheet
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Resultado de la fecha"
+        intro="Compartir el resultado en el grupo:"
+        text={text}
+        testId="resultado"
+      />
     </div>
   )
 }
