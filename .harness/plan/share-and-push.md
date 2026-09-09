@@ -57,3 +57,9 @@ WhatsApp preview. Decision: automatic WhatsApp *group* posting is not possible w
   "Hacer miembro" on guest rows.
 - Tests: Login (6), Admin (2), AdminCrud (1), EditFecha (fixture), FechaDetail.admin (2), summary (1),
   guest_join.integration (5). Prod: `supabase db push` (0035) is the USER's step; FE ships on push.
+
+## Slice 5 (2026-09-08) — admin shares for result + tabla, portada in the link preview
+- ShareSheet (generic) ← ConvocatoriaSheet; FechaDetail "Compartir resultado en WhatsApp" (completed,
+  admin); Leaderboard "Compartir tabla en WhatsApp" (admin). Summary links default to the app origin.
+- mig 0036 fecha_preview +cover_url → api/_lib/preview.mjs og:image = https cover else branded card.
+- Tests: FechaDetail.admin (2), Leaderboard (2), summary (1), preview (2). Prod: db push 0035+0036 first.

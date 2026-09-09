@@ -64,6 +64,7 @@ describe('previewHtml', () => {
       url: URL,
       image: IMG,
       redirect: URL,
+      imageIsCard: true,
     })
     expect(html).toContain('<meta property="og:title" content="Fecha &lt;script&gt; &amp; &quot;quotes&quot;">')
     expect(html).toContain('<meta property="og:description" content="it&#39;s">')
@@ -76,5 +77,28 @@ describe('previewHtml', () => {
 
   it('escapeHtml covers the five specials', () => {
     expect(escapeHtml(`<a href="x">'&'</a>`)).toBe('&lt;a href=&quot;x&quot;&gt;&#39;&amp;&#39;&lt;/a&gt;')
+  })
+})
+
+describe('previewMeta — portada as the preview image', () => {
+  const WHEN = '2026-09-21T01:00:00.000Z'
+  const base = { name: 'F', scheduled_at: WHEN, status: 'scheduled' as const, cancelled: false, confirmed: 2 }
+
+  it('uses the fecha cover when present and drops the fixed card dimensions', () => {
+    const m = previewMeta({ ...base, cover_url: 'https://cdn.example/covers/f.jpg' }, URL, IMG)
+    expect(m.image).toBe('https://cdn.example/covers/f.jpg')
+    expect(m.imageIsCard).toBe(false)
+    const html = previewHtml(m)
+    expect(html).toContain('<meta property="og:image" content="https://cdn.example/covers/f.jpg">')
+    expect(html).not.toContain('og:image:width')
+  })
+
+  it('falls back to the branded card (with dimensions) without a cover or with a non-https one', () => {
+    for (const cover of [null, undefined, 'http://insecure/x.jpg', '']) {
+      const m = previewMeta({ ...base, cover_url: cover as string | null }, URL, IMG)
+      expect(m.image).toBe(IMG)
+      expect(m.imageIsCard).toBe(true)
+    }
+    expect(previewHtml(previewMeta(null, URL, IMG))).toContain('og:image:width')
   })
 })

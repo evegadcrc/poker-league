@@ -932,6 +932,7 @@ export type Database = {
         Returns: {
           cancelled: boolean
           confirmed: number
+          cover_url: string
           guests_open: boolean
           name: string
           scheduled_at: string

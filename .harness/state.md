@@ -160,3 +160,15 @@ DevTools, iPhone viewport): logged-out fecha link → login shows the offer → 
 player + confirmed entry created, magic link sent → link lands on the fecha confirmed, in roster.
 ORDER MATTERS FOR PROD: run `supabase db push` (0035) BEFORE the FE deploys — the edit page now
 writes guests_open and would fail on a DB without the column. Push code after the migration.
+
+## 2026-09-08 — admin WhatsApp shares (result + tabla) and portada in the link preview — BUILT
+- components/ShareSheet.tsx (generic preview + Compartir en WhatsApp + Copiar); ConvocatoriaSheet now
+  wraps it. FechaDetail: admin-only "Compartir resultado en WhatsApp" on COMPLETED fechas
+  (fechaSummaryText; pot = materialized prizes or computePot). Leaderboard: admin-only "Compartir tabla
+  en WhatsApp" (seasonSummaryText top 5). Summary links now default to window.location.origin (no more
+  'poker-friends.app' placeholder); Admin console WhatsSheet benefits automatically.
+- Portada in the WhatsApp card: mig 0036 fecha_preview +cover_url; api/_lib/preview.mjs uses an https
+  cover as og:image (drops the fixed 1200×630 tags), else the branded card. Preview.mjs was rewritten
+  whole after a perl edit mangled it — prefer Write for multi-line JS edits.
+- Prod pending (USER): `supabase db push` for 0035 + 0036 BEFORE the code is pushed (edit page writes
+  guests_open; preview handler tolerates a missing cover_url).

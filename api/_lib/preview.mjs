@@ -10,8 +10,9 @@
 
 /**
  * @typedef {{ name: string, scheduled_at: string, status: 'scheduled'|'live'|'completed',
- *             cancelled: boolean, confirmed: number }} FechaPreviewRow
- * @typedef {{ title: string, description: string, url: string, image: string, redirect: string }} PreviewMeta
+ *             cancelled: boolean, confirmed: number, cover_url?: string | null }} FechaPreviewRow
+ * @typedef {{ title: string, description: string, url: string, image: string,
+ *             imageIsCard: boolean, redirect: string }} PreviewMeta
  */
 
 export const DEFAULT_TITLE = 'Poker Friends'
@@ -46,17 +47,29 @@ function confirmados(n) {
 }
 
 /**
- * Title + description for the card. `row` null → the generic app card.
+ * Title + description for the card. `row` null → the generic app card. When the
+ * fecha has a portada (cover_url, https) it becomes the preview image;
+ * `imageIsCard` tells previewHtml whether the fixed 1200×630 PNG dimensions of
+ * the branded card apply.
  * @param {FechaPreviewRow | null} row
  * @param {string} url
- * @param {string} image
+ * @param {string} image   the default branded card (absolute URL)
  * @param {string} [redirect]
  * @returns {PreviewMeta}
  */
 export function previewMeta(row, url, image, redirect = url) {
   if (!row) {
-    return { title: DEFAULT_TITLE, description: DEFAULT_DESCRIPTION, url, image, redirect }
+    return {
+      title: DEFAULT_TITLE,
+      description: DEFAULT_DESCRIPTION,
+      url,
+      image,
+      imageIsCard: true,
+      redirect,
+    }
   }
+  const cover =
+    typeof row.cover_url === 'string' && /^https:\/\//.test(row.cover_url) ? row.cover_url : null
   const when = formatWhenCR(row.scheduled_at)
   let prefix = ''
   if (row.cancelled) prefix = 'Cancelada · '
@@ -67,7 +80,8 @@ export function previewMeta(row, url, image, redirect = url) {
     title: `${row.name} · Poker Friends`,
     description: `${prefix}${parts.join(' · ')}`,
     url,
-    image,
+    image: cover ?? image,
+    imageIsCard: cover == null,
     redirect,
   }
 }
@@ -104,9 +118,13 @@ export function previewHtml(meta) {
     `<meta property="og:description" content="${d}">`,
     `<meta property="og:url" content="${u}">`,
     `<meta property="og:image" content="${img}">`,
-    '<meta property="og:image:width" content="1200">',
-    '<meta property="og:image:height" content="630">',
-    '<meta property="og:image:type" content="image/png">',
+    ...(meta.imageIsCard
+      ? [
+          '<meta property="og:image:width" content="1200">',
+          '<meta property="og:image:height" content="630">',
+          '<meta property="og:image:type" content="image/png">',
+        ]
+      : []),
     '<meta name="twitter:card" content="summary_large_image">',
     `<meta name="twitter:title" content="${t}">`,
     `<meta name="twitter:description" content="${d}">`,
