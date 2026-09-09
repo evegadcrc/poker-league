@@ -172,3 +172,10 @@ writes guests_open and would fail on a DB without the column. Push code after th
   whole after a perl edit mangled it — prefer Write for multi-line JS edits.
 - Prod pending (USER): `supabase db push` for 0035 + 0036 BEFORE the code is pushed (edit page writes
   guests_open; preview handler tolerates a missing cover_url).
+
+## 2026-09-08 — prize split editor: "Monto ₡" mode
+PrizeDistributionEditor gains a Porcentaje / Monto ₡ toggle. ₡ mode: type amounts per place; the
+percentages are DERIVED (share of the total, 0.1%) and that split is what's stored — payouts still
+come from pct × real pot at open (set_prizes, ₡5.000 rounding). With a known pot (live Consola
+EditPrizesSheet now passes pot) % mode shows ₡ hints and ₡ mode seeds from the split. parseMoney moved
+to lib/format. Tests: +4 editor. No DB change.

@@ -4,7 +4,7 @@ import PrizeDistributionEditor, {
   isValidDist,
   type PctRow,
 } from '@/components/PrizeDistributionEditor'
-import { formatMiles } from '@/lib/format'
+import { formatMiles, parseMoney } from '@/lib/format'
 import { toDatetimeLocal } from '@/lib/fechas'
 
 // ---------------------------------------------------------------------------
@@ -96,12 +96,6 @@ function saveFechaDefaults(d: FechaDefaults): void {
   } catch {
     // localStorage unavailable (private mode / quota) — non-fatal.
   }
-}
-
-/** Strip every non-digit and return the raw integer (empty → 0). */
-export const parseMoney = (s: string): number => {
-  const digits = s.replace(/\D/g, '')
-  return digits === '' ? 0 : Number(digits)
 }
 
 /** Everything the form edits. Money/stack values are raw integers; the venue

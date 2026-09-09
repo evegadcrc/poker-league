@@ -1297,6 +1297,7 @@ function ConsolePanel() {
         open={prizesOpen}
         onClose={() => setPrizesOpen(false)}
         distribution={parseDistribution(tournament.payout_distribution)}
+        pot={pot}
         busy={busy}
         onSave={(dist) => {
           setPrizesOpen(false)
@@ -1691,12 +1692,15 @@ function EditPrizesSheet({
   open,
   onClose,
   distribution,
+  pot,
   busy,
   onSave,
 }: {
   open: boolean
   onClose: () => void
   distribution: DistSlice[]
+  /** Current pot, so the editor can show ₡ per place and seed the ₡ mode. */
+  pot: number
   busy: boolean
   onSave: (dist: DistSlice[]) => void
 }) {
@@ -1717,7 +1721,7 @@ function EditPrizesSheet({
         Cambiar el reparto de premios de esta fecha. Al guardar se recalculan los montos según el
         pozo actual.
       </p>
-      <PrizeDistributionEditor rows={rows} onChange={setRows} disabled={busy} />
+      <PrizeDistributionEditor rows={rows} onChange={setRows} disabled={busy} pot={pot} />
       <div className="btn-row">
         <button
           type="button"

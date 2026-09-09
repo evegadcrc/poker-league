@@ -12,3 +12,10 @@
 export function formatMiles(n: number): string {
   return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')
 }
+
+/** Strip every non-digit and return the raw integer (empty → 0). The inverse of
+ *  `formatMiles` for controlled ₡ inputs: "₡20.000" / "20 000" / "20000" → 20000. */
+export function parseMoney(s: string): number {
+  const digits = s.replace(/\D/g, '')
+  return digits === '' ? 0 : Number(digits)
+}
