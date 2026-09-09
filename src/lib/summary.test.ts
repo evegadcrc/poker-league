@@ -198,7 +198,7 @@ describe('convocatoriaText — guests', () => {
       link: 'https://x/fechas/1',
     }
     expect(convocatoriaText({ ...base, guestsOpen: true })).toMatch(
-      /👉 Confirmar acá: https:\/\/x\/fechas\/1\n🙋 ¿Invitado\? Mismo enlace → «Voy como invitado»$/,
+      /👉 Confirmar acá: https:\/\/x\/fechas\/1\n🙋 ¿Invitado\? Mismo enlace → «Ingresar como invitado»$/,
     )
     expect(convocatoriaText(base)).not.toContain('Invitado')
   })

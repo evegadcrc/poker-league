@@ -1052,7 +1052,7 @@ function ShareFecha({ tournament, entries }: { tournament: TournamentRow; entrie
       )}
       {tournament.guests_open && (
         <div className="fd-note" data-testid="fd-guests-open">
-          <p>Invitados pueden anotarse con este enlace («Voy como invitado»).</p>
+          <p>Invitados pueden anotarse con este enlace («Ingresar como invitado»).</p>
         </div>
       )}
     </div>

@@ -202,12 +202,12 @@ describe('Login — magic link', () => {
 describe('Login — guest self-join (mig 0035)', () => {
   const FECHA_ID = '8c68be38-b00c-4434-b91f-1c63b9c3dd4c'
 
-  it('offers "Voy como invitado" only when the pending deep link is a fecha that accepts guests', async () => {
+  it('offers "Entrar aquí" (guest login) only when the pending deep link is a fecha that accepts guests', async () => {
     h.nextPath = `/fechas/${FECHA_ID}`
     h.guestFecha = { id: FECHA_ID, name: 'Fecha 2' }
     renderLogin()
-    expect(await screen.findByTestId('guest-offer')).toHaveTextContent('¿Venís de invitado a Fecha 2?')
-    expect(screen.getByRole('button', { name: 'Voy como invitado' })).toBeInTheDocument()
+    expect(await screen.findByTestId('guest-offer')).toHaveTextContent('Ingresar como invitado a Fecha 2:')
+    expect(screen.getByRole('button', { name: 'Entrar aquí' })).toBeInTheDocument()
   })
 
   it('no offer without a fecha deep link, or when the fecha is closed to guests', async () => {
@@ -225,7 +225,7 @@ describe('Login — guest self-join (mig 0035)', () => {
     h.nextPath = `/fechas/${FECHA_ID}`
     h.guestFecha = { id: FECHA_ID, name: 'Fecha 2' }
     renderLogin()
-    await user.click(await screen.findByRole('button', { name: 'Voy como invitado' }))
+    await user.click(await screen.findByRole('button', { name: 'Entrar aquí' }))
 
     expect(screen.getByTestId('guest-explainer')).toHaveTextContent(/no sumás puntos/)
     await user.type(screen.getByLabelText('Correo electrónico'), 'primo@example.com')
@@ -249,7 +249,7 @@ describe('Login — guest self-join (mig 0035)', () => {
     h.guestFecha = { id: FECHA_ID, name: 'Fecha 2' }
     h.guestJoinResult = { result: 'member', error: null }
     renderLogin()
-    await user.click(await screen.findByRole('button', { name: 'Voy como invitado' }))
+    await user.click(await screen.findByRole('button', { name: 'Entrar aquí' }))
     await user.type(screen.getByLabelText('Correo electrónico'), 'socio@example.com')
     await user.type(screen.getByTestId('guest-name'), 'Socio')
     await user.click(screen.getByRole('button', { name: 'Anotarme como invitado' }))
@@ -262,7 +262,7 @@ describe('Login — guest self-join (mig 0035)', () => {
     h.guestFecha = { id: FECHA_ID, name: 'Fecha 2' }
     h.guestJoinResult = { result: null, error: 'esta fecha no acepta invitados por enlace' }
     renderLogin()
-    await user.click(await screen.findByRole('button', { name: 'Voy como invitado' }))
+    await user.click(await screen.findByRole('button', { name: 'Entrar aquí' }))
     await user.type(screen.getByLabelText('Correo electrónico'), 'x@example.com')
     await user.type(screen.getByTestId('guest-name'), 'X')
     await user.click(screen.getByRole('button', { name: 'Anotarme como invitado' }))
@@ -275,7 +275,7 @@ describe('Login — guest self-join (mig 0035)', () => {
     h.nextPath = `/fechas/${FECHA_ID}`
     h.guestFecha = { id: FECHA_ID, name: 'Fecha 2' }
     renderLogin()
-    await user.click(await screen.findByRole('button', { name: 'Voy como invitado' }))
+    await user.click(await screen.findByRole('button', { name: 'Entrar aquí' }))
     await user.click(screen.getByRole('button', { name: 'Soy miembro' }))
     expect(screen.queryByTestId('guest-name')).toBeNull()
     expect(screen.getByRole('button', { name: 'Enviar enlace' })).toBeInTheDocument()

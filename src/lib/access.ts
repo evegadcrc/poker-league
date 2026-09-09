@@ -102,7 +102,7 @@ export async function setAutoApprove(on: boolean): Promise<{ error: string | nul
 }
 
 // ---------------------------------------------------------------------------
-// Guest self-join (mig 0035). The login screen offers "Voy como invitado" when
+// Guest self-join (mig 0035). The login screen offers "Ingresar como invitado" when
 // the visitor arrived through a fecha link whose admin opened it to guests.
 // ---------------------------------------------------------------------------
 export type GuestJoinResult = 'guest' | 'member'

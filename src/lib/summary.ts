@@ -232,7 +232,7 @@ export function convocatoriaText(opts: {
 
   // Blank line between groups, and around the roster.
   const tail = [`👉 Confirmar acá: ${link}`]
-  if (guestsOpen) tail.push('🙋 ¿Invitado? Mismo enlace → «Voy como invitado»')
+  if (guestsOpen) tail.push('🙋 ¿Invitado? Mismo enlace → «Ingresar como invitado»')
   return [...head, '', roster.join('\n\n'), '', ...tail].join('\n')
 }
 

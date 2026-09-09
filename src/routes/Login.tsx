@@ -26,7 +26,7 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null)
 
   // Guest self-join (mig 0035): when the visitor came through a fecha link and
-  // that fecha accepts guests, offer "Voy como invitado" (email + name → a guest
+  // that fecha accepts guests, offer "Ingresar como invitado … Entrar aquí" (email + name → a guest
   // player, confirmed for that fecha, then the same magic link).
   const [guestFecha, setGuestFecha] = useState<{ id: string; name: string } | null>(null)
   const [guestMode, setGuestMode] = useState(false)
@@ -189,14 +189,14 @@ export default function Login() {
 
           {status === 'idle' && guestFecha && !guestMode && (
             <p className="login-hint" data-testid="guest-offer">
-              ¿Venís de invitado a <b>{guestFecha.name}</b>?{' '}
+              Ingresar como invitado a <b>{guestFecha.name}</b>:{' '}
               <button
                 type="button"
                 className="link-btn"
                 onClick={() => setGuestMode(true)}
                 data-testid="guest-mode"
               >
-                Voy como invitado
+                Entrar aquí
               </button>
             </p>
           )}
